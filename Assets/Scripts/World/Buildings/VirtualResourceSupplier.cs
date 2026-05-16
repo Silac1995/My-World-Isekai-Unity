@@ -17,7 +17,9 @@ public class VirtualResourceSupplier : CommercialBuilding
     {
         ResourceId = resourceId;
         ParentMap = parentMap;
-        buildingName = $"Virtual Node: {resourceId}";
+        // VirtualResourceSupplier has no BuildingSO blueprint; BuildingName falls back to
+        // gameObject.name when _blueprint is null (Task 6).
+        gameObject.name = $"Virtual Node: {resourceId}";
     }
 
     public override bool ProducesItem(ItemSO item)

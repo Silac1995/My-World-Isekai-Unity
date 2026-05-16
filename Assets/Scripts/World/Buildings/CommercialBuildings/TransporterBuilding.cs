@@ -23,6 +23,6 @@ public class TransporterBuilding : CommercialBuilding
             _jobs.Add(new JobTransporter($"Transporter {i + 1}"));
         }
 
-        Debug.Log($"<color=green>[TransporterBuilding]</color> {buildingName} initialized with 1 Manager and {_transporterCount} Transporters.");
+        Debug.Log($"<color=green>[TransporterBuilding]</color> {BuildingName} initialized with 1 Manager and {_transporterCount} Transporters.");
     }
 }

@@ -130,7 +130,7 @@ public abstract class CraftingBuilding : CommercialBuilding, IStockProvider
             if (unregisteredCount > 0)
             {
                 Debug.LogWarning(
-                    $"[CraftingBuilding] {buildingName}: {unregisteredCount} CraftingStation(s) found in transform tree " +
+                    $"[CraftingBuilding] {BuildingName}: {unregisteredCount} CraftingStation(s) found in transform tree " +
                     $"but missing from any Room.FurnitureManager._furnitures list. Falling back to physical scan for them. " +
                     $"This usually means a default-furniture slot's RegisterSpawnedFurnitureUnchecked didn't run on the right " +
                     $"room (check each slot.TargetRoom is assigned and the target Room has a FurnitureGrid). " +

@@ -166,7 +166,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
         // The shop still needs a logistics manager to place restocking orders.
         _jobs.Add(new JobLogisticsManager("Shop Manager"));
 
-        Debug.Log($"<color=magenta>[Shop]</color> {buildingName} initialized with 1 LogisticsManager. Vendor slots added dynamically per cashier.");
+        Debug.Log($"<color=magenta>[Shop]</color> {BuildingName} initialized with 1 LogisticsManager. Vendor slots added dynamically per cashier.");
     }
 
 
@@ -480,7 +480,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
         if (caller == null) return false;
         if (Owner == null || caller != Owner)
         {
-            Debug.LogWarning($"[Shop] {buildingName}: rejected ServerRpc - caller {caller.CharacterName} is not owner ({Owner?.CharacterName ?? "null"}).");
+            Debug.LogWarning($"[Shop] {BuildingName}: rejected ServerRpc - caller {caller.CharacterName} is not owner ({Owner?.CharacterName ?? "null"}).");
             return false;
         }
         return true;
@@ -569,7 +569,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
                     var so = ResolveItemSO(saved.itemId);
                     if (so == null)
                     {
-                        Debug.LogWarning($"<color=orange>[ShopBuilding:Restore]</color> {buildingName}: catalog entry itemId='{saved.itemId}' did not resolve to an ItemSO — entry dropped.");
+                        Debug.LogWarning($"<color=orange>[ShopBuilding:Restore]</color> {BuildingName}: catalog entry itemId='{saved.itemId}' did not resolve to an ItemSO — entry dropped.");
                         continue;
                     }
                     _catalog.Add(new ShopItemEntry
@@ -586,7 +586,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
         catch (System.Exception e)
         {
             Debug.LogException(e);
-            Debug.LogError($"<color=red>[ShopBuilding:Restore]</color> {buildingName}: catalog restore failed — leaving seeded catalog in place.");
+            Debug.LogError($"<color=red>[ShopBuilding:Restore]</color> {BuildingName}: catalog restore failed — leaving seeded catalog in place.");
         }
 
         // --- Sell-shelves: defer resolution until live StorageFurniture children exist ---
@@ -656,7 +656,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
                 }
                 if (!matched)
                 {
-                    Debug.LogWarning($"<color=orange>[ShopBuilding:Restore]</color> {buildingName}: saved sell-shelf key '{savedKey}' did not match any live StorageFurniture — entry dropped (storage likely renamed or removed since save).");
+                    Debug.LogWarning($"<color=orange>[ShopBuilding:Restore]</color> {BuildingName}: saved sell-shelf key '{savedKey}' did not match any live StorageFurniture — entry dropped (storage likely renamed or removed since save).");
                 }
             }
 
@@ -666,7 +666,7 @@ public class ShopBuilding : CommercialBuilding, IStockProvider
         catch (System.Exception e)
         {
             Debug.LogException(e);
-            Debug.LogError($"<color=red>[ShopBuilding:Restore]</color> {buildingName}: sell-shelf resolution failed.");
+            Debug.LogError($"<color=red>[ShopBuilding:Restore]</color> {BuildingName}: sell-shelf resolution failed.");
         }
         finally
         {

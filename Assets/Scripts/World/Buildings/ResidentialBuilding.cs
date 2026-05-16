@@ -79,7 +79,7 @@ public class ResidentialBuilding : Building
                 AddResident(newOwner);
             }
         }
-        Debug.Log($"<color=green>[Building]</color> {newOwner?.CharacterName} is now the owner of {buildingName}.");
+        Debug.Log($"<color=green>[Building]</color> {newOwner?.CharacterName} is now the owner of {BuildingName}.");
     }
 
     /// <summary>
@@ -91,7 +91,7 @@ public class ResidentialBuilding : Building
 
         if (!IsOwner(owner))
         {
-            Debug.LogWarning($"<color=orange>[Building]</color> {owner.CharacterName} cannot add residents to {buildingName} — not the owner.");
+            Debug.LogWarning($"<color=orange>[Building]</color> {owner.CharacterName} cannot add residents to {BuildingName} — not the owner.");
             return false;
         }
 
@@ -121,7 +121,7 @@ public class ResidentialBuilding : Building
 
             if (targetApt.AddResident(resident))
             {
-                Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} now lives in an apartment of {buildingName}.");
+                Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} now lives in an apartment of {BuildingName}.");
                 return true;
             }
             return false;
@@ -129,7 +129,7 @@ public class ResidentialBuilding : Building
 
         if (base.AddResident(resident))
         {
-            Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} now lives at {buildingName}.");
+            Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} now lives at {BuildingName}.");
             return true;
         }
         return false;
@@ -145,7 +145,7 @@ public class ResidentialBuilding : Building
             {
                 apt.RemoveResident(resident);
                 apt.RemoveOwner(resident);
-                Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} left their apartment in {buildingName}.");
+                Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} left their apartment in {BuildingName}.");
                 return true;
             }
         }
@@ -158,7 +158,7 @@ public class ResidentialBuilding : Building
                 Character nextOwner = Residents.FirstOrDefault();
                 SetOwner(nextOwner);
             }
-            Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} left {buildingName}.");
+            Debug.Log($"<color=green>[Building]</color> {resident.CharacterName} left {BuildingName}.");
             return true;
         }
 

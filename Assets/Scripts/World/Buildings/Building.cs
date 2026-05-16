@@ -52,11 +52,7 @@ public class Building : ComplexRoom
     public BuildingSO Blueprint => _blueprint;
 
     [Header("Building Info")]
-    [SerializeField] protected string buildingName;
-
     [SerializeField] protected bool _isPublicLocation = false;
-
-    [SerializeField] protected BuildingType _buildingType = BuildingType.Residential; // Default value
 
     [SerializeField] protected Collider _buildingZone;
 
@@ -64,7 +60,6 @@ public class Building : ComplexRoom
     [SerializeField] protected Zone _deliveryZone;
 
     [Header("Construction")]
-    [SerializeField] protected List<CraftingIngredient> _constructionRequirements = new List<CraftingIngredient>();
     protected Dictionary<ItemSO, int> _contributedMaterials = new Dictionary<ItemSO, int>();
 
     [Tooltip("Tick on scene-authored / pre-placed buildings that should spawn already Complete (skip the construction loop). Has no effect on runtime placements via BuildingPlacementManager — those always go through UnderConstruction → Complete unless InstantMode is on. Save/load takes precedence over this flag — restored buildings keep whatever state they had when saved.")]
@@ -131,14 +126,13 @@ public class Building : ComplexRoom
         NetworkVariableWritePermission.Server
     );
 
-    [Header("Default Furniture")]
-    [Tooltip("Furniture spawned automatically by the server when this building first comes into existence in a fresh world.\n" +
-             "Skipped on save-restore — restored buildings reuse their persisted furniture state.\n" +
-             "Use this for any furniture whose prefab carries a NetworkObject; nesting a network-bearing furniture\n" +
-             "PrefabInstance directly inside the building prefab half-spawns the child and NRE's NGO sync.\n" +
-             "As of 2026-05-01: Furniture authored as nested children of the building prefab is auto-captured into this list at runtime by ConvertNestedNetworkFurnitureToLayout(); manual authoring of slots is still supported. If both a manual slot AND a nested child target the same ItemSO, the nested child WINS (its pose replaces the manual slot's) and a log is emitted — remove the manual slot to silence it.")]
-    [UnityEngine.Serialization.FormerlySerializedAs("_defaultFurnitureLayout")]
-    [SerializeField] private List<DefaultFurnitureSlot> _defaultFurnitureLayout = new List<DefaultFurnitureSlot>();
+    /// <summary>
+    /// Runtime-only list. Initialised from <see cref="BuildingSO.DefaultFurnitureLayout"/>
+    /// lazily on first read of <see cref="EffectiveDefaultFurnitureLayout"/>.
+    /// <see cref="ConvertNestedNetworkFurnitureToLayout"/> appends here for nested-prefab-converted
+    /// slots. Not serialized — Inspector authoring moved to the BuildingSO asset (Task 6).
+    /// </summary>
+    private List<DefaultFurnitureSlot> _runtimeDefaultFurnitureLayout;
 
     /// <summary>
     /// Set true after <see cref="TrySpawnDefaultFurniture"/> runs so multiple OnNetworkSpawn
@@ -157,8 +151,6 @@ public class Building : ComplexRoom
     private bool _isStarted;
 
     [Header("Identity (Dynamic)")]
-    [SerializeField] protected string _prefabId; // Registry lookup ID (e.g. "Shop_Armor_A")
-    
     public NetworkVariable<FixedString64Bytes> NetworkBuildingId = new NetworkVariable<FixedString64Bytes>(
         "",
         NetworkVariableReadPermission.Everyone,
@@ -178,23 +170,19 @@ public class Building : ComplexRoom
     public string BuildingName =>
         _blueprint != null && !string.IsNullOrEmpty(_blueprint.BuildingName)
             ? _blueprint.BuildingName
-            : (string.IsNullOrEmpty(buildingName) ? name : buildingName);
+            : name;
 
     public virtual BuildingType BuildingType =>
-        _blueprint != null ? _blueprint.BuildingType : _buildingType;
+        _blueprint != null ? _blueprint.BuildingType : BuildingType.Residential;
 
     public bool IsPublicLocation => _isPublicLocation;
     public Collider BuildingZone => _buildingZone;
     public Zone DeliveryZone => _deliveryZone;
 
-    // Setter retained: BuildingPlacementManager.RequestPlacementServerRpc writes
-    // PrefabId on dynamically-spawned buildings. Reads prefer the blueprint when
-    // present; otherwise fall back to the legacy field. Task 6 deletes both.
-    public string PrefabId
-    {
-        get => _blueprint != null ? _blueprint.PrefabId : _prefabId;
-        set => _prefabId = value;
-    }
+    // Single source of truth: the assigned BuildingSO blueprint. Scene-authored or
+    // test Buildings without a blueprint return string.Empty (acceptable — such
+    // Buildings don't go through the save/load registry resolution path).
+    public string PrefabId => _blueprint != null ? _blueprint.PrefabId : string.Empty;
 
     public string BuildingId => NetworkBuildingId.Value.ToString();
 
@@ -202,16 +190,16 @@ public class Building : ComplexRoom
     /// Human-readable label for this building. Used by WorkPlaceRecord (snapshot at first
     /// punch-in) and any UI / log surface that wants to show "where" a worker punched in.
     ///
-    /// Defaults to the authored <see cref="BuildingName"/> Inspector field; if that's blank
-    /// (legacy prefabs / dynamically-named instances), falls back to the GameObject name.
-    /// Subclasses may override to compose a friendlier label (e.g. owner + business name).
+    /// Delegates to <see cref="BuildingName"/> by default (which reads the assigned
+    /// <see cref="BuildingSO"/> blueprint, falling back to the GameObject name when no
+    /// blueprint is set). Subclasses may override to compose a friendlier label (e.g.
+    /// owner + business name).
     ///
     /// Stable identity for keying still belongs to <see cref="BuildingId"/> — this is purely
     /// the display string captured ONCE in <c>WorkPlaceRecord.BuildingDisplayName</c> at
     /// first work-time, so renaming later doesn't retroactively rewrite history.
     /// </summary>
-    public virtual string BuildingDisplayName =>
-        string.IsNullOrEmpty(buildingName) ? name : buildingName;
+    public virtual string BuildingDisplayName => BuildingName;
 
     /// <summary>
     /// True if a spawned interior MapController exists for this building.
@@ -236,33 +224,8 @@ public class Building : ComplexRoom
     /// buildings) or when no <see cref="WorldSettingsData"/> is reachable. Pair with
     /// <see cref="HasInterior"/> to disambiguate "authored to have one" vs "spawned".
     /// </summary>
-    public bool SupportsInterior
-    {
-        get
-        {
-            if (_blueprint != null) return _blueprint.InteriorPrefab != null;
-            if (string.IsNullOrEmpty(_prefabId)) return false;
-            var settings = GetCachedWorldSettings();
-            if (settings == null) return false;
-            return settings.GetInteriorPrefab(_prefabId) != null;
-        }
-    }
-
-    // Cached one-shot lookup of WorldSettingsData. Resources.Load is internally cached but
-    // a static field skips the call entirely on hot paths (debug overlays / per-frame
-    // inspector refresh). Falsy load attempts are remembered so we don't re-probe every
-    // frame when the asset is genuinely missing.
-    private static WorldSettingsData _cachedWorldSettings;
-    private static bool _worldSettingsLoadAttempted;
-
-    private static WorldSettingsData GetCachedWorldSettings()
-    {
-        if (_cachedWorldSettings != null) return _cachedWorldSettings;
-        if (_worldSettingsLoadAttempted) return null;
-        _worldSettingsLoadAttempted = true;
-        _cachedWorldSettings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
-        return _cachedWorldSettings;
-    }
+    public bool SupportsInterior =>
+        _blueprint != null && _blueprint.InteriorPrefab != null;
 
     /// <summary>
     /// Returns the interior MapController for this building, or null if none spawned yet.
@@ -296,30 +259,43 @@ public class Building : ComplexRoom
 
     /// <summary>
     /// Read-only view of the authored material requirements for construction. Empty when the
-    /// building was authored without a build phase. Prefers the blueprint when present;
-    /// otherwise falls back to the legacy <see cref="_constructionRequirements"/> field.
-    /// Task 6 deletes the legacy field after Task 11 migration.
+    /// building was authored without a build phase. Sourced from <see cref="_blueprint"/>;
+    /// returns <see cref="System.Array.Empty{T}"/> when no blueprint is assigned
+    /// (scene-authored / test Buildings).
     /// </summary>
     public IReadOnlyList<CraftingIngredient> ConstructionRequirements => EffectiveConstructionRequirements;
 
     /// <summary>
-    /// Reads <see cref="_blueprint"/>.ConstructionRequirements when present, else falls back
-    /// to the legacy <see cref="_constructionRequirements"/> prefab field. Task 6 deletes the
-    /// legacy field once Task 11 migration has run on every prefab.
+    /// Reads <see cref="_blueprint"/>.ConstructionRequirements when present, else returns
+    /// an empty array (prevents NullReferenceException for scene-authored or test Buildings
+    /// without a blueprint).
     /// </summary>
     protected System.Collections.Generic.IReadOnlyList<CraftingIngredient> EffectiveConstructionRequirements =>
-        _blueprint != null && _blueprint.ConstructionRequirements != null && _blueprint.ConstructionRequirements.Count > 0
-            ? _blueprint.ConstructionRequirements
-            : (System.Collections.Generic.IReadOnlyList<CraftingIngredient>)_constructionRequirements;
+        _blueprint != null ? _blueprint.ConstructionRequirements : System.Array.Empty<CraftingIngredient>();
 
     /// <summary>
-    /// Reads <see cref="_blueprint"/>.DefaultFurnitureLayout when present, else falls back
-    /// to the legacy <see cref="_defaultFurnitureLayout"/> prefab field.
+    /// Runtime-only view of the default furniture layout. Seeded lazily from
+    /// <see cref="_blueprint"/>.DefaultFurnitureLayout on first read;
+    /// <see cref="ConvertNestedNetworkFurnitureToLayout"/> may append/override entries on top
+    /// for nested-prefab-converted slots. Returns an empty list when no blueprint is assigned
+    /// and no nested furniture was converted.
     /// </summary>
-    protected System.Collections.Generic.IReadOnlyList<DefaultFurnitureSlot> EffectiveDefaultFurnitureLayout =>
-        _blueprint != null && _blueprint.DefaultFurnitureLayout != null && _blueprint.DefaultFurnitureLayout.Count > 0
-            ? _blueprint.DefaultFurnitureLayout
-            : (System.Collections.Generic.IReadOnlyList<DefaultFurnitureSlot>)_defaultFurnitureLayout;
+    protected System.Collections.Generic.IReadOnlyList<DefaultFurnitureSlot> EffectiveDefaultFurnitureLayout
+    {
+        get
+        {
+            if (_runtimeDefaultFurnitureLayout == null)
+            {
+                _runtimeDefaultFurnitureLayout = new List<DefaultFurnitureSlot>();
+                if (_blueprint != null && _blueprint.DefaultFurnitureLayout != null)
+                {
+                    for (int i = 0; i < _blueprint.DefaultFurnitureLayout.Count; i++)
+                        _runtimeDefaultFurnitureLayout.Add(_blueprint.DefaultFurnitureLayout[i]);
+                }
+            }
+            return _runtimeDefaultFurnitureLayout;
+        }
+    }
 
     /// <summary>
     /// Read-only view of the materials contributed so far. Server-authoritative; clients see the
@@ -385,7 +361,7 @@ public class Building : ComplexRoom
                     : MWI.WorldSystem.BuildingState.Complete;
             }
             if (_currentState.Value != newState) _currentState.Value = newState;
-            Debug.Log($"<color=cyan>[Building.OnNetworkSpawn]</color> {buildingName} reqs={reqCount} spawnAsComplete={_spawnAsComplete} → state={_currentState.Value}");
+            Debug.Log($"<color=cyan>[Building.OnNetworkSpawn]</color> {BuildingName} reqs={reqCount} spawnAsComplete={_spawnAsComplete} → state={_currentState.Value}");
         }
 
         if (IsServer && NetworkBuildingId.Value.IsEmpty)
@@ -402,12 +378,12 @@ public class Building : ComplexRoom
             if (PlacedByCharacterId.Value.IsEmpty)
             {
                 NetworkBuildingId.Value = DeriveDeterministicSceneBuildingId(gameObject.scene.name, transform.position);
-                Debug.Log($"<color=green>[Building]</color> Derived deterministic ID for scene-authored '{buildingName}' at {transform.position}: {BuildingId}");
+                Debug.Log($"<color=green>[Building]</color> Derived deterministic ID for scene-authored '{BuildingName}' at {transform.position}: {BuildingId}");
             }
             else
             {
                 NetworkBuildingId.Value = Guid.NewGuid().ToString("N");
-                Debug.Log($"<color=green>[Building]</color> Generated unique ID for runtime-placed {buildingName}: {BuildingId}");
+                Debug.Log($"<color=green>[Building]</color> Generated unique ID for runtime-placed {BuildingName}: {BuildingId}");
             }
         }
 
@@ -525,7 +501,7 @@ public class Building : ComplexRoom
         }
         else
         {
-            Debug.LogWarning($"<color=orange>[Building]</color> {buildingName} n'a pas pu s'enregistrer car BuildingManager n'est pas dans la scène.");
+            Debug.LogWarning($"<color=orange>[Building]</color> {BuildingName} n'a pas pu s'enregistrer car BuildingManager n'est pas dans la scène.");
         }
 
         // Re-scan FurnitureManager.Furnitures after every sibling's Awake/Start has finished.
@@ -550,7 +526,7 @@ public class Building : ComplexRoom
 
         // Apply initial visual state — late-joiners need this; HandleStateChanged only fires
         // on subsequent changes, not on the initial state replicated via NetworkVariable spawn payload.
-        Debug.Log($"<color=cyan>[Building.Start]</color> {buildingName} _currentState.Value={_currentState.Value} → calling ApplyConstructionVisuals. IsServer={IsServer}");
+        Debug.Log($"<color=cyan>[Building.Start]</color> {BuildingName} _currentState.Value={_currentState.Value} → calling ApplyConstructionVisuals. IsServer={IsServer}");
         ApplyConstructionVisuals(_currentState.Value);
 
         // Marker for BuildInstantly's deferral coroutine: subscription is wired, future state
@@ -644,9 +620,9 @@ public class Building : ComplexRoom
     {
         // ── Pre-spawn validation — fail fast WITHOUT creating any GameObject so the
         // Console clearly shows which dependency is missing before we touch the scene.
-        if (_constructionVisualRoot == null) { Debug.LogWarning($"[Building.Curtain] {buildingName}: _constructionVisualRoot null — skip"); return; }
-        if (_constructionCurtainMaterial == null) { Debug.LogWarning($"[Building.Curtain] {buildingName}: _constructionCurtainMaterial null — skip"); return; }
-        if (!(_buildingZone is BoxCollider box)) { Debug.LogWarning($"[Building.Curtain] {buildingName}: _buildingZone not a BoxCollider — skip"); return; }
+        if (_constructionVisualRoot == null) { Debug.LogWarning($"[Building.Curtain] {BuildingName}: _constructionVisualRoot null — skip"); return; }
+        if (_constructionCurtainMaterial == null) { Debug.LogWarning($"[Building.Curtain] {BuildingName}: _constructionCurtainMaterial null — skip"); return; }
+        if (!(_buildingZone is BoxCollider box)) { Debug.LogWarning($"[Building.Curtain] {BuildingName}: _buildingZone not a BoxCollider — skip"); return; }
 
         // ── Resolve settings via the BuildingCurtainSettingsHolder component on this
         // Building's root. The holder is authored once on Building_prefab.prefab and every
@@ -657,18 +633,18 @@ public class Building : ComplexRoom
         var holder = GetComponent<BuildingCurtainSettingsHolder>();
         if (holder == null)
         {
-            Debug.LogWarning($"[Building.Curtain] {buildingName}: BuildingCurtainSettingsHolder component missing on this Building's root GameObject — skip. " +
+            Debug.LogWarning($"[Building.Curtain] {BuildingName}: BuildingCurtainSettingsHolder component missing on this Building's root GameObject — skip. " +
                              "Add the component to Building_prefab.prefab so every building variant inherits it.");
             return;
         }
         var settings = holder.Settings;
         if (settings == null)
         {
-            Debug.LogWarning($"[Building.Curtain] {buildingName}: BuildingCurtainSettingsHolder is present but its Settings field is null — skip. " +
+            Debug.LogWarning($"[Building.Curtain] {BuildingName}: BuildingCurtainSettingsHolder is present but its Settings field is null — skip. " +
                              "Drag a BuildingCurtainSettings asset onto the holder on Building_prefab.prefab.");
             return;
         }
-        Debug.Log($"[Building.Curtain] {buildingName}: spawning curtain — settings='{settings.name}' " +
+        Debug.Log($"[Building.Curtain] {BuildingName}: spawning curtain — settings='{settings.name}' " +
                   $"emission={settings.EmissionRate} max={settings.MaxParticles} size={settings.StartSize} " +
                   $"speed=[{settings.RiseSpeedMin},{settings.RiseSpeedMax}] alphaMax={settings.AlphaMax}");
 
@@ -864,7 +840,7 @@ public class Building : ComplexRoom
 
         var mesh = new Mesh
         {
-            name = $"ConstructionPerimeterWall_Mesh ({buildingName})",
+            name = $"ConstructionPerimeterWall_Mesh ({BuildingName})",
             hideFlags = HideFlags.DontSave,
         };
         mesh.vertices = verts;
@@ -883,7 +859,7 @@ public class Building : ComplexRoom
         mr.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
         mr.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
 
-        Debug.Log($"[Building.Wall] {buildingName}: built perimeter wall — size={box.size.x:F2}×{box.size.z:F2}, " +
+        Debug.Log($"[Building.Wall] {BuildingName}: built perimeter wall — size={box.size.x:F2}×{box.size.z:F2}, " +
                   $"height={h:F2}, alpha=[{settings.WallAlphaBottom:F2}→{settings.WallAlphaTop:F2}]");
     }
 
@@ -895,10 +871,10 @@ public class Building : ComplexRoom
     /// </summary>
     private void EnsureConstructionFootprintMarker()
     {
-        if (_constructionVisualRoot == null) { Debug.LogWarning($"[Building.Footprint] {buildingName}: _constructionVisualRoot null — skip"); return; }
-        if (_constructionFootprintMaterial == null) { Debug.LogWarning($"[Building.Footprint] {buildingName}: _constructionFootprintMaterial null — skip"); return; }
-        if (!(_buildingZone is BoxCollider box)) { Debug.LogWarning($"[Building.Footprint] {buildingName}: _buildingZone not a BoxCollider — skip"); return; }
-        Debug.Log($"[Building.Footprint] {buildingName}: creating marker — bzCenter={box.center} bzSize={box.size}");
+        if (_constructionVisualRoot == null) { Debug.LogWarning($"[Building.Footprint] {BuildingName}: _constructionVisualRoot null — skip"); return; }
+        if (_constructionFootprintMaterial == null) { Debug.LogWarning($"[Building.Footprint] {BuildingName}: _constructionFootprintMaterial null — skip"); return; }
+        if (!(_buildingZone is BoxCollider box)) { Debug.LogWarning($"[Building.Footprint] {BuildingName}: _buildingZone not a BoxCollider — skip"); return; }
+        Debug.Log($"[Building.Footprint] {BuildingName}: creating marker — bzCenter={box.center} bzSize={box.size}");
 
         GameObject marker;
         try
@@ -936,7 +912,7 @@ public class Building : ComplexRoom
 
     private void HandleStateChanged(MWI.WorldSystem.BuildingState previousValue, MWI.WorldSystem.BuildingState newValue)
     {
-        Debug.Log($"<color=cyan>[Building.HandleStateChanged]</color> {buildingName} {previousValue} → {newValue} | IsServer={IsServer}");
+        Debug.Log($"<color=cyan>[Building.HandleStateChanged]</color> {BuildingName} {previousValue} → {newValue} | IsServer={IsServer}");
 
         // Visual swap runs on every peer (client + server), every state change.
         ApplyConstructionVisuals(newValue);
@@ -1018,7 +994,7 @@ public class Building : ComplexRoom
             if (c.enabled != showOriginals) c.enabled = showOriginals;
         }
 
-        Debug.Log($"<color=cyan>[Building.ApplyVisuals]</color> {buildingName} state={state} (under={underConstruction}) | conRoot={(_constructionVisualRoot != null ? _constructionVisualRoot.name : "NULL")} was={conActive} now={(_constructionVisualRoot != null && _constructionVisualRoot.activeSelf)} | cmpRoot={(_completedVisualRoot != null ? _completedVisualRoot.name : "NULL")} was={cmpActive} now={(_completedVisualRoot != null && _completedVisualRoot.activeSelf)} | extraToggled={_extraOriginalRenderersToToggle.Count} | IsServer={IsServer} IsClient={IsClient}");
+        Debug.Log($"<color=cyan>[Building.ApplyVisuals]</color> {BuildingName} state={state} (under={underConstruction}) | conRoot={(_constructionVisualRoot != null ? _constructionVisualRoot.name : "NULL")} was={conActive} now={(_constructionVisualRoot != null && _constructionVisualRoot.activeSelf)} | cmpRoot={(_completedVisualRoot != null ? _completedVisualRoot.name : "NULL")} was={cmpActive} now={(_completedVisualRoot != null && _completedVisualRoot.activeSelf)} | extraToggled={_extraOriginalRenderersToToggle.Count} | IsServer={IsServer} IsClient={IsClient}");
     }
 
     protected virtual void OnDestroy()
@@ -1171,7 +1147,7 @@ public class Building : ComplexRoom
         if (!IsServer) return;
         if (_currentState.Value == MWI.WorldSystem.BuildingState.Complete) return;
 
-        Debug.Log($"<color=red>[Building.BuildInstantly]</color> {buildingName} BYPASSING construction loop — _isStarted={_isStarted} | reqs={EffectiveConstructionRequirements?.Count ?? 0} | currentState={_currentState.Value}");
+        Debug.Log($"<color=red>[Building.BuildInstantly]</color> {BuildingName} BYPASSING construction loop — _isStarted={_isStarted} | reqs={EffectiveConstructionRequirements?.Count ?? 0} | currentState={_currentState.Value}");
 
         if (_isStarted)
         {
@@ -1209,11 +1185,11 @@ public class Building : ComplexRoom
 
         if (!_isStarted)
         {
-            Debug.LogError($"<color=red>[Building.BuildInstantly]</color> {buildingName} deferral timed out after {maxFrames} frames — Start never ran. Cascade will not fire.", this);
+            Debug.LogError($"<color=red>[Building.BuildInstantly]</color> {BuildingName} deferral timed out after {maxFrames} frames — Start never ran. Cascade will not fire.", this);
             yield break;
         }
 
-        Debug.Log($"<color=red>[Building.BuildInstantly]</color> {buildingName} deferral resolved after {frames} frame(s); flipping state now.");
+        Debug.Log($"<color=red>[Building.BuildInstantly]</color> {BuildingName} deferral resolved after {frames} frame(s); flipping state now.");
         DoInstantBuildStateFlip();
     }
 
@@ -1245,7 +1221,7 @@ public class Building : ComplexRoom
         }
 
         _contributedMaterials[item] += amount;
-        Debug.Log($"[Building] Contributed {amount}x {item.ItemName} to {buildingName} construction.");
+        Debug.Log($"[Building] Contributed {amount}x {item.ItemName} to {BuildingName} construction.");
 
         CheckConstructionCompletion();
     }
@@ -1269,7 +1245,7 @@ public class Building : ComplexRoom
         if (isFinished)
         {
             _currentState.Value = MWI.WorldSystem.BuildingState.Complete;
-            Debug.Log($"<color=green>[Building]</color> {buildingName} has finished construction!");
+            Debug.Log($"<color=green>[Building]</color> {BuildingName} has finished construction!");
             // OnConstructionComplete will be triggered by state change callback
         }
     }
@@ -1355,6 +1331,11 @@ public class Building : ComplexRoom
         Furniture[] children = GetComponentsInChildren<Furniture>(includeInactive: true);
         if (children == null || children.Length == 0) return;
 
+        // Force lazy init of _runtimeDefaultFurnitureLayout so blueprint-authored slots are
+        // present BEFORE the append/override loop below. Without this, nested-prefab-converted
+        // slots would replace (not layer on top of) the blueprint slots on first read.
+        _ = EffectiveDefaultFurnitureLayout;
+
         int converted = 0;
         int skipped = 0;
         foreach (var furniture in children)
@@ -1372,7 +1353,7 @@ public class Building : ComplexRoom
             if (furniture.FurnitureItemSO == null)
             {
                 Debug.LogWarning(
-                    $"<color=orange>[Building]</color> {buildingName}: nested furniture '{furniture.name}' has a NetworkObject but no FurnitureItemSO — destroying without conversion (would have half-spawned anyway).",
+                    $"<color=orange>[Building]</color> {BuildingName}: nested furniture '{furniture.name}' has a NetworkObject but no FurnitureItemSO — destroying without conversion (would have half-spawned anyway).",
                     this);
                 DestroyImmediate(furniture.gameObject);
                 continue;
@@ -1407,20 +1388,20 @@ public class Building : ComplexRoom
             // which only happens when a manual _defaultFurnitureLayout entry was authored AND
             // the same nested-child sat at the same world position. Converted child wins.
             const float positionEpsilon = 0.01f;
-            int existingIndex = _defaultFurnitureLayout.FindIndex(s =>
+            int existingIndex = _runtimeDefaultFurnitureLayout.FindIndex(s =>
                 s != null
                 && s.ItemSO == slot.ItemSO
                 && Vector3.Distance(s.LocalPosition, slot.LocalPosition) < positionEpsilon);
             if (existingIndex >= 0)
             {
                 Debug.Log(
-                    $"<color=cyan>[Building]</color> {buildingName}: nested child '{furniture.name}' overrides existing manual _defaultFurnitureLayout entry [{existingIndex}] for ItemSO '{slot.ItemSO.name}' at position {slot.LocalPosition}. Remove the manual slot to silence this log.",
+                    $"<color=cyan>[Building]</color> {BuildingName}: nested child '{furniture.name}' overrides existing blueprint DefaultFurnitureLayout entry [{existingIndex}] for ItemSO '{slot.ItemSO.name}' at position {slot.LocalPosition}. Remove the blueprint slot to silence this log.",
                     this);
-                _defaultFurnitureLayout[existingIndex] = slot;
+                _runtimeDefaultFurnitureLayout[existingIndex] = slot;
             }
             else
             {
-                _defaultFurnitureLayout.Add(slot);
+                _runtimeDefaultFurnitureLayout.Add(slot);
             }
 
             DestroyImmediate(furniture.gameObject);
@@ -1430,7 +1411,7 @@ public class Building : ComplexRoom
         if (converted > 0 || skipped > 0)
         {
             Debug.Log(
-                $"<color=cyan>[Building]</color> {buildingName}: converted {converted} nested NetworkObject furniture child(ren) to _defaultFurnitureLayout (skipped {skipped} non-network furniture).",
+                $"<color=cyan>[Building]</color> {BuildingName}: converted {converted} nested NetworkObject furniture child(ren) to _defaultFurnitureLayout (skipped {skipped} non-network furniture).",
                 this);
         }
     }
@@ -1497,13 +1478,13 @@ public class Building : ComplexRoom
             var slot = layout[i];
             if (slot == null || slot.ItemSO == null || slot.ItemSO.InstalledFurniturePrefab == null)
             {
-                Debug.LogWarning($"[Building] {buildingName}: _defaultFurnitureLayout[{i}] is missing ItemSO or InstalledFurniturePrefab — slot skipped.", this);
+                Debug.LogWarning($"[Building] {BuildingName}: _defaultFurnitureLayout[{i}] is missing ItemSO or InstalledFurniturePrefab — slot skipped.", this);
                 continue;
             }
 
             if (existingItemSOs.Contains(slot.ItemSO))
             {
-                Debug.Log($"[Building] {buildingName}: slot[{i}] '{slot.ItemSO.name}' already present as a baked or restored child — skipping spawn.", this);
+                Debug.Log($"[Building] {BuildingName}: slot[{i}] '{slot.ItemSO.name}' already present as a baked or restored child — skipping spawn.", this);
                 continue;
             }
 
@@ -1576,7 +1557,7 @@ public class Building : ComplexRoom
             else
             {
                 Debug.LogWarning(
-                    $"[Building] {buildingName}: default furniture slot for '{slot.ItemSO.name}' has no TargetRoom and the MainRoom has no FurnitureManager — slot will spawn under the building root without grid registration.",
+                    $"[Building] {BuildingName}: default furniture slot for '{slot.ItemSO.name}' has no TargetRoom and the MainRoom has no FurnitureManager — slot will spawn under the building root without grid registration.",
                     this);
             }
         }
@@ -1648,7 +1629,7 @@ public class Building : ComplexRoom
 
         _currentState.Value = MWI.WorldSystem.BuildingState.Complete;
         if (ConstructionProgress.Value < 1f) ConstructionProgress.Value = 1f;
-        Debug.Log($"<color=green>[Building.Construction]</color> {buildingName} completed by Finalize().");
+        Debug.Log($"<color=green>[Building.Construction]</color> {BuildingName} completed by Finalize().");
     }
 
     /// <summary>
@@ -1678,10 +1659,10 @@ public class Building : ComplexRoom
     [Unity.Netcode.ServerRpc(RequireOwnership = false)]
     public void RequestStartFinishConstructionServerRpc(Unity.Netcode.NetworkBehaviourReference actorRef)
     {
-        if (!IsServer) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — !IsServer"); return; }
+        if (!IsServer) { Debug.LogWarning($"[Building.SRpc] {BuildingName} aborted — !IsServer"); return; }
         if (!IsUnderConstruction) return; // benign — zone-press race after Finalize.
-        if (!actorRef.TryGet(out Character actor) || actor == null) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — actorRef.TryGet failed"); return; }
-        if (actor.CharacterActions == null) { Debug.LogWarning($"[Building.SRpc] {buildingName} aborted — actor.CharacterActions null"); return; }
+        if (!actorRef.TryGet(out Character actor) || actor == null) { Debug.LogWarning($"[Building.SRpc] {BuildingName} aborted — actorRef.TryGet failed"); return; }
+        if (actor.CharacterActions == null) { Debug.LogWarning($"[Building.SRpc] {BuildingName} aborted — actor.CharacterActions null"); return; }
 
         // Cooperative model: any character can finalize. Phase 1 owner-check removed.
         var action = new CharacterAction_FinishConstruction(actor, this);
@@ -1731,7 +1712,7 @@ public class Building : ComplexRoom
         }
         if (_pendingOwnerIds.Count == 0) return;
 
-        Debug.Log($"<color=cyan>[Building:RestoreOwners]</color> {buildingName}: pending owners={_pendingOwnerIds.Count}");
+        Debug.Log($"<color=cyan>[Building:RestoreOwners]</color> {BuildingName}: pending owners={_pendingOwnerIds.Count}");
 
         TryResolvePendingOwners();
 
@@ -1747,7 +1728,7 @@ public class Building : ComplexRoom
             Character.OnCharacterSpawned += HandleCharacterIdentityResolvedForOwnerRestore;
             Character.OnCharacterIdReassigned += HandleCharacterIdentityResolvedForOwnerRestore;
             _waitingForOwnerCharacters = true;
-            Debug.Log($"<color=cyan>[Building:RestoreOwners]</color> {buildingName}: subscribed to OnCharacterSpawned + OnCharacterIdReassigned for {_pendingOwnerIds.Count} owner(s).");
+            Debug.Log($"<color=cyan>[Building:RestoreOwners]</color> {BuildingName}: subscribed to OnCharacterSpawned + OnCharacterIdReassigned for {_pendingOwnerIds.Count} owner(s).");
         }
     }
 
@@ -1780,12 +1761,12 @@ public class Building : ComplexRoom
             try
             {
                 BindRestoredOwner(owner);
-                Debug.Log($"<color=green>[Building:RestoreOwners]</color> {buildingName}: bound owner '{owner.CharacterName}' (id={id}).");
+                Debug.Log($"<color=green>[Building:RestoreOwners]</color> {BuildingName}: bound owner '{owner.CharacterName}' (id={id}).");
             }
             catch (Exception e)
             {
                 Debug.LogException(e);
-                Debug.LogError($"<color=red>[Building:RestoreOwners]</color> {buildingName}: BindRestoredOwner threw for id={id} — entry skipped.");
+                Debug.LogError($"<color=red>[Building:RestoreOwners]</color> {BuildingName}: BindRestoredOwner threw for id={id} — entry skipped.");
             }
             finally
             {

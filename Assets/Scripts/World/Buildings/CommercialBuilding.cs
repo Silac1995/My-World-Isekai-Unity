@@ -539,7 +539,7 @@ public abstract class CommercialBuilding : Building
     {
         if (!DebugInventorySync) return;
         string role = IsServer ? "Server" : "Client";
-        Debug.Log($"<color=#88ddff>[InventorySync:{role}-OnChanged]</color> {buildingName}: event={evt.Type} value='{evt.Value}' (NetworkList now {_inventoryItemIds.Count} entries).");
+        Debug.Log($"<color=#88ddff>[InventorySync:{role}-OnChanged]</color> {BuildingName}: event={evt.Type} value='{evt.Value}' (NetworkList now {_inventoryItemIds.Count} entries).");
     }
 
     // =========================================================================
@@ -902,7 +902,7 @@ public abstract class CommercialBuilding : Building
             _ownerCommunity = null;
         }
 
-        Debug.Log($"<color=green>[Building]</color> {newOwner?.CharacterName} now owns {buildingName}.");
+        Debug.Log($"<color=green>[Building]</color> {newOwner?.CharacterName} now owns {BuildingName}.");
 
         // Restore path passes autoAssignJob=false because the saved Employees list
         // already carries the boss's actual job (avoids the auto-pick stealing a slot
@@ -982,7 +982,7 @@ public abstract class CommercialBuilding : Building
 
         if (_pendingEmployees.Count == 0) return;
 
-        Debug.Log($"<color=cyan>[CommercialBuilding:RestoreEmployees]</color> {buildingName}: pending employees={_pendingEmployees.Count}");
+        Debug.Log($"<color=cyan>[CommercialBuilding:RestoreEmployees]</color> {BuildingName}: pending employees={_pendingEmployees.Count}");
 
         TryResolvePendingEmployees();
 
@@ -996,7 +996,7 @@ public abstract class CommercialBuilding : Building
             Character.OnCharacterSpawned += HandleCharacterIdentityResolvedForEmployeeRestore;
             Character.OnCharacterIdReassigned += HandleCharacterIdentityResolvedForEmployeeRestore;
             _waitingForEmployeeCharacters = true;
-            Debug.Log($"<color=cyan>[CommercialBuilding:RestoreEmployees]</color> {buildingName}: subscribed to OnCharacterSpawned + OnCharacterIdReassigned for {_pendingEmployees.Count} employee(s).");
+            Debug.Log($"<color=cyan>[CommercialBuilding:RestoreEmployees]</color> {BuildingName}: subscribed to OnCharacterSpawned + OnCharacterIdReassigned for {_pendingEmployees.Count} employee(s).");
         }
     }
 
@@ -1057,18 +1057,18 @@ public abstract class CommercialBuilding : Building
             {
                 // Job type missing from this building's roster (data drift) —
                 // log and drop so we don't keep retrying forever.
-                Debug.LogWarning($"<color=orange>[CommercialBuilding:RestoreEmployees]</color> {buildingName}: no free '{entry.JobType}' slot for worker '{worker.CharacterName}'. Dropping pending entry.");
+                Debug.LogWarning($"<color=orange>[CommercialBuilding:RestoreEmployees]</color> {BuildingName}: no free '{entry.JobType}' slot for worker '{worker.CharacterName}'. Dropping pending entry.");
                 _pendingEmployees.RemoveAt(i);
                 continue;
             }
 
             if (worker.CharacterJob != null && worker.CharacterJob.TakeJob(job, this))
             {
-                Debug.Log($"<color=green>[CommercialBuilding:RestoreEmployees]</color> {buildingName}: bound '{worker.CharacterName}' to {entry.JobType}.");
+                Debug.Log($"<color=green>[CommercialBuilding:RestoreEmployees]</color> {BuildingName}: bound '{worker.CharacterName}' to {entry.JobType}.");
             }
             else
             {
-                Debug.LogWarning($"<color=orange>[CommercialBuilding:RestoreEmployees]</color> {buildingName}: TakeJob failed for '{worker.CharacterName}' on '{entry.JobType}' (schedule conflict?). Dropping pending entry.");
+                Debug.LogWarning($"<color=orange>[CommercialBuilding:RestoreEmployees]</color> {BuildingName}: TakeJob failed for '{worker.CharacterName}' on '{entry.JobType}' (schedule conflict?). Dropping pending entry.");
             }
             _pendingEmployees.RemoveAt(i);
         }
@@ -1151,21 +1151,21 @@ public abstract class CommercialBuilding : Building
         // A boss is required to hire (direct boss or community leader).
         if (!HasOwner && !HasCommunityLeader())
         {
-            Debug.Log($"<color=red>[Building]</color> {buildingName} has no boss or community leader. Nobody can hire here.");
+            Debug.Log($"<color=red>[Building]</color> {BuildingName} has no boss or community leader. Nobody can hire here.");
             return false;
         }
 
         // The job must exist in this building.
         if (!_jobs.Contains(job))
         {
-            Debug.Log($"<color=red>[Building]</color> The position {job.JobTitle} does not exist in {buildingName}.");
+            Debug.Log($"<color=red>[Building]</color> The position {job.JobTitle} does not exist in {BuildingName}.");
             return false;
         }
 
         // The job must be vacant.
         if (job.IsAssigned)
         {
-            Debug.Log($"<color=orange>[Building]</color> The position {job.JobTitle} at {buildingName} is already taken.");
+            Debug.Log($"<color=orange>[Building]</color> The position {job.JobTitle} at {BuildingName} is already taken.");
             return false;
         }
 
@@ -1288,21 +1288,21 @@ public abstract class CommercialBuilding : Building
         // in TimeClockFurnitureInteractable.Interact is UX-only).
         if (!IsWorkerEmployedHere(worker))
         {
-            Debug.LogWarning($"[CommercialBuilding] Punch denied: {worker.CharacterName} is not employed at {buildingName}.");
+            Debug.LogWarning($"[CommercialBuilding] Punch denied: {worker.CharacterName} is not employed at {BuildingName}.");
             return;
         }
 
         var clock = TimeClock;
         if (clock == null)
         {
-            Debug.LogWarning($"[CommercialBuilding] {buildingName} has no TimeClockFurniture authored — cannot honour player punch request.");
+            Debug.LogWarning($"[CommercialBuilding] {BuildingName} has no TimeClockFurniture authored — cannot honour player punch request.");
             return;
         }
 
         var interactable = clock.GetComponent<TimeClockFurnitureInteractable>();
         if (interactable == null)
         {
-            Debug.LogError($"[CommercialBuilding] TimeClockFurniture on {buildingName} is missing a TimeClockFurnitureInteractable sibling component.");
+            Debug.LogError($"[CommercialBuilding] TimeClockFurniture on {BuildingName} is missing a TimeClockFurnitureInteractable sibling component.");
             return;
         }
 
@@ -1320,7 +1320,7 @@ public abstract class CommercialBuilding : Building
                 ? $"bounds.center={zone.bounds.center} extents={zone.bounds.extents}"
                 : "zone=null";
             Debug.LogWarning(
-                $"[CommercialBuilding] Punch denied: {worker.CharacterName} is not inside the Time Clock interaction zone at {buildingName}. " +
+                $"[CommercialBuilding] Punch denied: {worker.CharacterName} is not inside the Time Clock interaction zone at {BuildingName}. " +
                 $"worker.transform.position={worker.transform.position} " +
                 $"worker.Rigidbody.position={(worker.Rigidbody != null ? worker.Rigidbody.position.ToString() : "null")} " +
                 $"zone.{zoneInfo}");
@@ -1482,7 +1482,7 @@ public abstract class CommercialBuilding : Building
 
             _activeWorkerIds.Add(new FixedString64Bytes(worker.CharacterId));
 
-            Debug.Log($"<color=green>[Building]</color> {worker.CharacterName} punched in at {buildingName}.");
+            Debug.Log($"<color=green>[Building]</color> {worker.CharacterName} punched in at {BuildingName}.");
 
             // Shift-punch storage-role assignment pass (server-only). Every worker punching
             // in re-runs the rule; idempotent — only writes when a storage's current role
@@ -1501,7 +1501,7 @@ public abstract class CommercialBuilding : Building
             catch (System.Exception e)
             {
                 Debug.LogException(e);
-                Debug.LogError($"[CommercialBuilding] {buildingName}: AssignStorageRolesForShift threw during WorkerStartingShift(worker={worker.CharacterName}). Continuing.");
+                Debug.LogError($"[CommercialBuilding] {BuildingName}: AssignStorageRolesForShift threw during WorkerStartingShift(worker={worker.CharacterName}). Continuing.");
             }
 
             // Sibling pass for the unified B2B Treasury (2026-05-09): every Safe with
@@ -1518,7 +1518,7 @@ public abstract class CommercialBuilding : Building
             catch (System.Exception e)
             {
                 Debug.LogException(e);
-                Debug.LogError($"[CommercialBuilding] {buildingName}: AssignSafeRolesForShift threw during WorkerStartingShift(worker={worker.CharacterName}). Continuing.");
+                Debug.LogError($"[CommercialBuilding] {BuildingName}: AssignSafeRolesForShift threw during WorkerStartingShift(worker={worker.CharacterName}). Continuing.");
             }
 
             // Trigger the logistics logic if this is the manager.
@@ -1815,7 +1815,7 @@ public abstract class CommercialBuilding : Building
                 }
             }
 
-            Debug.Log($"<color=orange>[Building]</color> {worker.CharacterName} punched out of {buildingName}.");
+            Debug.Log($"<color=orange>[Building]</color> {worker.CharacterName} punched out of {BuildingName}.");
 
             if (worker.CharacterJob != null)
             {
@@ -1841,7 +1841,7 @@ public abstract class CommercialBuilding : Building
         if (_inventory.Contains(item))
         {
             if (NPCDebug.VerboseJobs)
-                Debug.Log($"<color=#888888>[Building]</color> {item.ItemSO.ItemName} already in inventory of {buildingName} — skip duplicate add.");
+                Debug.Log($"<color=#888888>[Building]</color> {item.ItemSO.ItemName} already in inventory of {BuildingName} — skip duplicate add.");
             return;
         }
         _inventory.Add(item);
@@ -1859,7 +1859,7 @@ public abstract class CommercialBuilding : Building
         // Gated to avoid the Windows console-buffer progressive-freeze documented in
         // wiki/gotchas/host-progressive-freeze-debug-log-spam.md.
         if (NPCDebug.VerboseJobs)
-            Debug.Log($"<color=green>[Building]</color> {item.ItemSO.ItemName} added to inventory of {buildingName}.");
+            Debug.Log($"<color=green>[Building]</color> {item.ItemSO.ItemName} added to inventory of {BuildingName}.");
     }
 
     public virtual ItemInstance TakeFromInventory(ItemSO itemSO)
@@ -1952,7 +1952,7 @@ public abstract class CommercialBuilding : Building
         if (!IsServer || _inventoryItemIds == null || itemSO == null) return;
         _inventoryItemIds.Add(ResolveItemNetKey(itemSO));
         if (DebugInventorySync)
-            Debug.Log($"<color=#88ff88>[InventorySync:Server-Add]</color> {buildingName}: +{itemSO.ItemId} (NetworkList now {_inventoryItemIds.Count} entries).");
+            Debug.Log($"<color=#88ff88>[InventorySync:Server-Add]</color> {BuildingName}: +{itemSO.ItemId} (NetworkList now {_inventoryItemIds.Count} entries).");
     }
 
     // Cache of every ItemSO under Resources/Data/Item, lazily loaded once per session.
@@ -1983,7 +1983,7 @@ public abstract class CommercialBuilding : Building
             catch (System.Exception e)
             {
                 Debug.LogException(e);
-                Debug.LogError($"[CommercialBuilding] {buildingName}: GetInventoryCountsByItemSO failed to load ItemSOs from Resources/Data/Item.");
+                Debug.LogError($"[CommercialBuilding] {BuildingName}: GetInventoryCountsByItemSO failed to load ItemSOs from Resources/Data/Item.");
                 return result;
             }
         }
@@ -2022,7 +2022,7 @@ public abstract class CommercialBuilding : Building
             {
                 _inventoryItemIds.RemoveAt(i);
                 if (DebugInventorySync)
-                    Debug.Log($"<color=#ff8888>[InventorySync:Server-Remove]</color> {buildingName}: -{itemSO.ItemId} (NetworkList now {_inventoryItemIds.Count} entries).");
+                    Debug.Log($"<color=#ff8888>[InventorySync:Server-Remove]</color> {BuildingName}: -{itemSO.ItemId} (NetworkList now {_inventoryItemIds.Count} entries).");
                 return;
             }
         }
@@ -2060,7 +2060,7 @@ public abstract class CommercialBuilding : Building
         int hitCount = Physics.OverlapBoxNonAlloc(center, halfExtents, buffer, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
         if (hitCount == OverlapBufferSize)
         {
-            Debug.LogWarning($"[CommercialBuilding] {buildingName}: GetWorldItemsInStorage saturated the OverlapBox buffer ({OverlapBufferSize}). Bump OverlapBufferSize — items beyond #{OverlapBufferSize} were truncated this scan.", this);
+            Debug.LogWarning($"[CommercialBuilding] {BuildingName}: GetWorldItemsInStorage saturated the OverlapBox buffer ({OverlapBufferSize}). Bump OverlapBufferSize — items beyond #{OverlapBufferSize} were truncated this scan.", this);
         }
 
         for (int i = 0; i < hitCount; i++)
@@ -2379,7 +2379,7 @@ public abstract class CommercialBuilding : Building
             int hitCount = Physics.OverlapBoxNonAlloc(center, halfExtents, buffer, boxCol.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
             if (hitCount == OverlapBufferSize)
             {
-                Debug.LogWarning($"[CommercialBuilding] {buildingName}: CountUnabsorbedItemsInBuildingZone saturated the OverlapBox buffer ({OverlapBufferSize}). Bump OverlapBufferSize — items beyond #{OverlapBufferSize} were truncated this scan.", this);
+                Debug.LogWarning($"[CommercialBuilding] {BuildingName}: CountUnabsorbedItemsInBuildingZone saturated the OverlapBox buffer ({OverlapBufferSize}). Bump OverlapBufferSize — items beyond #{OverlapBufferSize} were truncated this scan.", this);
             }
 
             for (int i = 0; i < hitCount; i++)
@@ -2436,7 +2436,7 @@ public abstract class CommercialBuilding : Building
             {
                 // Defensive: a broken equipment component on one worker must not break the whole stock check.
                 Debug.LogException(e);
-                Debug.LogError($"[CommercialBuilding] {buildingName}: CountUnabsorbedItemsInBuildingZone threw while scanning worker '{worker?.CharacterName}'. Skipping that worker's contribution this tick.");
+                Debug.LogError($"[CommercialBuilding] {BuildingName}: CountUnabsorbedItemsInBuildingZone threw while scanning worker '{worker?.CharacterName}'. Skipping that worker's contribution this tick.");
             }
         }
 
@@ -2481,7 +2481,7 @@ public abstract class CommercialBuilding : Building
                     int hitCount = Physics.OverlapBoxNonAlloc(center, halfExtents, buffer, pickupBox.transform.rotation, Physics.AllLayers, QueryTriggerInteraction.Collide);
                     if (hitCount == OverlapBufferSize)
                     {
-                        Debug.LogWarning($"[CommercialBuilding] {buildingName}: RefreshStorageInventory PickupZone scan saturated the OverlapBox buffer ({OverlapBufferSize}). Bump OverlapBufferSize — items beyond #{OverlapBufferSize} were truncated this scan.", this);
+                        Debug.LogWarning($"[CommercialBuilding] {BuildingName}: RefreshStorageInventory PickupZone scan saturated the OverlapBox buffer ({OverlapBufferSize}). Bump OverlapBufferSize — items beyond #{OverlapBufferSize} were truncated this scan.", this);
                     }
                     for (int i = 0; i < hitCount; i++)
                     {
@@ -2495,7 +2495,7 @@ public abstract class CommercialBuilding : Building
                 {
                     // Defensive (rule #31): a PhysX hiccup on PickupZone scan must not derail the whole refresh.
                     Debug.LogException(e);
-                    Debug.LogError($"[CommercialBuilding] {buildingName}: Physics.OverlapBox threw while scanning PickupZone. Pass 1 proceeds with StorageZone items only.");
+                    Debug.LogError($"[CommercialBuilding] {BuildingName}: Physics.OverlapBox threw while scanning PickupZone. Pass 1 proceeds with StorageZone items only.");
                 }
             }
         }
@@ -2559,7 +2559,7 @@ public abstract class CommercialBuilding : Building
 
         if (ghostlyInstances.Count > 0)
         {
-            Debug.LogWarning($"<color=orange>[CommercialBuilding]</color> {buildingName}: Audit detected {ghostlyInstances.Count} logical objects with no physical counterpart! Cleaning up...");
+            Debug.LogWarning($"<color=orange>[CommercialBuilding]</color> {BuildingName}: Audit detected {ghostlyInstances.Count} logical objects with no physical counterpart! Cleaning up...");
 
             foreach (var ghost in ghostlyInstances)
             {
@@ -2594,7 +2594,7 @@ public abstract class CommercialBuilding : Building
 
         if (absorbed > 0)
         {
-            Debug.Log($"<color=green>[CommercialBuilding]</color> {buildingName}: Audit absorbed {absorbed} orphan physical object(s) into the logical inventory.");
+            Debug.Log($"<color=green>[CommercialBuilding]</color> {BuildingName}: Audit absorbed {absorbed} orphan physical object(s) into the logical inventory.");
         }
     }
 
@@ -3019,7 +3019,7 @@ public abstract class CommercialBuilding : Building
         {
             // Shouldn't happen — CanAffordFromTreasury guarded the entry. Log and refuse so
             // callers don't silently believe the debit succeeded.
-            Debug.LogError($"[Treasury] {buildingName}: TryDebitTreasury post-guard mismatch (remaining={remaining} after debiting across {safes.Count} safes, reason='{reason}'). Treasury state may be inconsistent.");
+            Debug.LogError($"[Treasury] {BuildingName}: TryDebitTreasury post-guard mismatch (remaining={remaining} after debiting across {safes.Count} safes, reason='{reason}'). Treasury state may be inconsistent.");
             return false;
         }
         return true;
@@ -3036,13 +3036,13 @@ public abstract class CommercialBuilding : Building
         if (!IsServer) return;
         if (amount <= 0)
         {
-            Debug.LogError($"[Treasury] {buildingName}: CreditTreasury rejected non-positive amount {amount} (reason='{reason}').");
+            Debug.LogError($"[Treasury] {BuildingName}: CreditTreasury rejected non-positive amount {amount} (reason='{reason}').");
             return;
         }
         var safes = TreasurySafes;
         if (safes.Count == 0)
         {
-            Debug.LogWarning($"[Treasury] {buildingName}: CreditTreasury({amount}, '{reason}') skipped — building has no Treasury-role safe to receive funds.");
+            Debug.LogWarning($"[Treasury] {BuildingName}: CreditTreasury({amount}, '{reason}') skipped — building has no Treasury-role safe to receive funds.");
             return;
         }
         SafeFurniture pick = safes[0];
@@ -3232,7 +3232,7 @@ public abstract class CommercialBuilding : Building
         }
         if (caller == null || Owner == null || caller != Owner)
         {
-            Debug.LogWarning($"[CommercialBuilding] {buildingName}: TrySetStorageRoleServerRpc rejected — caller is not the owner.");
+            Debug.LogWarning($"[CommercialBuilding] {BuildingName}: TrySetStorageRoleServerRpc rejected — caller is not the owner.");
             return;
         }
 
@@ -3250,7 +3250,7 @@ public abstract class CommercialBuilding : Building
         }
         if (!roleSupported)
         {
-            Debug.LogWarning($"[CommercialBuilding] {buildingName}: role {newRole} is not in SupportedStorageRoles — rejecting.");
+            Debug.LogWarning($"[CommercialBuilding] {BuildingName}: role {newRole} is not in SupportedStorageRoles — rejecting.");
             return;
         }
 
@@ -3258,7 +3258,7 @@ public abstract class CommercialBuilding : Building
         var storage = netObj.GetComponent<StorageFurniture>();
         if (storage == null)
         {
-            Debug.LogWarning($"[CommercialBuilding] {buildingName}: TrySetStorageRoleServerRpc target is not a StorageFurniture.");
+            Debug.LogWarning($"[CommercialBuilding] {BuildingName}: TrySetStorageRoleServerRpc target is not a StorageFurniture.");
             return;
         }
 
@@ -3303,7 +3303,7 @@ public abstract class CommercialBuilding : Building
         if (storage == null) return;
         if (!IsServer)
         {
-            Debug.LogError($"[CommercialBuilding] {buildingName}: DoSetStorageRole called on non-server peer — server authority violation. Route through TrySetStorageRoleServerRpc.");
+            Debug.LogError($"[CommercialBuilding] {BuildingName}: DoSetStorageRole called on non-server peer — server authority violation. Route through TrySetStorageRoleServerRpc.");
             return;
         }
 
@@ -3319,7 +3319,7 @@ public abstract class CommercialBuilding : Building
             // missing a required network component) and silently swallowing it caused a
             // playtest where the dropdown appeared to do nothing. Promote to LogError so
             // it's not lost in the noise next time.
-            Debug.LogError($"[CommercialBuilding] {buildingName}: storage '{storage.FurnitureName}' has no StorageFurnitureNetworkSync sibling — role write DROPPED. Check the prefab — base StorageFurniture variants must inherit the sync component.");
+            Debug.LogError($"[CommercialBuilding] {BuildingName}: storage '{storage.FurnitureName}' has no StorageFurnitureNetworkSync sibling — role write DROPPED. Check the prefab — base StorageFurniture variants must inherit the sync component.");
             return;
         }
 
@@ -3358,7 +3358,7 @@ public abstract class CommercialBuilding : Building
         }
         if (!roleSupported)
         {
-            Debug.LogWarning($"[CommercialBuilding] {buildingName}: TrySetStorageRoleServer rejected role {newRole} — not in SupportedStorageRoles.");
+            Debug.LogWarning($"[CommercialBuilding] {BuildingName}: TrySetStorageRoleServer rejected role {newRole} — not in SupportedStorageRoles.");
             return false;
         }
 
@@ -3386,7 +3386,7 @@ public abstract class CommercialBuilding : Building
     /// FarmingBuilding in Plan 3).
     ///
     /// Default format:
-    ///     "Hiring at {buildingName}:
+    ///     "Hiring at {BuildingName}:
     ///      • 2 Farmer positions
     ///      • 1 Logistics Manager
     ///     For application, see the owner in person."

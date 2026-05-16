@@ -30,7 +30,7 @@ public class ForgeBuilding : CraftingBuilding
             _jobs.Add(new JobBlacksmithApprentice(_smithingSkill, _minimumApprenticeTier));
         }
 
-        Debug.Log($"<color=orange>[Forge]</color> {buildingName} initialized with 1 Manager, 1 Blacksmith and {_apprenticeCount} Apprentice(s).");
+        Debug.Log($"<color=orange>[Forge]</color> {BuildingName} initialized with 1 Manager, 1 Blacksmith and {_apprenticeCount} Apprentice(s).");
     }
 
     /// <summary>

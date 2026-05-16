@@ -117,7 +117,7 @@ public class HarvestingBuilding : CommercialBuilding
 
         _jobs.Add(new JobLogisticsManager("Logistics Manager"));
 
-        Debug.Log($"<color=green>[HarvestingBuilding]</color> {buildingName} initialisé avec {_harvesterCount} {_harvesterJobTitle}(s) et 1 Manager.");
+        Debug.Log($"<color=green>[HarvestingBuilding]</color> {BuildingName} initialisé avec {_harvesterCount} {_harvesterJobTitle}(s) et 1 Manager.");
     }
 
     // === Gestion de la zone de récolte ===
@@ -190,7 +190,7 @@ public class HarvestingBuilding : CommercialBuilding
         }
         else
         {
-            Debug.Log($"<color=orange>[HarvestingBuilding]</color> {buildingName} : Scan de {zone.zoneName} n'a rien trouvé. Retour à l'exploration.");
+            Debug.Log($"<color=orange>[HarvestingBuilding]</color> {BuildingName} : Scan de {zone.zoneName} n'a rien trouvé. Retour à l'exploration.");
         }
     }
 
@@ -292,7 +292,7 @@ public class HarvestingBuilding : CommercialBuilding
         if (zone == null) return;
 
         _harvestableZone = zone;
-        Debug.Log($"<color=green>[HarvestingBuilding]</color> {buildingName} : zone de récolte trouvée → {zone.zoneName}.");
+        Debug.Log($"<color=green>[HarvestingBuilding]</color> {BuildingName} : zone de récolte trouvée → {zone.zoneName}.");
     }
 
     /// <summary>
@@ -303,7 +303,7 @@ public class HarvestingBuilding : CommercialBuilding
     {
         if (_harvestableZone != null)
         {
-            Debug.Log($"<color=orange>[HarvestingBuilding]</color> {buildingName} : zone de récolte {_harvestableZone.zoneName} effacée du focus principal.");
+            Debug.Log($"<color=orange>[HarvestingBuilding]</color> {BuildingName} : zone de récolte {_harvestableZone.zoneName} effacée du focus principal.");
         }
         _harvestableZone = null;
     }
@@ -423,7 +423,7 @@ public class HarvestingBuilding : CommercialBuilding
                 if (NPCDebug.VerboseJobs)
                 {
                     int actualStock = GetItemCount(instance.ItemSO);
-                    Debug.Log($"<color=cyan>[HarvestingBuilding]</color> {buildingName} : {instance.ItemSO.ItemName} récolté ({actualStock} en stock logique).");
+                    Debug.Log($"<color=cyan>[HarvestingBuilding]</color> {BuildingName} : {instance.ItemSO.ItemName} récolté ({actualStock} en stock logique).");
                 }
                 return true;
             }
@@ -442,7 +442,7 @@ public class HarvestingBuilding : CommercialBuilding
         if (employee != null && !_employees.Contains(employee))
         {
             _employees.Add(employee);
-            Debug.Log($"<color=yellow>[HarvestingBuilding]</color> {employee.CharacterName} rejoint {buildingName} comme employé.");
+            Debug.Log($"<color=yellow>[HarvestingBuilding]</color> {employee.CharacterName} rejoint {BuildingName} comme employé.");
         }
     }
 
@@ -453,7 +453,7 @@ public class HarvestingBuilding : CommercialBuilding
     {
         if (employee != null && _employees.Remove(employee))
         {
-            Debug.Log($"<color=yellow>[HarvestingBuilding]</color> {employee.CharacterName} quitte {buildingName}.");
+            Debug.Log($"<color=yellow>[HarvestingBuilding]</color> {employee.CharacterName} quitte {BuildingName}.");
         }
     }
 

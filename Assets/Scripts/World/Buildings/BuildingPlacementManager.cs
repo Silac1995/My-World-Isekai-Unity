@@ -437,14 +437,19 @@ namespace MWI.WorldSystem
 
             GameObject buildingObj = Instantiate(blueprint.BuildingPrefab, position, rotation);
 
-            // Set PrefabId + PlacedByCharacterId BEFORE Spawn so the value is included in the
+            // Set PlacedByCharacterId BEFORE Spawn so the value is included in the
             // initial NetworkVariable payload AND is observable inside Building.OnNetworkSpawn.
             // Building.OnNetworkSpawn uses an empty PlacedByCharacterId to distinguish
             // scene-authored buildings (which need a deterministic ID) from runtime-placed ones.
+            // PrefabId now derives from _blueprint.PrefabId (Task 6) — the prefab carries its
+            // BuildingSO reference, so no runtime assignment is needed.
             var placedBuilding = buildingObj.GetComponent<Building>();
             if (placedBuilding != null)
             {
-                placedBuilding.PrefabId = prefabId;
+                if (placedBuilding.Blueprint == null)
+                {
+                    Debug.LogWarning($"[BuildingPlacementManager] Spawned prefab '{placedBuilding.name}' has no Blueprint reference — was the BuildingSO migration run? PrefabId={prefabId}");
+                }
                 if (_character != null)
                 {
                     placedBuilding.PlacedByCharacterId.Value = _character.CharacterId;

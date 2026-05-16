@@ -94,7 +94,7 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
 
         _jobs.Add(new JobLogisticsManager("Logistics Manager"));
 
-        Debug.Log($"<color=green>[FarmingBuilding]</color> {buildingName} initialised with {_farmerCount} farmer(s) + 1 Logistics Manager.");
+        Debug.Log($"<color=green>[FarmingBuilding]</color> {BuildingName} initialised with {_farmerCount} farmer(s) + 1 Logistics Manager.");
     }
 
     // ── IStockProvider ──────────────────────────────────────────────
@@ -276,17 +276,17 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
         if (!Unity.Netcode.NetworkManager.Singleton.IsServer) return;
         if (TaskManager == null)
         {
-            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} PlantScan: TaskManager is null — skipping.");
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {BuildingName} PlantScan: TaskManager is null — skipping.");
             return;
         }
         if (_farmingAreaZones == null || _farmingAreaZones.Count == 0)
         {
-            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} PlantScan: _farmingAreaZones is empty — no plant tasks will register. Authoring fix: assign at least one Zone to the FarmingBuilding's 'Farming Areas (multi-zone)' list.");
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {BuildingName} PlantScan: _farmingAreaZones is empty — no plant tasks will register. Authoring fix: assign at least one Zone to the FarmingBuilding's 'Farming Areas (multi-zone)' list.");
             return;
         }
         if (_cropsToGrow == null || _cropsToGrow.Count == 0)
         {
-            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} PlantScan: _cropsToGrow is empty — no plant tasks will register.");
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {BuildingName} PlantScan: _cropsToGrow is empty — no plant tasks will register.");
             return;
         }
 
@@ -321,7 +321,7 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
         }
 
         Debug.Log(
-            $"<color=cyan>[FarmingBuilding]</color> {buildingName} PlantScan: zones={_farmingAreaZones.Count}, cells scanned={totalCellsScanned}, " +
+            $"<color=cyan>[FarmingBuilding]</color> {BuildingName} PlantScan: zones={_farmingAreaZones.Count}, cells scanned={totalCellsScanned}, " +
             $"registered={registered} (alreadyPlanted={alreadyPlanted}, noCropSelected={noCropSelected}, noSeed={noSeed}, alreadyTasked={alreadyTasked}).");
     }
 
@@ -400,7 +400,7 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
         }
 
         Debug.Log(
-            $"<color=cyan>[FarmingBuilding]</color> {buildingName} WaterScan: zones={_farmingAreaZones.Count}, cells scanned={totalCellsScanned}, " +
+            $"<color=cyan>[FarmingBuilding]</color> {BuildingName} WaterScan: zones={_farmingAreaZones.Count}, cells scanned={totalCellsScanned}, " +
             $"registered={registered} (notPlanted={notPlanted}, cropMissing={cropMissing}, alreadyMature={alreadyMature}, " +
             $"recentlyWatered={recentlyWatered}, wetEnough={wetEnough}, alreadyTasked={alreadyTasked}). " +
             $"Sample cell ({sampleCropId ?? "—"}): Moisture={sampleMoisture:F2} (need <{sampleMinMoisture:F2}), " +
@@ -477,7 +477,7 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
         if (now - _lastSeedAuthoringWarnTime > 5f)
         {
             _lastSeedAuthoringWarnTime = now;
-            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName}: SeedRegistry has no SeedSO whose CropToPlant equals CropSO '{crop.name}' (Id='{crop.Id}'). PlantScan will report noSeed=N forever. Designer fix: open the matching SeedSO asset (typically under Assets/Resources/Data/Item/Seed/) and set its _cropToPlant field to this CropSO.");
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {BuildingName}: SeedRegistry has no SeedSO whose CropToPlant equals CropSO '{crop.name}' (Id='{crop.Id}'). PlantScan will report noSeed=N forever. Designer fix: open the matching SeedSO asset (typically under Assets/Resources/Data/Item/Seed/) and set its _cropToPlant field to this CropSO.");
         }
         return false;
     }
@@ -525,7 +525,7 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
             {
                 _lastSeedLookupDumpTime = now;
                 var sb = new System.Text.StringBuilder();
-                sb.Append($"<color=orange>[FarmingBuilding]</color> {buildingName} HasItemInBuildingOrStorage MISS for '{item.ItemName}' (ItemSO instanceID={item.GetInstanceID()}). Chests inspected:");
+                sb.Append($"<color=orange>[FarmingBuilding]</color> {BuildingName} HasItemInBuildingOrStorage MISS for '{item.ItemName}' (ItemSO instanceID={item.GetInstanceID()}). Chests inspected:");
                 for (int s = 0; s < storages.Length; s++)
                 {
                     var storage = storages[s];
@@ -654,21 +654,21 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
         var box = zone.GetComponent<BoxCollider>();
         if (box == null)
         {
-            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} EnumerateCellsInZone: zone '{zone.name}' has no BoxCollider — cannot enumerate cells.");
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {BuildingName} EnumerateCellsInZone: zone '{zone.name}' has no BoxCollider — cannot enumerate cells.");
             return;
         }
 
         var map = MapController.GetMapAtPosition(transform.position);
         if (map == null)
         {
-            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} EnumerateCellsInZone: MapController.GetMapAtPosition({transform.position}) returned null — building isn't inside any registered map. PlantScan/WaterScan will register no tasks.");
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {BuildingName} EnumerateCellsInZone: MapController.GetMapAtPosition({transform.position}) returned null — building isn't inside any registered map. PlantScan/WaterScan will register no tasks.");
             return;
         }
 
         var grid = map.GetComponent<TerrainCellGrid>();
         if (grid == null || grid.Width == 0)
         {
-            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} EnumerateCellsInZone: map '{map.name}' has no TerrainCellGrid (or grid.Width=0) — no cells available.");
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {BuildingName} EnumerateCellsInZone: map '{map.name}' has no TerrainCellGrid (or grid.Width=0) — no cells available.");
             return;
         }
 
@@ -699,7 +699,7 @@ public class FarmingBuilding : HarvestingBuilding, IStockProvider
 
         if (minX > maxX || minZ > maxZ)
         {
-            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {buildingName} EnumerateCellsInZone: zone '{zone.name}' bounds fall fully OUTSIDE map '{map.name}' grid ({grid.Width}x{grid.Depth}). Worldmin={worldMin}, worldMax={worldMax}, gridOrigin0={origin0}, cellSize={grid.CellSize}. Reposition the zone over the building's terrain.");
+            Debug.LogWarning($"<color=orange>[FarmingBuilding]</color> {BuildingName} EnumerateCellsInZone: zone '{zone.name}' bounds fall fully OUTSIDE map '{map.name}' grid ({grid.Width}x{grid.Depth}). Worldmin={worldMin}, worldMax={worldMax}, gridOrigin0={origin0}, cellSize={grid.CellSize}. Reposition the zone over the building's terrain.");
             return; // zone fully outside grid
         }
 

@@ -22,7 +22,7 @@ public class BarBuilding : CommercialBuilding
             _jobs.Add(new JobServer());
         }
 
-        Debug.Log($"<color=magenta>[Bar]</color> {buildingName} initialized with 1 Barman and {_serverCount} Servers.");
+        Debug.Log($"<color=magenta>[Bar]</color> {BuildingName} initialized with 1 Barman and {_serverCount} Servers.");
     }
 
     /// <summary>
