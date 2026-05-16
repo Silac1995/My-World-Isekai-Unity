@@ -3,8 +3,10 @@ using Unity.Netcode;
 
 /// <summary>
 /// One delivered-material slot replicated through Building.DeliveredMaterials NetworkList.
-/// RequirementIndex is the position in Building._constructionRequirements (compact —
-/// avoids replicating ItemSO refs/strings every change).
+/// RequirementIndex is the position in BuildingSO.ConstructionRequirements (read via
+/// Building.EffectiveConstructionRequirements). Compact — avoids replicating ItemSO refs/strings
+/// every change. DO NOT reorder the blueprint's ConstructionRequirements list after authoring
+/// or in-flight construction saves silently misalign (the index pins the slot's identity).
 ///
 /// Delivered is plain data — the owner (Building / ConstructionSiteScanner) is responsible
 /// for clamping it to the requirement's needed quantity before mutating the NetworkList.

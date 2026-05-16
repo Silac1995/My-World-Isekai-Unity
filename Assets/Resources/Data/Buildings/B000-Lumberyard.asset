@@ -24,4 +24,4 @@ MonoBehaviour:
     Amount: 2
     IsReferenceOnly: 0
   _defaultFurnitureLayout: []
-  _baseTreasury: 0
+  _baseTreasury: 100

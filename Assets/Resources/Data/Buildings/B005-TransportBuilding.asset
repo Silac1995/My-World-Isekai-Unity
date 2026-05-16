@@ -21,4 +21,4 @@ MonoBehaviour:
   _communityPriority: 3
   _constructionRequirements: []
   _defaultFurnitureLayout: []
-  _baseTreasury: 0
+  _baseTreasury: 100

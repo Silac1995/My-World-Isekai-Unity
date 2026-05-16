@@ -3063,7 +3063,10 @@ public abstract class CommercialBuilding : Building
     /// wilderness placements). Idempotency is enforced by <see cref="_treasurySeeded"/>;
     /// the flag is persisted via <see cref="BuildingSaveData.TreasurySeeded"/> (Task 10)
     /// so map wake-up after save does not re-credit. Non-positive amounts, non-commercial
-    /// blueprints, and absent blueprints all mark the flag set without crediting.
+    /// blueprints, and absent blueprints all mark the flag set without crediting (no future
+    /// retry needed — those states are stable). The "no Treasury-role safe yet" case is
+    /// treated differently: the flag stays <c>false</c> so a future reload (with safes
+    /// authored by then, or added at runtime) can retry the seed.
     /// </summary>
     private void SeedTreasuryIfNeeded()
     {
@@ -3095,6 +3098,18 @@ public abstract class CommercialBuilding : Building
         {
             // Rule #31: don't crash construction if map lookup fails. Default-currency fallback.
             Debug.LogException(e);
+        }
+
+        // Guard: building must have at least one Treasury-role safe to receive the seed.
+        // CreditTreasury LogWarnings + returns silently when no Treasury safe exists, which would
+        // otherwise let _treasurySeeded flip to true here and lose the seed forever. Leave the
+        // flag false so a future reload (with Treasury safes added by then) retries.
+        var treasurySafes = TreasurySafes;
+        if (treasurySafes == null || treasurySafes.Count == 0)
+        {
+            Debug.LogWarning(
+                $"[BaseTreasury] {BuildingName}: blueprint authored BaseTreasury={amount} but the building has no Treasury-role safe yet. Seeding skipped this pass — _treasurySeeded stays false so a future reload (or runtime safe addition) can retry.");
+            return;
         }
 
         try
