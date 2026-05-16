@@ -494,7 +494,15 @@ public class BuildingLogisticsManager : MonoBehaviour
 
         if (order.AssociatedBuyOrder != null)
         {
-            order.AssociatedBuyOrder.RecordDelivery(deliveredAmount);
+            bool buyOrderCompletedByThisDelivery = order.AssociatedBuyOrder.RecordDelivery(deliveredAmount);
+
+            // Supplier reputation bump (+1) on full BuyOrder completion. Authored 2026-05-16
+            // as the positive half of the reputation system — see commercial-treasury.md.
+            // Fires once per BuyOrder (the moment RecordDelivery flips IsCompleted to true).
+            if (buyOrderCompletedByThisDelivery && order.AssociatedBuyOrder.Source != null)
+            {
+                order.AssociatedBuyOrder.Source.TryChangeReputation(+1, $"DeliveredOrder_{order.AssociatedBuyOrder.ItemToTransport?.ItemName}_x{order.AssociatedBuyOrder.Quantity}");
+            }
 
             var clientLogistics = order.Destination?.LogisticsManager;
             if (clientLogistics != null)
@@ -906,6 +914,27 @@ public class BuildingLogisticsManager : MonoBehaviour
                     }
                 }
 
+                int undelivered = expired.Quantity - expired.DeliveredQuantity;
+
+                // B2B refund-on-expiration (2026-05-16). Only fires when:
+                //   - the order's Source is this building (which is a ShopBuilding),
+                //   - IsPlaced=true (the atomic commit happened — money + items moved),
+                //   - undelivered > 0 (the transporter hadn't completed the run).
+                // For non-B2B (producer) orders, money was never debited from the buyer's
+                // treasury, so there's nothing to refund — only the reputation hit applies.
+                if (undelivered > 0 && expired.IsPlaced && _building is ShopBuilding sourceShop && expired.Source == _building)
+                {
+                    TryRefundB2BExpiration(sourceShop, expired, undelivered);
+                }
+
+                // Reputation hit on the SUPPLIER (this building) for any undelivered units.
+                // Same penalty applies to B2B and producer-side orders — both promised
+                // delivery and failed. The buyer is unaffected; they did their part.
+                if (undelivered > 0 && _building is CommercialBuilding supplierAsCommercial)
+                {
+                    supplierAsCommercial.TryChangeReputation(-5, $"ExpiredOrder_{expired.ItemToTransport?.ItemName}_undelivered{undelivered}");
+                }
+
                 CancelBuyOrder(expired);
             }
         }
@@ -925,6 +954,143 @@ public class BuildingLogisticsManager : MonoBehaviour
                 CancelBuyOrder(expired);
             }
         }
+    }
+
+    /// <summary>
+    /// Refund-on-expiration for a B2B BuyOrder (Source is a ShopBuilding, IsPlaced=true,
+    /// some quantity undelivered). Authored 2026-05-16 — see
+    /// <c>wiki/systems/commercial-treasury.md §Refund-on-expiration</c>.
+    ///
+    /// <para>
+    /// Atomically reverses the financial half of the original B2B commit for the undelivered
+    /// portion: debits the shop's first <see cref="Cashier"/> till, credits the buyer's
+    /// <see cref="CommercialBuilding"/> treasury. If the cashier till has been emptied by the
+    /// shop owner in the meantime, falls back to the shop's own treasury safe; if both are
+    /// empty, refunds only what's available and logs a warning (the buyer still gets the rep
+    /// hit on the supplier as the audit trail). Money never gets printed.
+    /// </para>
+    ///
+    /// <para>
+    /// Items that were moved from sell-shelves into shop.Inventory at commit time but never
+    /// picked up by the transporter (still physically at the shop, never left in a courier's
+    /// bag) are returned to a sell-shelf slot where possible, or left in shop.Inventory if no
+    /// shelf slot is free. Items already in transit when the order expired are lost — the
+    /// shop can't refund what isn't there. The financial refund + the lost items together
+    /// nets the buyer back to their pre-order state for the undelivered units.
+    /// </para>
+    /// </summary>
+    private void TryRefundB2BExpiration(ShopBuilding shop, BuyOrder expired, int undelivered)
+    {
+        if (shop == null || expired == null || undelivered <= 0) return;
+        var buyer = expired.Destination;
+        if (buyer == null) return;
+
+        // Re-resolve unit price from the live catalog (the catalog may have changed since
+        // commit, but using the live price keeps refund-amount predictable for the player —
+        // and the catalog rarely shifts mid-order in practice).
+        var catalogEntry = shop.GetCatalogEntry(expired.ItemToTransport);
+        if (!catalogEntry.HasValue)
+        {
+            Debug.LogWarning($"[Refund] {shop.BuildingName}: expired B2B order for {expired.ItemToTransport?.ItemName} but item is no longer in catalog. Skipping refund — financial state may drift.");
+            return;
+        }
+        int unitPrice = ShopBuilding.ResolvePrice(catalogEntry.Value);
+        int refundOwed = unitPrice * undelivered;
+        if (refundOwed <= 0) return;
+
+        var currency = MWI.Economy.CurrencyId.Default;
+        int actuallyRefunded = 0;
+
+        // Tier 1: shop's first cashier till. Cashier already exposes DebitTill which returns
+        // false on insufficient funds — partial-cover not supported at till level, so try the
+        // full amount and fall through to treasury on failure.
+        if (shop.Cashiers != null && shop.Cashiers.Count > 0)
+        {
+            var cashier = shop.Cashiers[0];
+            if (cashier != null && cashier.DebitTill(currency, refundOwed, $"B2B_RefundExpired_to_{buyer.BuildingName}"))
+            {
+                actuallyRefunded = refundOwed;
+            }
+        }
+
+        // Tier 2: shop's own treasury (if till didn't cover OR no cashier exists).
+        if (actuallyRefunded < refundOwed)
+        {
+            int stillOwed = refundOwed - actuallyRefunded;
+            if (shop.TryDebitTreasury(currency, stillOwed, $"B2B_RefundExpired_to_{buyer.BuildingName}"))
+            {
+                actuallyRefunded += stillOwed;
+            }
+        }
+
+        if (actuallyRefunded > 0)
+        {
+            buyer.CreditTreasury(currency, actuallyRefunded, $"B2B_RefundExpired_from_{shop.BuildingName}");
+        }
+        if (actuallyRefunded < refundOwed)
+        {
+            Debug.LogWarning($"[Refund] {shop.BuildingName} → {buyer.BuildingName}: owed {refundOwed}g for {undelivered}× {expired.ItemToTransport.ItemName}, but till+treasury only covered {actuallyRefunded}g. Shortfall of {refundOwed - actuallyRefunded}g eaten by the buyer.");
+        }
+        else
+        {
+            Debug.Log($"<color=#aaffaa>[Refund]</color> {shop.BuildingName} → {buyer.BuildingName}: refunded {actuallyRefunded}g ({undelivered}× {expired.ItemToTransport.ItemName} undelivered).");
+        }
+
+        // Item return: any ItemInstance still in shop.Inventory that belongs to this expired
+        // order's expected items goes back to a sell-shelf slot, best-effort. We can't tell
+        // for certain "this specific instance was part of this order" without per-order
+        // tagging — so we walk shop.Inventory for matching ItemSO and return up to
+        // 'undelivered' units (the items still in transit are gone and the shop's books
+        // are now in sync).
+        int itemsReturned = ReturnExpiredOrderItemsToShelf(shop, expired.ItemToTransport, undelivered);
+        if (itemsReturned > 0)
+        {
+            Debug.Log($"<color=#aaffaa>[Refund]</color> {shop.BuildingName}: returned {itemsReturned}× {expired.ItemToTransport.ItemName} from inventory back to sell-shelf (out of {undelivered} undelivered).");
+        }
+    }
+
+    /// <summary>
+    /// Best-effort return of matching ItemSO instances from shop.Inventory back onto a
+    /// sell-shelf. Stops at <paramref name="maxCount"/> or when shelves saturate. Items
+    /// that don't fit stay in shop.Inventory — they're still owned by the shop, just not
+    /// visible to customers.
+    /// </summary>
+    private static int ReturnExpiredOrderItemsToShelf(ShopBuilding shop, ItemSO target, int maxCount)
+    {
+        if (shop == null || target == null || maxCount <= 0) return 0;
+        var shelves = shop.SellShelves;
+        if (shelves == null || shelves.Count == 0) return 0;
+
+        // Walk inventory backwards so removal during iteration is safe.
+        int returned = 0;
+        var inventory = shop.Inventory;
+        for (int i = inventory.Count - 1; i >= 0 && returned < maxCount; i--)
+        {
+            var inst = inventory[i];
+            if (inst == null || inst.ItemSO != target) continue;
+
+            // Find a shelf with free space for this instance.
+            for (int s = 0; s < shelves.Count; s++)
+            {
+                var shelf = shelves[s];
+                if (shelf == null || shelf.IsLocked) continue;
+                if (!shelf.HasFreeSpaceForItem(inst)) continue;
+                // Pull from inventory then store on shelf. RemoveExactItemFromInventory
+                // is the symmetric mutator on CommercialBuilding.
+                if (shop.RemoveExactItemFromInventory(inst))
+                {
+                    if (shelf.AddItem(inst))
+                    {
+                        returned++;
+                        break;
+                    }
+                    // Failed to add to shelf after removing from inventory — put it back.
+                    shop.AddToInventory(inst);
+                }
+                break;
+            }
+        }
+        return returned;
     }
 
     private void CheckExpiredCraftingOrders()

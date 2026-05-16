@@ -176,6 +176,14 @@ namespace MWI.WorldSystem
         public List<EmployeeSaveEntry> Employees = new List<EmployeeSaveEntry>();
 
         /// <summary>
+        /// Per-building reputation score (0–100), only meaningful for <see cref="CommercialBuilding"/>.
+        /// Default 50 (<see cref="CommercialBuilding.ReputationDefault"/>) so old saves that don't carry
+        /// the field deserialize as neutral. Authored 2026-05-16 alongside refund-on-expiration —
+        /// see <c>wiki/systems/commercial-treasury.md §Reputation</c>.
+        /// </summary>
+        public int Reputation = 50;
+
+        /// <summary>
         /// Saved <see cref="StorageFurniture"/> contents (chests, shelves, crates, …).
         /// Default-empty so older save files (no field) deserialize cleanly. Each entry
         /// is keyed by <see cref="StorageFurnitureSaveEntry.FurnitureKey"/> — see that
@@ -316,6 +324,9 @@ namespace MWI.WorldSystem
 
                 // Persist the treasury seed-flag so the next load doesn't re-credit.
                 data.TreasurySeeded = commercial.GetTreasurySeededForSave();
+
+                // Per-building reputation (0–100, 50 = neutral). Authored 2026-05-16.
+                data.Reputation = commercial.Reputation;
             }
 
             // Storage furniture contents — walk every StorageFurniture under this

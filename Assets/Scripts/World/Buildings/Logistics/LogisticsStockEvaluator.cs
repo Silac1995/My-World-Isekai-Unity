@@ -368,6 +368,19 @@ public class LogisticsStockEvaluator
                 string shopMapId = shopMapController != null ? shopMapController.MapId : string.Empty;
                 if (!string.Equals(shopMapId, buyerMapId)) continue;
 
+                // Reputation gate (2026-05-16). Shops below ReputationB2BMinimum are
+                // skipped — they've failed enough recent deliveries that the supply chain
+                // refuses to source from them. Recovers naturally as the shop completes
+                // future orders (+1 per successful delivery; see commercial-treasury.md).
+                if (shop.Reputation < CommercialBuilding.ReputationB2BMinimum)
+                {
+                    if (logFlow)
+                    {
+                        Debug.Log($"<color=#ff8866>[LogisticsDBG]</color> B2B → shop '{shop.BuildingName}' skipped: reputation {shop.Reputation} < {CommercialBuilding.ReputationB2BMinimum}.");
+                    }
+                    continue;
+                }
+
                 var catalogEntry = shop.GetCatalogEntry(itemSO);
                 if (!catalogEntry.HasValue) continue; // shop doesn't sell this item
 

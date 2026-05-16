@@ -1021,6 +1021,15 @@ namespace MWI.WorldSystem
             // into the Treasury for B2B shop-buy logistics. Authored 2026-05-09.
             RestoreSafeContents(building, bSave);
 
+            // Per-building reputation (commercial only). Authored 2026-05-16 alongside
+            // refund-on-expiration. Falls back to ReputationDefault (50) for old saves
+            // that don't carry the field — JSON int default is 0, but the BuildingSaveData
+            // field initializer sets it to 50 so deserialization-missing-field reads as neutral.
+            if (building is CommercialBuilding commercialBuilding)
+            {
+                commercialBuilding.RestoreReputationFromSave(bSave.Reputation);
+            }
+
             // ShopBuilding-only: catalog restore is immediate; sell-shelf resolution is
             // deferred via OnFurnituresLoaded().
             if (building is ShopBuilding shopBuilding)

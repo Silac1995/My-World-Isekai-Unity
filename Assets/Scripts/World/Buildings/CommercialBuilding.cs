@@ -36,12 +36,73 @@ public abstract class CommercialBuilding : Building
     [Tooltip("Initial hiring state at scene start / fresh save. true = open by default (existing buildings remain backward compatible — they all auto-load as 'currently hiring'). false = start closed; owner must open hiring before applications are accepted.")]
     [SerializeField] private bool _initialHiringOpen = true;
 
+    [Header("Reputation")]
+    [Tooltip("Starting reputation on first spawn / fresh save (clamped 0–100). 50 = neutral. Tanks on failed B2B deliveries, recovers on successful ones. Below 20, the B2B preference scan skips this building when picking a supplier.")]
+    [SerializeField, Range(0, 100)] private int _initialReputation = ReputationDefault;
+
+    public const int ReputationMin     = 0;
+    public const int ReputationMax     = 100;
+    public const int ReputationDefault = 50;
+    /// <summary>Reputation floor below which the B2B preference scan refuses to source from this building.</summary>
+    public const int ReputationB2BMinimum = 20;
+
     private NetworkVariable<bool> _isHiring = new(
         true,
         readPerm: NetworkVariableReadPermission.Everyone,
         writePerm: NetworkVariableWritePermission.Server);
 
     public bool IsHiring => _isHiring.Value;
+
+    /// <summary>
+    /// Server-authoritative per-building reputation (0–100). Replicated to every peer for
+    /// management UI / debug overlays. Default = <see cref="ReputationDefault"/> (50). Mutated
+    /// server-only via <see cref="TryChangeReputation"/>; clients listen via
+    /// <see cref="OnReputationChanged"/>. Authored 2026-05-16 as the consequence layer for
+    /// failed B2B deliveries — see [[commercial-treasury]] §Reputation.
+    /// </summary>
+    private NetworkVariable<int> _reputation = new(
+        ReputationDefault,
+        readPerm: NetworkVariableReadPermission.Everyone,
+        writePerm: NetworkVariableWritePermission.Server);
+
+    public int Reputation => _reputation.Value;
+
+    /// <summary>Fires on every peer when reputation changes — payload is (oldValue, newValue).</summary>
+    public event System.Action<int, int> OnReputationChanged;
+
+    /// <summary>
+    /// Server-only mutator. Clamps the new value to [<see cref="ReputationMin"/>, <see cref="ReputationMax"/>],
+    /// no-ops if the clamped value equals the current value, and logs the transition + reason for
+    /// debugging. Returns true when the value actually moved.
+    /// </summary>
+    public bool TryChangeReputation(int delta, string reason)
+    {
+        if (!IsServer) return false;
+        int oldVal = _reputation.Value;
+        int newVal = Mathf.Clamp(oldVal + delta, ReputationMin, ReputationMax);
+        if (newVal == oldVal) return false;
+        _reputation.Value = newVal;
+        Debug.Log($"<color=#aa88ff>[Reputation]</color> {BuildingName}: {oldVal} → {newVal} (delta={(delta >= 0 ? "+" : "")}{delta}, reason='{reason}').");
+        return true;
+    }
+
+    /// <summary>
+    /// Server-only — overwrites reputation from save data. Bypasses the +delta clamp logic so
+    /// a saved-but-out-of-range value is still tolerated (clamped) without firing the "moved by X"
+    /// log line. Used by <c>MapController</c> save-restore.
+    /// </summary>
+    public void RestoreReputationFromSave(int saved)
+    {
+        if (!IsServer) return;
+        int clamped = Mathf.Clamp(saved, ReputationMin, ReputationMax);
+        if (_reputation.Value == clamped) return;
+        _reputation.Value = clamped;
+    }
+
+    private void HandleReputationChanged(int oldVal, int newVal)
+    {
+        OnReputationChanged?.Invoke(oldVal, newVal);
+    }
 
     // ── Lazy furniture-ref resolution ──────────────────────────────
     // Inspector refs (_helpWantedFurniture / _managementFurniture) point at nested NO
@@ -508,6 +569,15 @@ public abstract class CommercialBuilding : Building
         }
 
         _isHiring.OnValueChanged += HandleIsHiringChanged;
+
+        // Reputation: seed from Inspector if NetworkVariable is still at the default. Same
+        // idempotency as hiring — save/load runs after OnNetworkSpawn and overwrites via
+        // RestoreReputationFromSave, so this seed only takes effect on a fresh world.
+        if (IsServer && _reputation.Value == ReputationDefault && _initialReputation != ReputationDefault)
+        {
+            _reputation.Value = Mathf.Clamp(_initialReputation, ReputationMin, ReputationMax);
+        }
+        _reputation.OnValueChanged += HandleReputationChanged;
 
         // Initial sign refresh on the server so authoring's _initialHiringOpen state is
         // reflected in the sign text from the very first frame. Routes through the lazy
@@ -1106,6 +1176,7 @@ public abstract class CommercialBuilding : Building
         UnsubscribeJobWorkerBindListener();
         UnsubscribeEmployeeRestoreListener();
         _isHiring.OnValueChanged -= HandleIsHiringChanged;
+        _reputation.OnValueChanged -= HandleReputationChanged;
         UnsubscribeAllStorageRoleEvents();
         UnsubscribeAllSafeEvents();
         base.OnNetworkDespawn();
