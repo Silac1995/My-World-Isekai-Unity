@@ -15,6 +15,7 @@ related:
   - "[[jobs-and-logistics]]"
   - "[[construction]]"
   - "[[management-panel-architecture]]"
+  - "[[player-hud]]"
 status: stable
 confidence: high
 primary_agent: building-furniture-specialist
@@ -144,6 +145,40 @@ public void AssignSafeRolesForShift(); // sibling of AssignStorageRolesForShift;
 private bool TryB2BPurchaseFromShop(ItemSO itemSO, int quantityToOrder); // called from RequestStock
 ```
 
+**Player UI surface — added 2026-05-16:**
+
+The deposit/withdraw player UI is the human-facing path into Treasury safes. Lives entirely in the [[player-hud]] system but the gameplay effect routes through this system.
+
+```csharp
+// SafeFurniture — added 2026-05-16 (UI integration)
+public override bool OnInteract(Character interactor); // owning-player gate, opens panel via PlayerUI
+public override List<InteractionOption> GetExtraInteractionOptions(Character interactor); // hold-E menu "Open Safe" verb
+public SafeFurnitureNetworkSync NetSync { get; } // lazy getter — used by actions to fire result toasts
+
+// SafeFurnitureNetworkSync — added 2026-05-16
+[ServerRpc(RequireOwnership=false)]
+public void RequestDepositServerRpc (NetworkBehaviourReference characterRef, int currencyRawId, int amount, ServerRpcParams p);
+[ServerRpc(RequireOwnership=false)]
+public void RequestWithdrawServerRpc(NetworkBehaviourReference characterRef, int currencyRawId, int amount, ServerRpcParams p);
+public void NotifyOperationResult(ulong targetClientId, bool success, string reason); // -> targeted ClientRpc
+```
+
+**Anti-cheat validation chain** in both ServerRpcs (in order): `characterRef.TryGet` resolve → `character.OwnerClientId == p.Receive.SenderClientId` (ownership) → `InteractableObject.IsCharacterInInteractionZone(character)` (rule #36 proximity) → `amount > 0` → queue the CharacterAction. Each failure fires a targeted `OperationResultClientRpc` with a wire-format reason (`out-of-zone` / `invalid-amount` from the RPC, `insufficient-wallet` / `insufficient-safe` from the action).
+
+**Player↔NPC parity (rule #22)** — both directions go through new `CharacterAction`s, not raw RPC mutations:
+
+```csharp
+public sealed class CharacterAction_DepositToSafe  : CharacterAction  // wallet.RemoveCoins, then safe.Credit (atomic)
+public sealed class CharacterAction_WithdrawFromSafe : CharacterAction // safe.TryDebit,  then wallet.AddCoins (atomic)
+```
+
+The player UI queues these via `character.CharacterActions.ExecuteAction(...)` from the ServerRpc body; a future NPC banker / treasurer / pickpocket AI queues the exact same actions from its GOAP / BT layer. The atomic guard (wallet/safe debit FIRST, return false → no opposite-side credit) prevents the "wallet debited but safe never credited" hazard. v1 behavior: **clamp-on-submit** — if the user types more than the source balance, the action receives `Mathf.Min(typed, sourceBalance)` (Stardew-style — see commit `7f0e6097`).
+
+**HUD panel** ([[player-hud]] variants):
+- `Assets/Scripts/UI/Furniture/UI_SafePanel.cs` — variant of [[player-hud]] `UI_WindowBase`. Subscribes to `SafeFurniture.OnBalanceChanged` + `CharacterWallet.OnBalanceChanged` for live repaint. Auto-closes on out-of-zone (1Hz `IsCharacterInInteractionZone` poll), ESC, target despawn.
+- `Assets/Scripts/UI/Furniture/UI_SafeCurrencyRow.cs` — one row per `CurrencyId`. Single amount input + MAX + Deposit + Withdraw. Forward-compat for multi-currency Kingdom system (renders one row per currency in `safe.Balances`).
+- Asset locations: `Assets/UI/Player HUD/UI_SafePanel.prefab` (Variant of `UI_WindowBase.prefab` per rule #39), `Assets/UI/Player HUD/UI_SafeCurrencyRow.prefab` (leaf).
+
 ## Data flow
 
 ```
@@ -258,6 +293,7 @@ shop.LogisticsManager.ProcessActiveBuyOrders
 
 - 2026-05-16 — BaseTreasury seed source documented. Seeding fires from CommercialBuilding.OnDefaultFurnitureSpawned via SeedTreasuryIfNeeded helper; idempotent via _treasurySeeded server-only flag. — claude
 - 2026-05-09 — Initial implementation. SafeFurniture + SafeFurnitureNetworkSync + SafeRoleType + SafeRoleCatalog data layer. Save/load schema (`SafeFurnitureSaveEntry`, `BuildingSaveData.Safes`, `MapController.RestoreSafeContents`). Treasury aggregator on `CommercialBuilding` (`GetTreasuryBalance` / `TryDebitTreasury` / `CreditTreasury` / `OnTreasuryChanged`). `BuildingLogisticsManager.AssignSafeRolesForShift` auto-assigns safes to Treasury on shift-punch. `LogisticsStockEvaluator.TryB2BPurchaseFromShop` scans same-map shops and atomically commits B2B purchases (debit treasury → credit shop cashier till → move items to shop inventory → IsPlaced BuyOrder). Background commit (no NPC walk). Same-map scope. — claude
+- 2026-05-16 — Player UI surface shipped. Tap-E on a SafeFurniture opens `UI_SafePanel` (Variant of `UI_WindowBase.prefab` per rule #39, ScreenSpaceCamera, 560×480 frame, ScrollRect for future overflow). Per-currency rows with single amount input + MAX + Deposit + Withdraw + Stardew-style clamp-on-submit (typed > balance → submit clamps to balance). Hold-E also surfaces "Open Safe" verb via new `Furniture.GetExtraInteractionOptions` virtual + `FurnitureInteractable.GetHoldInteractionOptions` integration. Gameplay routes through new `CharacterAction_DepositToSafe` / `CharacterAction_WithdrawFromSafe` for rule #22 NPC parity; raw `safe.Credit` / `safe.TryDebit` continue serving B2B paths. Two new ServerRpcs on `SafeFurnitureNetworkSync` (`RequestDepositServerRpc` / `RequestWithdrawServerRpc`) with the rule-#36 proximity re-validation chain + targeted `OperationResultClientRpc` for failure toasts. Late-joiner replication uses existing `_networkBalances` NetworkList + `CharacterWallet` ClientRpc broadcast; rule #19b repro verified live by Kevin (host + client). Also fixed an inherited Safe.prefab `InteractionZone` BoxCollider that was disabled (rule #36 broken state — see commit `43b5daae`). — claude
 
 ## Sources
 

@@ -930,3 +930,49 @@ Extends `InteractionInvitation`. Community leader negotiates with the building o
 - `CommercialBuilding.OnDefaultFurnitureSpawned` is the canonical seeding hook: extends the existing override to call `SeedTreasuryIfNeeded()` which credits the Treasury safe in the local map's NativeCurrency. Idempotent via `_treasurySeeded` flag (server-only).
 - `BuildingSaveData.TreasurySeeded` — persists the idempotency flag across save/reload. Default-false on old saves so legacy data re-seeds exactly once on next load.
 - Migration tool: `Assets/Editor/BuildingRegistryToBuildingSOMigration.cs` — Menu: `MWI > Migration > Convert BuildingRegistry → BuildingSO assets`. Already run on this branch; idempotent.
+
+---
+
+## SafeFurniture Player UI (2026-05-16)
+
+A player can press E on a SafeFurniture inside its `InteractionZone` to open a deposit/withdraw window. Hold-E also surfaces "Open Safe" in the radial menu. NPCs use the same `CharacterAction`s server-side (rule #22).
+
+**End-to-end flow:**
+
+```
+[Player E in zone]
+  → FurnitureInteractable.Interact(player)
+  → SafeFurniture.OnInteract(player)              [client-local, owning player only]
+  → PlayerUI.Instance.OpenSafePanel(safe, player)
+[Row submit]
+  → safe.NetSync.RequestDepositServerRpc(charRef, currencyId, amount)
+  → [SERVER] anti-cheat chain: characterRef.TryGet → sender owns character → IsCharacterInInteractionZone (rule #36) → amount > 0
+  → character.CharacterActions.ExecuteAction(new CharacterAction_DepositToSafe(...))
+  → [SERVER tick] action.OnApplyEffect — atomic: wallet.RemoveCoins, if success then safe.Credit
+  → Failure path → safe.NetSync.NotifyOperationResult → targeted OperationResultClientRpc → toast in panel
+  → Success path → SafeFurniture.OnBalanceChanged + CharacterWallet ClientRpc broadcast → panel rows repaint live on every peer
+```
+
+**Key surfaces:**
+- `SafeFurniture.OnInteract` — opens the panel (owning-player gate).
+- `SafeFurniture.GetExtraInteractionOptions(Character)` — contributes "Open Safe" to the hold-E menu via the new `Furniture.GetExtraInteractionOptions` virtual on the base.
+- `SafeFurniture.NetSync` — lazy getter for the sibling `SafeFurnitureNetworkSync`.
+- `SafeFurnitureNetworkSync.RequestDepositServerRpc(NetworkBehaviourReference, int, int)` — server entry. Anti-cheat-validated. Queues `CharacterAction_DepositToSafe`.
+- `SafeFurnitureNetworkSync.RequestWithdrawServerRpc(...)` — inverse, queues `CharacterAction_WithdrawFromSafe`.
+- `SafeFurnitureNetworkSync.NotifyOperationResult(ulong, bool, string)` — server-side helper. String→FixedString64Bytes conversion + fires targeted `OperationResultClientRpc` to the requester only (not broadcast).
+- `CharacterAction_DepositToSafe` / `CharacterAction_WithdrawFromSafe` — server-side atomic actions, `Duration = 0` (single-shot). Rule #22 NPC-parity ready.
+- `UI_SafePanel` / `UI_SafeCurrencyRow` — see [`.agent/skills/ui-hud/SKILL.md`](../ui-hud/SKILL.md) for panel architecture (Variant of `UI_WindowBase.prefab`, ScreenSpaceCamera, ScrollRect, etc.).
+
+**Behavior notes:**
+- **Permissionless v1**: anyone in the InteractionZone can deposit/withdraw. Future locks/keys/lockpicking system will gate at the `Interact` level.
+- **Clamp-on-submit**: typing more than the source balance and clicking submit results in `Mathf.Min(typed, sourceBalance)` (Stardew-style). Buttons disable only when typed=0 or source=0.
+- **Forward-compat multi-currency**: panel iterates `safe.Balances`, instantiates one row per `CurrencyId`. Today only `CurrencyId.Default` exists; Kingdom currencies plug in without panel changes.
+- **NPC parity**: a future banker / pickpocket NPC AI queues the SAME `CharacterAction_DepositToSafe` / `CharacterAction_WithdrawFromSafe` from its GOAP/BT layer.
+- **Late-joiner safe (rule #19b)**: uses existing `_networkBalances` `NetworkList<BuildingTreasuryEntry>` on `SafeFurnitureNetworkSync` (replicates on client connect via `OnNetworkSpawn` catch-up) + `CharacterWallet` ClientRpc broadcast (global). Verified live by Kevin (host + client).
+- **Prefab proximity gate (rule #36)**: `Safe.prefab` ships with `FurnitureInteractable` + an active `InteractionZone` BoxCollider (size 12×5×15, isTrigger=true). Pre-shipped state had this collider disabled — fixed 2026-05-16 in `43b5daae`. Verify with `safe.GetComponent<InteractableObject>().IsCharacterInInteractionZone(character)` — never raw `Vector3.Distance`.
+
+**Cross-refs:**
+- Panel chrome convention (Variant of `UI_WindowBase.prefab`, ScreenSpaceCamera, etc.): [wiki/systems/player-hud.md](../../wiki/systems/player-hud.md) + CLAUDE.md rule #39.
+- Treasury data layer (`SafeFurniture` + `SafeFurnitureNetworkSync` + save/load): [wiki/systems/commercial-treasury.md](../../wiki/systems/commercial-treasury.md).
+- UI HUD authoring procedural: [`.agent/skills/ui-hud/SKILL.md`](../ui-hud/SKILL.md).
+- Spec + plan: `docs/superpowers/specs/2026-05-16-safe-furniture-deposit-withdraw-ui-design.md` + `docs/superpowers/plans/2026-05-16-safe-furniture-deposit-withdraw-ui.md`.
