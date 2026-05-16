@@ -132,4 +132,21 @@ namespace MWI.Tests.Buildings
             }
         }
     }
+
+    public class BuildingSaveCompatTests
+    {
+        [Test]
+        public void Old_save_JSON_with_PrefabId_string_loads_into_new_BuildingSaveData()
+        {
+            // Synthetic "old save" JSON — pre-TreasurySeeded shape. Pins the cross-version
+            // load path: PrefabId string survives verbatim, TreasurySeeded defaults false
+            // so old saves re-seed exactly once on next load.
+            const string oldJson =
+                "{\"BuildingId\":\"abc-123\",\"PrefabId\":\"Shop_Armor_A\",\"Position\":{\"x\":0,\"y\":0,\"z\":0},\"Rotation\":{\"x\":0,\"y\":0,\"z\":0,\"w\":1},\"State\":1,\"ConstructionProgress\":1}";
+            var data = UnityEngine.JsonUtility.FromJson<BuildingSaveData>(oldJson);
+            Assert.AreEqual("abc-123", data.BuildingId);
+            Assert.AreEqual("Shop_Armor_A", data.PrefabId);
+            Assert.IsFalse(data.TreasurySeeded, "Missing TreasurySeeded in old saves must default false so re-seed fires once.");
+        }
+    }
 }
