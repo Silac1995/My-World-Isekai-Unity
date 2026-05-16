@@ -611,6 +611,10 @@ PrefabInstance:
       value: B004-ClothingShop
       objectReference: {fileID: 0}
     - target: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
+      propertyPath: _blueprint
+      value: 
+      objectReference: {fileID: 11400000, guid: 51bb15f4aaca3184b9ade5b290cf0a90, type: 2}
+    - target: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: _deliveryZone
       value: 
       objectReference: {fileID: 7231545901852857222}
@@ -1252,7 +1256,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5373015520138888760, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 2887614629
+      value: 95177399
       objectReference: {fileID: 0}
     - target: {fileID: 5404920813648563519, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: m_LocalPosition.x
@@ -6218,6 +6222,10 @@ PrefabInstance:
       propertyPath: m_LocalPosition.z
       value: -23
       objectReference: {fileID: 0}
+    - target: {fileID: 9017037114712406252, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 3087684743
+      objectReference: {fileID: 0}
     - target: {fileID: 9065137950495012345, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: m_Name
       value: Clothing Shop
@@ -6385,7 +6393,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8919011143180878016, guid: c5741fc63642989479b278096dc3acbf, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 2597567719
+      value: 2597114117
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -6490,7 +6498,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8919011143180878016, guid: c5741fc63642989479b278096dc3acbf, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 1677316204
+      value: 2660795439
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

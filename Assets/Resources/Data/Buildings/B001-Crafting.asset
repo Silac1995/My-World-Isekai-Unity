@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b9189f649fa9d343b2d7217c84df089, type: 3}
+  m_Name: B001-Crafting
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.WorldSystem.BuildingCommercialSO
+  _prefabId: B001-Crafting
+  _buildingName: Crafting Building
+  _icon: {fileID: 0}
+  _buildingType: 0
+  _buildingPrefab: {fileID: 1945857671188992395, guid: bcf1eea9ceffe55459083485e22660a5, type: 3}
+  _interiorPrefab: {fileID: 0}
+  _communityPriority: 6
+  _constructionRequirements:
+  - Item: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
+    Amount: 2
+    IsReferenceOnly: 0
+  _defaultFurnitureLayout: []
+  _baseTreasury: 0

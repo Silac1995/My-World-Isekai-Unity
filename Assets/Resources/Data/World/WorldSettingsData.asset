@@ -65,3 +65,11 @@ MonoBehaviour:
     BuildingPrefab: {fileID: 9115621722984573628, guid: 9b578bd502ab0614c8a54bd6ada9f5ac, type: 3}
     InteriorPrefab: {fileID: 0}
     CommunityPriority: 6
+  Blueprints:
+  - {fileID: 11400000, guid: e05151d63136c66489a55e79e2fc2e14, type: 2}
+  - {fileID: 11400000, guid: 76093a84e55f49f48ae7fd6134e073b3, type: 2}
+  - {fileID: 11400000, guid: 06ac6b23381fc1b4e896d927c0cdfd1e, type: 2}
+  - {fileID: 11400000, guid: 95543b040d5cd564d9bd4c183dc68a15, type: 2}
+  - {fileID: 11400000, guid: 51bb15f4aaca3184b9ade5b290cf0a90, type: 2}
+  - {fileID: 11400000, guid: e0e8a77894a1e2441a460b5d82d6b110, type: 2}
+  - {fileID: 11400000, guid: b3d0fca764552004c89d5c33eb156de8, type: 2}

@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b9189f649fa9d343b2d7217c84df089, type: 3}
+  m_Name: B005-TransportBuilding
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.WorldSystem.BuildingCommercialSO
+  _prefabId: B005-TransportBuilding
+  _buildingName: Transport Building
+  _icon: {fileID: 0}
+  _buildingType: 7
+  _buildingPrefab: {fileID: 7206197390350540711, guid: e77d7c4bb571b7844a1031c7a7e9a6d8, type: 3}
+  _interiorPrefab: {fileID: 0}
+  _communityPriority: 3
+  _constructionRequirements: []
+  _defaultFurnitureLayout: []
+  _baseTreasury: 0

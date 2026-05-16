@@ -453,6 +453,10 @@ PrefabInstance:
       value: Small house room
       objectReference: {fileID: 0}
     - target: {fileID: 7957207800943456863, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      propertyPath: _blueprint
+      value: 
+      objectReference: {fileID: 11400000, guid: 06ac6b23381fc1b4e896d927c0cdfd1e, type: 2}
+    - target: {fileID: 7957207800943456863, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
       propertyPath: buildingName
       value: Small house
       objectReference: {fileID: 0}
@@ -474,7 +478,7 @@ PrefabInstance:
       objectReference: {fileID: 2100000, guid: 1492e3802f383504d9933cfbda4694aa, type: 2}
     - target: {fileID: 7957207800943456863, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
       propertyPath: _constructionCurtainMaterial
-      value:
+      value: 
       objectReference: {fileID: 0}
     - target: {fileID: 7957207800943456863, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
       propertyPath: _constructionOutlineMaterial

@@ -1478,6 +1478,10 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6518796099225268499, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 336341083
+      objectReference: {fileID: 0}
     - target: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Name
       value: Transporter Building
@@ -3052,6 +3056,7 @@ MonoBehaviour:
   _floorTerrainType: {fileID: 0}
   _isExposed: 0
   _subRooms: []
+  _blueprint: {fileID: 11400000, guid: e0e8a77894a1e2441a460b5d82d6b110, type: 2}
   buildingName: Transporter Company
   _isPublicLocation: 0
   _buildingType: 7

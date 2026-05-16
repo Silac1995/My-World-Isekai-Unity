@@ -910,6 +910,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 8919011143180878016, guid: c5741fc63642989479b278096dc3acbf, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 263525029
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -1150,6 +1154,10 @@ PrefabInstance:
     - target: {fileID: 6383464023724560883, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6518796099225268499, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 3710444154
       objectReference: {fileID: 0}
     - target: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Name
@@ -2272,6 +2280,7 @@ MonoBehaviour:
   _floorTerrainType: {fileID: 0}
   _isExposed: 0
   _subRooms: []
+  _blueprint: {fileID: 11400000, guid: e05151d63136c66489a55e79e2fc2e14, type: 2}
   buildingName: Lumberyard building
   _isPublicLocation: 0
   _buildingType: 6

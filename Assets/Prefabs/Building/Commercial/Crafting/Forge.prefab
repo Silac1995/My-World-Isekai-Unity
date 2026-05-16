@@ -2910,6 +2910,7 @@ MonoBehaviour:
   _floorTerrainType: {fileID: 0}
   _isExposed: 0
   _subRooms: []
+  _blueprint: {fileID: 11400000, guid: 76093a84e55f49f48ae7fd6134e073b3, type: 2}
   buildingName: Forge
   _isPublicLocation: 0
   _buildingType: 0

@@ -880,6 +880,10 @@ PrefabInstance:
       propertyPath: m_LocalPosition.z
       value: 3
       objectReference: {fileID: 0}
+    - target: {fileID: 1308639716227157215, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 3865012063
+      objectReference: {fileID: 0}
     - target: {fileID: 1352801138892128714, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: m_Name
       value: Farming Building Variant
@@ -896,6 +900,10 @@ PrefabInstance:
       propertyPath: _roomName
       value: Farming Building room
       objectReference: {fileID: 0}
+    - target: {fileID: 2058514990271563893, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+      propertyPath: _blueprint
+      value: 
+      objectReference: {fileID: 11400000, guid: b3d0fca764552004c89d5c33eb156de8, type: 2}
     - target: {fileID: 2058514990271563893, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: _depositZone
       value: 

@@ -1468,6 +1468,10 @@ PrefabInstance:
       value: Medium house room
       objectReference: {fileID: 0}
     - target: {fileID: 7957207800943456863, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
+      propertyPath: _blueprint
+      value: 
+      objectReference: {fileID: 11400000, guid: 95543b040d5cd564d9bd4c183dc68a15, type: 2}
+    - target: {fileID: 7957207800943456863, guid: 2e1494b4d52f43344be89b09545dbadf, type: 3}
       propertyPath: buildingName
       value: Medium house
       objectReference: {fileID: 0}
