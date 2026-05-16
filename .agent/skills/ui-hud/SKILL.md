@@ -84,7 +84,7 @@ For every new closable window:
 
 **Wire the inherited `_buttonClose`** at prefab-authoring time to the variant's close button. The base prefab supplies the field; the variant supplies the Button instance.
 
-### 3. Authoring a new panel via MCP (Roslyn `script-execute`)
+### 3. Authoring a new window via MCP (Roslyn `script-execute`)
 
 The canonical example is the 2026-05-16 SafeFurniture scaffold. The full pattern is:
 
@@ -94,30 +94,51 @@ var baseWindow = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/UI/Player HUD
 
 // 2. Instantiate as variant editing context.
 GameObject root = (GameObject)PrefabUtility.InstantiatePrefab(baseWindow);
-root.name = "UI_<Name>Panel";
+root.name = "UI_<Name>Window";
 
-// 3. Add the panel script as a Variant override.
-var t = System.Type.GetType("MWI.UI.<Category>.UI_<Name>Panel, Assembly-CSharp", false);
+// 3. Add the window script as a Variant override.
+var t = System.Type.GetType("MWI.UI.<Category>.UI_<Name>Window, Assembly-CSharp", false);
 var script = root.AddComponent(t) as MonoBehaviour;
 
-// 4. Add content under the inherited Canvas (root.GetComponentInChildren<Canvas>().transform).
-//    Title, close button, row container, status label, ...
+// 4. CRITICAL: fix the inherited Canvas configuration.
+//    UI_WindowBase.prefab ships with the Canvas in ScreenSpaceCamera mode, but with
+//    RectTransform scale=(0,0,0) — every variant MUST override scale to (1,1,1) or
+//    the entire window renders at zero scale (invisible).
+//    Don't change renderMode — keep ScreenSpaceCamera. Don't add a CanvasScaler
+//    if one's already present from the base.
+var canvas = root.GetComponentInChildren<Canvas>(true);
+var canvasRt = canvas.GetComponent<RectTransform>();
+canvasRt.localScale = Vector3.one;
+canvasRt.localRotation = Quaternion.identity;
+canvasRt.localPosition = Vector3.zero;
+// worldCamera stays null — UI_WindowBase.Awake assigns Camera.main at runtime.
 
-// 5. Wire SerializeFields via reflection (private fields → BindingFlags.NonPublic):
+// 5. Add content under the inherited Canvas (canvas.transform), NOT under the root.
+//    Parenting content under the variant root would create a second Canvas context
+//    and re-trigger the 2026-05-16 "two-Canvas invisible window" bug.
+//    Title, close button, row container, status label, ... all under canvas.transform.
+
+// 6. Wire SerializeFields via reflection (private fields → BindingFlags.NonPublic):
 SetPrivateField(script, "_titleLabel", titleTmp);
 SetPrivateField(script, "_rowContainer", rowContainerRt);
 SetPrivateField(script, "_buttonClose", closeBtn);   // inherited from UI_WindowBase
 
-// 6. Default panel deactivated.
+// 7. DO NOT override Awake in the new script to add another Canvas. The inherited
+//    Canvas is the sole render surface. If your script overrides Awake for other
+//    reasons, the first line MUST be `base.Awake();` — otherwise the inherited
+//    _buttonClose wiring AND the Camera.main → worldCamera assignment in
+//    UI_WindowBase.Awake don't run, and the window won't render.
+
+// 8. Default window deactivated.
 root.SetActive(false);
 
-// 7. Save as variant.
-var asset = PrefabUtility.SaveAsPrefabAsset(root, "Assets/UI/Player HUD/UI_<Name>Panel.prefab");
+// 9. Save as variant.
+var asset = PrefabUtility.SaveAsPrefabAsset(root, "Assets/UI/Player HUD/UI_<Name>Window.prefab");
 UnityEngine.Object.DestroyImmediate(root);
 AssetDatabase.SaveAssets();
 AssetDatabase.Refresh();
 
-// 8. Verify variant relationship.
+// 10. Verify variant relationship.
 var src = PrefabUtility.GetCorrespondingObjectFromSource(savedAsset);
 Debug.Assert(src.name == "UI_WindowBase");
 ```
@@ -201,13 +222,16 @@ The canonical example is [UI_SafeCurrencyRow.cs](../../Assets/Scripts/UI/Furnitu
 
 ## Common gotchas
 
-- **Null SerializeField silently breaks the feature.** A panel whose `_<name>Panel` SerializeField on `PlayerUI` is null causes `Open<Name>Panel` to silently no-op. The diagnostic warning IS the diagnosis — train your eye to scan for `[PlayerUI]` orange warnings in the Console.
+- **Null SerializeField silently breaks the feature.** A window whose `_<name>Window` SerializeField on `PlayerUI` is null causes `Open<Name>Window` to silently no-op. The diagnostic warning IS the diagnosis — train your eye to scan for `[PlayerUI]` orange warnings in the Console.
+- **Inherited Canvas RectTransform `scale=(0,0,0)` invisibility.** `UI_WindowBase.prefab` ships with the inherited Canvas's RectTransform at `scale=(0,0,0)`. Every variant MUST override this to `scale=(1,1,1)`, or the entire window renders at zero scale and is invisible in Game view. (2026-05-16 SafeFurniture incident.) The MCP authoring recipe in step 4 above does this automatically; if you author by hand, remember to set it.
+- **Don't add a Canvas in your variant's `Awake`.** The inherited Canvas child (under the variant root, named "Canvas") is the sole render surface. Calling `GetComponent<Canvas>()` on the variant root returns null because the Canvas lives on a child, so an `AddComponent<Canvas>()` fallback creates a SECOND Canvas at runtime — with conflicting render-mode / sorting state. The 2026-05-16 SafeFurniture "visible in Scene view, invisible in Game view" bug was exactly this. Parent your variant's content under the inherited Canvas child, not under the variant root.
+- **Canvas renderMode must remain `ScreenSpaceCamera`.** Don't change it to Overlay or WorldSpace in a variant. The project convention is `ScreenSpaceCamera` everywhere (per rule #39), with `Camera.main` assigned at runtime by `UI_WindowBase.Awake`. Changing the mode breaks the convention and the camera assignment becomes a no-op.
+- **`Camera.main` must exist before any UI_WindowBase variant Awakes.** If the main-tagged camera spawns later than the HUD, `UI_WindowBase.Awake` will assign `worldCamera = null` (Camera.main returns null) and log an orange `[UI_WindowBase]` warning. Either ensure the camera is in the scene from the start, or assign `canvas.worldCamera` explicitly when the camera is created.
 - **Play-mode wiring is volatile.** Always wire in Edit mode. From MCP, gate on `EditorApplication.isPlaying` first.
-- **`Time.unscaledDeltaTime` may resolve to `MWI.Time`** when the panel's namespace is `MWI.UI.<Category>`. Fully qualify as `UnityEngine.Time.unscaledDeltaTime` to disambiguate. Rule #26 still mandates unscaled time for UI.
-- **`NetworkObject.OnNetworkDespawn` is NOT a public event** in this NGO version — it's an override on `NetworkBehaviour`. Don't subscribe panels to it. Use the `Update` null-guard on the target reference instead (1-frame latency between despawn and close is imperceptible).
+- **`Time.unscaledDeltaTime` may resolve to `MWI.Time`** when the window's namespace is `MWI.UI.<Category>`. Fully qualify as `UnityEngine.Time.unscaledDeltaTime` to disambiguate. Rule #26 still mandates unscaled time for UI.
+- **`NetworkObject.OnNetworkDespawn` is NOT a public event** in this NGO version — it's an override on `NetworkBehaviour`. Don't subscribe windows to it. Use the `Update` null-guard on the target reference instead (1-frame latency between despawn and close is imperceptible).
 - **Variant override drift.** Edits to `UI_WindowBase.prefab` propagate to variants UNLESS the variant has explicitly overridden the property. Use "Revert Override" in the Inspector to re-inherit.
-- **Don't add a Canvas to a variant** — the base prefab already supplies one. Adding a second Canvas at the variant root causes z-order conflicts and double-raycasts. (Defensive Canvas auto-provisioning in `Awake` is OK if you're worried about prefab override propagation; see `UI_StorageFurniturePanel.Awake` for the pattern.)
-- **Don't put panel state on a NetworkBehaviour field.** Panels are pure client-side UI. They subscribe to authoritative NetworkVariable / ClientRpc broadcast state on OTHER components (`SafeFurnitureNetworkSync._networkBalances`, `CharacterWallet.OnBalanceChanged`).
+- **Don't put window state on a NetworkBehaviour field.** Windows are pure client-side UI. They subscribe to authoritative NetworkVariable / ClientRpc broadcast state on OTHER components (`SafeFurnitureNetworkSync._networkBalances`, `CharacterWallet.OnBalanceChanged`).
 
 ## Test checklist before claiming done
 
