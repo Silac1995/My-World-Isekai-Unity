@@ -135,6 +135,25 @@ public class SafeFurnitureNetworkSync : NetworkBehaviour
         _networkRole.Value = newRole;
     }
 
+    // ──────────────────────────────────────────────────────────────────
+    // Per-client deposit/withdraw operation feedback (player UI).
+    // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Server-only entry point used by <c>CharacterAction_DepositToSafe</c> and
+    /// <c>CharacterAction_WithdrawFromSafe</c> to report success / failure to the
+    /// requesting client. Stub today — Task 4 of the safe deposit/withdraw UI
+    /// feature replaces this body with a targeted ClientRpc dispatcher that the
+    /// open <c>UI_SafeFurniturePanel</c> listens to for inline status feedback.
+    /// </summary>
+    public void NotifyOperationResult(ulong targetClientId, bool success, string reason)
+    {
+        // TODO(Task 4 — 2026-05-16-safe-furniture-deposit-withdraw-ui): replace this
+        // stub with a targeted ClientRpc that pushes (success, reason) to the
+        // requesting client only. Stub body intentionally a no-op so Task 2/3 compile
+        // green without leaking premature wire format.
+    }
+
     private void HandleRoleChanged(SafeRoleType _, SafeRoleType newValue)
     {
         if (_safe != null) _safe.ApplyRoleFromNetwork(newValue);

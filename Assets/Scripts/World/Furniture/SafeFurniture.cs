@@ -62,6 +62,23 @@ public class SafeFurniture : Furniture
     /// <summary>Inspector-authored seed for the per-currency balance. Read by the sync component on first server spawn.</summary>
     public IReadOnlyList<CurrencyBalanceEntry> InitialBalances => _initialBalances;
 
+    /// <summary>
+    /// Lazy-cached sibling <see cref="SafeFurnitureNetworkSync"/> reference. Used by
+    /// server-side actions (<c>CharacterAction_DepositToSafe</c>,
+    /// <c>CharacterAction_WithdrawFromSafe</c>) to route per-client failure
+    /// notifications through the sync component's ClientRpc dispatcher. Null when
+    /// the safe is offline / non-networked (defensive — actions null-check).
+    /// </summary>
+    private SafeFurnitureNetworkSync _netSync;
+    public SafeFurnitureNetworkSync NetSync
+    {
+        get
+        {
+            if (_netSync == null) _netSync = GetComponent<SafeFurnitureNetworkSync>();
+            return _netSync;
+        }
+    }
+
     /// <summary>Read a currency balance. Server + client safe. Returns 0 for absent currencies.</summary>
     public int GetBalance(MWI.Economy.CurrencyId currency)
     {
