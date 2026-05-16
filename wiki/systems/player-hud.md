@@ -33,26 +33,28 @@ depended_on_by:
 # Player HUD
 
 ## Summary
-The Player HUD is the single client-side UI layer that surfaces world state to the local owning player. Every player-facing panel (safe deposit/withdraw, storage chest, shop buy, building management, …) lives as a child of one scene-resident `UI_PlayerHUD` GameObject and is opened/closed exclusively through the [PlayerUI](../../Assets/Scripts/UI/PlayerUI.cs) singleton facade. Every panel inherits its window chrome (Canvas + Background + close-button wiring) from a single base prefab — [UI_WindowBase.prefab](../../Assets/UI/Player%20HUD/UI_WindowBase.prefab) — via Unity Prefab Variants. No panel re-implements the Canvas / GraphicRaycaster / CanvasScaler trio.
+The Player HUD is the single client-side UI layer that surfaces world state to the local owning player. **Every closable UI window** — full-screen panels, half-screen modals, side drawers, mid-screen popups, confirmation dialogs, dismissable tooltips, sub-windows opened from inside another window — lives as a child of one scene-resident `UI_PlayerHUD` GameObject and is opened/closed exclusively through the [PlayerUI](../../Assets/Scripts/UI/PlayerUI.cs) singleton façade. Every closable window inherits its chrome (Canvas + Background + close-button wiring) from a single base prefab — [UI_WindowBase.prefab](../../Assets/UI/Player%20HUD/UI_WindowBase.prefab) — via Unity Prefab Variants. No window re-implements the Canvas / GraphicRaycaster / CanvasScaler trio. The defining trait of "is a window for this system" is **"has a close affordance"** — not size, modality, or layout.
 
 ## Purpose
 Three problems would be unsolved without this system:
 
-1. **Consistency of window chrome.** Every panel needs the same Canvas setup, sorting order, scale mode, raycaster, and "click X to close" button wiring. Re-authoring those on every panel is error-prone and visually inconsistent.
-2. **Single entry-point for opening UI.** Gameplay code (`Furniture.OnInteract`, `CharacterAction` ClientRpcs, hold-E menu options) must be able to open the right panel without each call site knowing prefab paths or Inspector wiring details. `PlayerUI.Instance.Open<Name>Panel(...)` is that entry-point.
-3. **Discoverable diagnostics when wiring breaks.** When a designer forgets to assign a panel's `[SerializeField]` on `PlayerUI`, the Open call must log a directive warning so the diagnosis takes 5 seconds instead of an hour.
+1. **Consistency of window chrome.** Every closable window needs the same Canvas setup, sorting order, scale mode, raycaster, and "click X to close" button wiring. Re-authoring those on every window is error-prone and visually inconsistent.
+2. **Single entry-point for opening UI.** Gameplay code (`Furniture.OnInteract`, `CharacterAction` ClientRpcs, hold-E menu options, parent-window code that opens a sub-window) must be able to open the right window without each call site knowing prefab paths or Inspector wiring details. `PlayerUI.Instance.Open<Name>Window(...)` is that entry-point.
+3. **Discoverable diagnostics when wiring breaks.** When a designer forgets to assign a window's `[SerializeField]` on `PlayerUI`, the Open call must log a directive warning so the diagnosis takes 5 seconds instead of an hour.
 
 ## Responsibilities
-- Own the [UI_WindowBase.prefab](../../Assets/UI/Player%20HUD/UI_WindowBase.prefab) chrome base every panel inherits.
-- Host every `UI_*Panel` script extending [UI_WindowBase](../../Assets/Scripts/UI/UI_WindowBase.cs).
-- Expose `Open<Name>Panel(...)` / `Close<Name>Panel()` on `PlayerUI` as the singleton public surface.
-- Log directive warnings when a panel's SerializeField is null.
-- Coordinate panel z-order (each panel's Canvas has its own `sortingOrder`; PlayerUI assumes panels don't overlap by default).
+- Own the [UI_WindowBase.prefab](../../Assets/UI/Player%20HUD/UI_WindowBase.prefab) chrome base every closable window inherits.
+- Host every `UI_*<Window>` script extending [UI_WindowBase](../../Assets/Scripts/UI/UI_WindowBase.cs).
+- Expose `Open<Name>Window(...)` / `Close<Name>Window()` on `PlayerUI` as the singleton public surface.
+- Log directive warnings when a window's SerializeField is null.
+- Keep the façade **flat**: every closable window is a sibling under PlayerUI, never a grand-child of another window. Sub-windows opened from inside another window go through `PlayerUI.Instance.Open<Name>Window(...)`, not via a direct child reference.
+- Coordinate window z-order (each window's Canvas has its own `sortingOrder`; PlayerUI assumes windows don't overlap by default).
 
 **Non-responsibilities** (common misconceptions):
 - Not responsible for input-driven character control — that's in [[player-controller]] / `PlayerController` (rule #33).
 - Not responsible for the world-space interaction menu (the hold-E radial menu) — that's [[ui-interaction-menu]], a separate `UI_InteractionMenu` script driven by `InteractableObject.GetHoldInteractionOptions`.
 - Not responsible for screen-space UI that isn't player-driven (loading screens, splash, debug overlays) — those live in their own scenes / canvases outside the HUD hierarchy.
+- **Not responsible for non-window leaf prefabs**: rows / tiles / list items / badges / auto-fading tooltips. Those are `Instantiate`d as children of a window's `_rowContainer` at runtime and have no close affordance. **Litmus test**: if the element has a Button that calls `CloseWindow` / `SetActive(false)` on itself, it is a window and rule #39 applies; if it disappears only when its parent window closes or via a timer, it is a leaf and rule #39 does not apply.
 
 ## Key classes / files
 | File | Role |
@@ -130,6 +132,7 @@ Standard panel-open flow:
 
 ## Change log
 - 2026-05-16 — created; documents the UI_WindowBase Prefab Variant convention formalised by Kevin during the SafeFurniture deposit/withdraw UI feature — claude
+- 2026-05-16 — broadened scope from "player-facing panel / modal / full-screen" to "any closable UI window" per Kevin clarification ("a window/ui that can be closed should always be a child of Window_base"). Added litmus test for the window-vs-leaf boundary and the flat-façade rule (sub-windows open through PlayerUI, not via parent-window child refs) — claude
 
 ## Sources
 - [UI_WindowBase.cs](../../Assets/Scripts/UI/UI_WindowBase.cs)

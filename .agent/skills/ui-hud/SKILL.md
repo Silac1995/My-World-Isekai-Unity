@@ -1,21 +1,22 @@
 ---
 name: ui-hud
-description: Procedural skill for authoring, modifying, and debugging player-facing HUD panels (deposit/withdraw, storage, shop buy, management, …) following the Prefab-Variant-of-UI_WindowBase convention and the PlayerUI singleton façade.
+description: Procedural skill for authoring, modifying, and debugging any closable UI window (full-screen panel, modal, side drawer, popup, confirmation dialog, sub-window, …) following the Prefab-Variant-of-UI_WindowBase convention and the PlayerUI singleton façade.
 ---
 
 # UI HUD
 
-This skill captures the procedural recipe for adding or modifying a player-facing UI panel. It enforces the architecture defined in [wiki/systems/player-hud.md](../../wiki/systems/player-hud.md) and rule #39 of CLAUDE.md.
+This skill captures the procedural recipe for adding or modifying any closable UI window. It enforces the architecture defined in [wiki/systems/player-hud.md](../../wiki/systems/player-hud.md) and rule #39 of CLAUDE.md.
 
-The HUD has ONE base prefab — [Assets/UI/Player HUD/UI_WindowBase.prefab](../../Assets/UI/Player%20HUD/UI_WindowBase.prefab) — and EVERY player-facing panel is a Prefab Variant of it. The singleton façade is [PlayerUI](../../Assets/Scripts/UI/PlayerUI.cs); gameplay code never instantiates panels directly, never holds prefab references, never SetActive's a panel.
+The HUD has ONE base prefab — [Assets/UI/Player HUD/UI_WindowBase.prefab](../../Assets/UI/Player%20HUD/UI_WindowBase.prefab) — and **every closable UI window** (regardless of size, modality, or whether it's a top-level panel or a sub-window opened from inside another) is a Prefab Variant of it. The defining trait is **"has a close affordance"** — if the user can dismiss it, it's a window. The singleton façade is [PlayerUI](../../Assets/Scripts/UI/PlayerUI.cs); gameplay code never instantiates windows directly, never holds prefab references, never SetActive's a window, and parent windows never hold direct refs to sub-windows — every closable surface routes through `PlayerUI.Instance.Open<Name>Window(...)`.
 
 ## When to use this skill
 
-- Creating a new player-facing panel (deposit / inventory / dialogue / quest log / shop / craft / …).
-- Modifying an existing panel's content (adding rows, fields, buttons).
+- Creating any new closable UI surface — top-level panel (deposit / inventory / dialogue / quest log / shop / craft) OR a sub-window opened from inside an existing window (confirmation dialog, item detail popup, settings sub-pane, …).
+- Modifying an existing window's content (adding rows, fields, buttons, sub-window triggers).
 - Debugging "I tapped E / clicked X and nothing happened" symptoms.
-- Reviewing a PR that touches `PlayerUI.cs`, `UI_WindowBase.*`, or any `UI_*Panel.cs` script.
-- Authoring a panel programmatically via MCP `script-execute` (the 2026-05-16 SafeFurniture scaffold is the canonical example).
+- Reviewing a PR that touches `PlayerUI.cs`, `UI_WindowBase.*`, or any `UI_*` script under `Assets/Scripts/UI/`.
+- Authoring a window programmatically via MCP `script-execute` (the 2026-05-16 SafeFurniture scaffold is the canonical example).
+- Deciding whether a new UI prefab counts as a "window" (subject to rule #39) or a "leaf" (exempt). **Litmus test**: does the element have a Button that calls `CloseWindow` / `SetActive(false)` to dismiss itself? If yes → window, must be a Variant. If it disappears only when its parent closes or via a timer → leaf, plain MonoBehaviour prefab.
 
 ## The Player HUD Architecture
 
@@ -50,18 +51,18 @@ The HUD has ONE base prefab — [Assets/UI/Player HUD/UI_WindowBase.prefab](../.
 
 ### 1. Singleton façade — PlayerUI
 
-`PlayerUI.Instance` is the only entry-point for opening panels.
+`PlayerUI.Instance` is the only entry-point for opening any closable window.
 
-**Rule:** Never call `panel.gameObject.SetActive(true)` or `panel.OpenWindow()` from gameplay code. Always go through `PlayerUI.Instance.Open<Name>Panel(...)`. This keeps the wiring discoverable, the warning-log diagnostic centralised, and the panel's z-order managed in one place.
+**Rule:** Never call `window.gameObject.SetActive(true)` or `window.OpenWindow()` from gameplay code or from a parent window. Always go through `PlayerUI.Instance.Open<Name>Window(...)`. This keeps the wiring discoverable, the warning-log diagnostic centralised, the z-order managed in one place, and the façade flat (sub-windows are siblings under PlayerUI, never grand-children of another window).
 
-For every new panel:
-- Add `[SerializeField] private MWI.UI.<Category>.UI_<Name>Panel _<name>Panel;` to `PlayerUI`.
-- Add `public void Open<Name>Panel(<contextArgs>)` and `public void Close<Name>Panel()`.
-- Inside `Open<Name>Panel`, **always** include a null-guard with a directive warning:
+For every new closable window:
+- Add `[SerializeField] private MWI.UI.<Category>.UI_<Name>Window _<name>Window;` to `PlayerUI`.
+- Add `public void Open<Name>Window(<contextArgs>)` and `public void Close<Name>Window()`.
+- Inside `Open<Name>Window`, **always** include a null-guard with a directive warning:
   ```csharp
-  if (_<name>Panel == null)
+  if (_<name>Window == null)
   {
-      Debug.LogWarning("<color=orange>[PlayerUI]</color> Open<Name>Panel called but _<name>Panel SerializeField is null — author the prefab (variant of UI_WindowBase.prefab) and wire it to PlayerUI._<name>Panel in the Inspector.");
+      Debug.LogWarning("<color=orange>[PlayerUI]</color> Open<Name>Window called but _<name>Window SerializeField is null — author the prefab (variant of UI_WindowBase.prefab) and wire it to PlayerUI._<name>Window in the Inspector.");
       return;
   }
   ```
@@ -69,16 +70,17 @@ For every new panel:
 
 ### 2. The Variant convention
 
-**Rule:** every player-facing panel prefab MUST be a Prefab Variant of `Assets/UI/Player HUD/UI_WindowBase.prefab`.
+**Rule:** every closable UI window prefab MUST be a Prefab Variant of `Assets/UI/Player HUD/UI_WindowBase.prefab`. This applies to top-level windows AND to sub-windows opened from inside another window. The window-vs-leaf litmus test is at the top of this skill.
 
-**Asset placement:** `Assets/UI/Player HUD/UI_<Name>Panel.prefab`. NOT `Assets/Prefabs/`. NOT `Assets/UI/`. Specifically the `Player HUD` subfolder.
+**Asset placement:** `Assets/UI/Player HUD/UI_<Name>Window.prefab`. NOT `Assets/Prefabs/`. NOT `Assets/UI/`. Specifically the `Player HUD` subfolder.
 
-**Backing script:** `public sealed class UI_<Name>Panel : UI_WindowBase`. The base auto-wires the inherited `_buttonClose` Button in `Awake` and exposes `OpenWindow` / `CloseWindow`. Your subclass:
+**Backing script:** `public sealed class UI_<Name>Window : UI_WindowBase`. The base auto-wires the inherited `_buttonClose` Button in `Awake` and exposes `OpenWindow` / `CloseWindow`. Your subclass:
 - Adds its own `[SerializeField]` content fields.
 - Overrides `Awake` only if you need defensive Canvas/GraphicRaycaster auto-provisioning (mirror `UI_StorageFurniturePanel.Awake` for the pattern) — call `base.Awake()` first.
 - Provides `Initialize(<contextArgs>)` that wires subscriptions + calls `OpenWindow()`.
 - Overrides `CloseWindow()` to unsubscribe + clear state, then calls `base.CloseWindow()` last.
 - Adds `OnDisable()` and `OnDestroy()` belt-and-braces unbind (rule #16).
+- If this window opens a sub-window, calls `PlayerUI.Instance.Open<SubName>Window(...)` — never holds a direct `[SerializeField]` reference to the sub-window itself.
 
 **Wire the inherited `_buttonClose`** at prefab-authoring time to the variant's close button. The base prefab supplies the field; the variant supplies the Button instance.
 
