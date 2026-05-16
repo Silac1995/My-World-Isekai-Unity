@@ -45,6 +45,12 @@ public class Building : ComplexRoom
         public Room TargetRoom;
     }
 
+    [Header("Blueprint")]
+    [Tooltip("The BuildingSO that authored this building. Source of truth for PrefabId, BuildingName, BuildingType, ConstructionRequirements, DefaultFurnitureLayout. Set on every authored prefab; clones inherit it via Inspector serialization.")]
+    [SerializeField] protected BuildingSO _blueprint;
+
+    public BuildingSO Blueprint => _blueprint;
+
     [Header("Building Info")]
     [SerializeField] protected string buildingName;
 
@@ -169,12 +175,27 @@ public class Building : ComplexRoom
         NetworkVariableWritePermission.Server
     );
 
-    public string BuildingName => buildingName;
-    public virtual BuildingType BuildingType => _buildingType;
+    public string BuildingName =>
+        _blueprint != null && !string.IsNullOrEmpty(_blueprint.BuildingName)
+            ? _blueprint.BuildingName
+            : (string.IsNullOrEmpty(buildingName) ? name : buildingName);
+
+    public virtual BuildingType BuildingType =>
+        _blueprint != null ? _blueprint.BuildingType : _buildingType;
+
     public bool IsPublicLocation => _isPublicLocation;
     public Collider BuildingZone => _buildingZone;
     public Zone DeliveryZone => _deliveryZone;
-    public string PrefabId { get => _prefabId; set => _prefabId = value; }
+
+    // Setter retained: BuildingPlacementManager.RequestPlacementServerRpc writes
+    // PrefabId on dynamically-spawned buildings. Reads prefer the blueprint when
+    // present; otherwise fall back to the legacy field. Task 6 deletes both.
+    public string PrefabId
+    {
+        get => _blueprint != null ? _blueprint.PrefabId : _prefabId;
+        set => _prefabId = value;
+    }
+
     public string BuildingId => NetworkBuildingId.Value.ToString();
 
     /// <summary>
@@ -219,6 +240,7 @@ public class Building : ComplexRoom
     {
         get
         {
+            if (_blueprint != null) return _blueprint.InteriorPrefab != null;
             if (string.IsNullOrEmpty(_prefabId)) return false;
             var settings = GetCachedWorldSettings();
             if (settings == null) return false;
@@ -274,9 +296,30 @@ public class Building : ComplexRoom
 
     /// <summary>
     /// Read-only view of the authored material requirements for construction. Empty when the
-    /// building was authored without a build phase.
+    /// building was authored without a build phase. Prefers the blueprint when present;
+    /// otherwise falls back to the legacy <see cref="_constructionRequirements"/> field.
+    /// Task 6 deletes the legacy field after Task 11 migration.
     /// </summary>
-    public IReadOnlyList<CraftingIngredient> ConstructionRequirements => _constructionRequirements;
+    public IReadOnlyList<CraftingIngredient> ConstructionRequirements => EffectiveConstructionRequirements;
+
+    /// <summary>
+    /// Reads <see cref="_blueprint"/>.ConstructionRequirements when present, else falls back
+    /// to the legacy <see cref="_constructionRequirements"/> prefab field. Task 6 deletes the
+    /// legacy field once Task 11 migration has run on every prefab.
+    /// </summary>
+    protected System.Collections.Generic.IReadOnlyList<CraftingIngredient> EffectiveConstructionRequirements =>
+        _blueprint != null && _blueprint.ConstructionRequirements != null && _blueprint.ConstructionRequirements.Count > 0
+            ? _blueprint.ConstructionRequirements
+            : (System.Collections.Generic.IReadOnlyList<CraftingIngredient>)_constructionRequirements;
+
+    /// <summary>
+    /// Reads <see cref="_blueprint"/>.DefaultFurnitureLayout when present, else falls back
+    /// to the legacy <see cref="_defaultFurnitureLayout"/> prefab field.
+    /// </summary>
+    protected System.Collections.Generic.IReadOnlyList<DefaultFurnitureSlot> EffectiveDefaultFurnitureLayout =>
+        _blueprint != null && _blueprint.DefaultFurnitureLayout != null && _blueprint.DefaultFurnitureLayout.Count > 0
+            ? _blueprint.DefaultFurnitureLayout
+            : (System.Collections.Generic.IReadOnlyList<DefaultFurnitureSlot>)_defaultFurnitureLayout;
 
     /// <summary>
     /// Read-only view of the materials contributed so far. Server-authoritative; clients see the
@@ -329,7 +372,7 @@ public class Building : ComplexRoom
         // and overrides this for saved buildings.
         if (IsServer)
         {
-            int reqCount = _constructionRequirements?.Count ?? 0;
+            int reqCount = EffectiveConstructionRequirements?.Count ?? 0;
             MWI.WorldSystem.BuildingState newState;
             if (_spawnAsComplete)
             {
@@ -1128,7 +1171,7 @@ public class Building : ComplexRoom
         if (!IsServer) return;
         if (_currentState.Value == MWI.WorldSystem.BuildingState.Complete) return;
 
-        Debug.Log($"<color=red>[Building.BuildInstantly]</color> {buildingName} BYPASSING construction loop — _isStarted={_isStarted} | reqs={_constructionRequirements?.Count ?? 0} | currentState={_currentState.Value}");
+        Debug.Log($"<color=red>[Building.BuildInstantly]</color> {buildingName} BYPASSING construction loop — _isStarted={_isStarted} | reqs={EffectiveConstructionRequirements?.Count ?? 0} | currentState={_currentState.Value}");
 
         if (_isStarted)
         {
@@ -1213,7 +1256,7 @@ public class Building : ComplexRoom
 
         bool isFinished = true;
 
-        foreach (var req in _constructionRequirements)
+        foreach (var req in EffectiveConstructionRequirements)
         {
             int contributed = _contributedMaterials.TryGetValue(req.Item, out int c) ? c : 0;
             if (contributed < req.Amount)
@@ -1239,7 +1282,7 @@ public class Building : ComplexRoom
         var pending = new Dictionary<ItemSO, int>();
         if (CurrentState == MWI.WorldSystem.BuildingState.Complete) return pending;
 
-        foreach (var req in _constructionRequirements)
+        foreach (var req in EffectiveConstructionRequirements)
         {
             int contributed = _contributedMaterials.TryGetValue(req.Item, out int c) ? c : 0;
             if (contributed < req.Amount)
@@ -1406,13 +1449,14 @@ public class Building : ComplexRoom
     /// </summary>
     public bool IsDefaultLayoutFurniture(Furniture furniture, float positionEpsilon = 0.05f)
     {
-        if (furniture == null || furniture.FurnitureItemSO == null || _defaultFurnitureLayout == null)
-            return false;
+        if (furniture == null || furniture.FurnitureItemSO == null) return false;
+        var layout = EffectiveDefaultFurnitureLayout;
+        if (layout == null) return false;
 
         Vector3 localPos = transform.InverseTransformPoint(furniture.transform.position);
-        for (int i = 0; i < _defaultFurnitureLayout.Count; i++)
+        for (int i = 0; i < layout.Count; i++)
         {
-            var slot = _defaultFurnitureLayout[i];
+            var slot = layout[i];
             if (slot == null || slot.ItemSO != furniture.FurnitureItemSO) continue;
             if (Vector3.Distance(slot.LocalPosition, localPos) < positionEpsilon)
                 return true;
@@ -1434,7 +1478,8 @@ public class Building : ComplexRoom
         if (_defaultFurnitureSpawned) return;
         _defaultFurnitureSpawned = true;
 
-        if (_defaultFurnitureLayout == null || _defaultFurnitureLayout.Count == 0)
+        var layout = EffectiveDefaultFurnitureLayout;
+        if (layout == null || layout.Count == 0)
         {
             return;
         }
@@ -1447,9 +1492,9 @@ public class Building : ComplexRoom
             if (f != null && f.FurnitureItemSO != null) existingItemSOs.Add(f.FurnitureItemSO);
         }
 
-        for (int i = 0; i < _defaultFurnitureLayout.Count; i++)
+        for (int i = 0; i < layout.Count; i++)
         {
-            var slot = _defaultFurnitureLayout[i];
+            var slot = layout[i];
             if (slot == null || slot.ItemSO == null || slot.ItemSO.InstalledFurniturePrefab == null)
             {
                 Debug.LogWarning($"[Building] {buildingName}: _defaultFurnitureLayout[{i}] is missing ItemSO or InstalledFurniturePrefab — slot skipped.", this);
@@ -1565,13 +1610,14 @@ public class Building : ComplexRoom
     /// </summary>
     public float ComputeProgress()
     {
-        if (_constructionRequirements == null || _constructionRequirements.Count == 0) return 1f;
+        var reqs = EffectiveConstructionRequirements;
+        if (reqs == null || reqs.Count == 0) return 1f;
 
         int totalRequired = 0;
         int totalSatisfied = 0;
-        for (int i = 0; i < _constructionRequirements.Count; i++)
+        for (int i = 0; i < reqs.Count; i++)
         {
-            var req = _constructionRequirements[i];
+            var req = reqs[i];
             if (req.Item == null) continue;
             int r = req.Amount;
             int d = _contributedMaterials.TryGetValue(req.Item, out int v) ? v : 0;
