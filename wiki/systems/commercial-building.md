@@ -3,9 +3,9 @@ type: system
 title: "Commercial Building"
 tags: [building, commercial, jobs, tier-2]
 created: 2026-04-19
-updated: 2026-05-14
+updated: 2026-05-16
 sources: []
-related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[tool-storage]]", "[[commercial-storage-roles]]", "[[help-wanted-and-hiring]]", "[[management-panel-architecture]]", "[[dev-mode]]", "[[kevin]]"]
+related: ["[[building]]", "[[building-logistics-manager]]", "[[building-task-manager]]", "[[jobs-and-logistics]]", "[[shops]]", "[[crafting-loop]]", "[[worker-wages-and-performance]]", "[[quest-system]]", "[[tool-storage]]", "[[commercial-storage-roles]]", "[[commercial-treasury]]", "[[construction]]", "[[help-wanted-and-hiring]]", "[[management-panel-architecture]]", "[[dev-mode]]", "[[kevin]]"]
 status: stable
 confidence: high
 primary_agent: building-furniture-specialist
@@ -86,7 +86,21 @@ Force-assignment bypasses consent: `CommunityTracker.ImposeJobOnCitizen()` → `
 
 ## Default furniture spawn
 
-See [[building#Default furniture layout]] for the system (it now lives at the `Building` level). `CommercialBuilding` overrides `OnDefaultFurnitureSpawned()` to invalidate the storage furniture cache after the layout spawns.
+See [[building#Default furniture layout]] for the system (it now lives at the `Building` level). `CommercialBuilding` overrides `OnDefaultFurnitureSpawned()` to invalidate the storage furniture cache after the layout spawns AND to fire the Treasury seed (see below).
+
+## Treasury seed flow
+
+The `BaseTreasury` integer on `BuildingCommercialSO` seeds the building's Treasury-role
+[[commercial-treasury|SafeFurniture]] once, on construction-complete, via `CommercialBuilding.OnDefaultFurnitureSpawned`
+calling the `SeedTreasuryIfNeeded()` helper. Currency is resolved at that moment from
+`MapController.NativeCurrency` (which reads `CommunityData.NativeCurrency`); buildings
+placed outside any `MapController` fall back to `CurrencyId.Default`. The seed runs in
+all four spawn paths: cooperative finalize (see [[construction]]), `_spawnAsComplete`
+designer flag, debug `BuildInstantly`, and `RestoreFromSaveData` Complete-branch.
+Re-credit on reload is prevented by `BuildingSaveData.TreasurySeeded`, a server-only
+boolean flag mirroring the `_treasurySeeded` runtime field — clients never read it.
+Crediting itself delegates to [[commercial-treasury|CreditTreasury]] which picks the
+largest Treasury-role safe (first-found ordering today).
 
 `Building.SpawnDefaultFurnitureSlot` defaults `slot.TargetRoom` to `MainRoom` when null — without this, late-authored slots silently spawned under the building root without grid registration, and the LogisticsManager + crafting pipeline relied on `_furnitures` registration for storage lookups. Designers can still set `slot.TargetRoom` explicitly. `Building.Start` also explicitly invokes `FurnitureManager.LoadExistingFurniture()` for the building's `MainRoom` because `Room.Start` runs the same defensive rescan but is `private` — without the explicit call the Building's own MainRoom rescan never happens (the Building class is itself the MainRoom via `ComplexRoom` inheritance).
 
@@ -136,6 +150,7 @@ Always call `base.GetManagementTabs()` first so the Hiring tab is preserved. See
 - If a subclass wants autonomous restock, **implementing `IStockProvider` is mandatory** — declaring `_itemsToSell` or `_inputStockTargets` alone does nothing until the contract is wired.
 
 ## Change log
+- 2026-05-16 — Treasury seed flow: BuildingCommercialSO.BaseTreasury → OnDefaultFurnitureSpawned override → CreditTreasury. Currency resolved from MapController.NativeCurrency at credit time. Persisted via BuildingSaveData.TreasurySeeded. — claude
 - 2026-05-14 — Added private `DoSetStorageRole(StorageFurniture, StorageRoleType)` server-only mutator + `internal bool TrySetStorageRoleServer(...)` validated wrapper. Both `TrySetStorageRoleServerRpc` (player UI) and `BuildingLogisticsManager.AssignStorageRolesForShift` (NPC shift-punch) funnel through `DoSetStorageRole`, eliminating future-divergence risk between the two role-write paths. `SupportedStorageRoles` subtype filter lives inside `TrySetStorageRoleServer` — same rule the RPC enforces. Playtest-confirmed. See [[commercial-storage-roles]]. — claude
 - 2026-05-14 — `WorkerStartingShift` now invokes `LogisticsManager.AssignStorageRolesForShift()` (server-only, wrapped in try/catch per rule #31) inside the `!IsWorkerOnShift` branch — one call per actual shift entry. Applies the unified storage-role rule (tool-priority → shelf-priority on shops → inventory default). Idempotent re-runs are zero-cost. Also added `CommercialBuilding.GetStorageFurnitureOrdered()` public accessor (thin read-only wrapper around the existing `GetStorageFurnitureCached`) so the logistics layer can address the same cached/ordered set without re-walking rooms. See [[commercial-storage-roles]] for the full rule + idempotency contract. — claude
 - 2026-05-09 (later) — Owner / employee restoration split. The combined `RestoreFromSaveData(List<string> ownerIds, List<EmployeeSaveEntry> employees)` was decomposed: the **owner** half lifted to base [[building]] (`Building.RestoreOwnersFromSaveData` + virtual `BindRestoredOwner` hook), commercial-side override calls `SetOwner(owner, ownerJob, autoAssignJob:false)` AND consumes the matching saved `EmployeeSaveEntry` from `_pendingEmployees` to recover the boss's actual job slot; the **employee** half stays here as `RestoreEmployeesFromSaveData(List<EmployeeSaveEntry>)`. Both subscribe to `Character.OnCharacterSpawned` AND `Character.OnCharacterIdReassigned` (the latter closes the host-player UUID timing window — see [[host-player-uuid-timing-on-load]]). Routed by `MapController.ApplyDynamicSaveDataToBuilding(Building, BuildingSaveData)` — owners FIRST so the override can claim the boss's employee entry before the employee pass runs. Order is critical for the auto-assigned-job suppression. — claude

@@ -3,7 +3,7 @@ type: system
 title: "Building & Furniture"
 tags: [building, furniture, world, tier-1]
 created: 2026-04-18
-updated: 2026-05-13
+updated: 2026-05-16
 sources: []
 related:
   - "[[world]]"
@@ -65,8 +65,10 @@ Give the world a single containment model that every gameplay system can hang of
 | `Assets/Scripts/World/Buildings/Zone.cs` | Foundation — `BoxCollider` + `_charactersInside` tracking. |
 | `Assets/Scripts/World/Buildings/Room.cs` | Adds `_roomOwners`, `_roomResidents`, `FurnitureManager`, `FurnitureGrid`. |
 | `Assets/Scripts/World/Buildings/ComplexRoom.cs` | Multi-room container; `GetRoomAt(Vector3)`, `FindAvailableFurniture()`. |
-| `Assets/Scripts/World/Buildings/Building.cs` | Building name/type, `BuildingState`, `_buildingZone` collider, `_deliveryZone`, contribute/instant-build methods. |
+| `Assets/Scripts/World/Buildings/Building.cs` | Building name/type, `BuildingState`, `_buildingZone` collider, `_deliveryZone`, contribute/instant-build methods. Each prefab carries a `[SerializeField] BuildingSO _blueprint` — the single source of truth for `PrefabId` / `BuildingName` / `BuildingType` / `ConstructionRequirements` / `DefaultFurnitureLayout`. |
 | `Assets/Scripts/World/Buildings/CommercialBuilding.cs` | Adds `BuildingTaskManager` + `BuildingLogisticsManager` (consumed by [[jobs-and-logistics]] and [[shops]]). |
+| `Assets/Scripts/World/Data/BuildingSO.cs` | Base ScriptableObject blueprint (`namespace MWI.WorldSystem`). One asset per building type under `Assets/Resources/Data/Buildings/`. Holds `PrefabId`, `BuildingName`, `Icon`, `BuildingPrefab`, `InteriorPrefab`, `CommunityPriority`, `BuildingType`, `ConstructionRequirements`, `DefaultFurnitureLayout`. Replaces the legacy inline `BuildingRegistryEntry` + the 5 duplicated SerializeFields previously on every Building prefab. |
+| `Assets/Scripts/World/Data/BuildingCommercialSO.cs` | `BuildingSO` subclass adding `int BaseTreasury` (currency seed credited once at construction-complete via [[commercial-building#Treasury seed flow]]). |
 
 ### Furniture
 | File | Role |
@@ -93,6 +95,7 @@ Room:
 - `Room.FurnitureManager` / `Room.Grid`.
 
 Building:
+- `Building._blueprint` — `[SerializeField] BuildingSO` per prefab. **Single source of truth** for `PrefabId` (saved string key — preserved verbatim across the 2026-05-16 migration so zero save migration was required), `BuildingName`, `BuildingType`, `ConstructionRequirements`, `DefaultFurnitureLayout`. The legacy duplicated SerializeFields (`_prefabId`, `buildingName`, `_buildingType`, `_constructionRequirements`, `_defaultFurnitureLayout`) have been removed; all accessors read through `_blueprint`. `BuildingCommercialSO` subclasses also expose `BaseTreasury` (see [[commercial-building#Treasury seed flow]]). `WorldSettingsData.Blueprints : List<BuildingSO>` is the live registry; the legacy `[Obsolete] BuildingRegistry` lives alongside for one cycle.
 - `Building.CurrentState` (`BuildingState` enum).
 - `Building.ContributeMaterial(ItemSO, int)` — server-side ledger increment for construction (called from `CharacterAction_FinishConstruction.OnTick`).
 - `Building.BuildInstantly()` — debug/cheat/admin path.
@@ -232,6 +235,7 @@ for procedural authoring details.
 - [[building-placement-manager]] — community permission gate.
 
 ## Change log
+- 2026-05-16 — BuildingSO blueprint introduced. Replaces inline BuildingRegistryEntry + duplicated prefab fields. PrefabId strings preserved verbatim (zero save migration). — claude
 - 2026-05-13 (later) — Fixed the second half of the save-load storage bug: **prefab-authored default furniture** (e.g. Lumberyard's crate at `_defaultFurnitureLayout[0]`) was also vanishing on load, not just runtime-placed. Same subscription-timing race that bit `BuildInstantly` (see [[buildinstantly-pre-start-lifecycle-race]]): `MapController.SpawnSavedBuildings` → `Spawn()` → `OnNetworkSpawn` auto-derives `_currentState.Value = UnderConstruction` for any prefab with non-empty `_constructionRequirements` and `_spawnAsComplete=false`. Then `ApplyDynamicSaveDataToBuilding → RestoreFromSaveData` writes `_currentState.Value = Complete`, **but Start() (where the `OnValueChanged += HandleStateChanged` subscription lives) hasn't run yet** — so the post-Complete cascade (`TrySpawnDefaultFurniture`, `ConfigureNavMeshObstacles`, `OnConstructionComplete`) silently no-ops. Default furniture never spawns; storage CONTENTS restore then finds zero live storages and silently skips them too. Fix: `Building.RestoreFromSaveData` now manually invokes `TrySpawnDefaultFurniture()` + `ConfigureNavMeshObstacles()` after the state-flip when `_isStarted == false`; idempotent via `_defaultFurnitureSpawned`. `MapController.ApplyDynamicSaveDataToBuilding` reordered so `RestoreFromSaveData` runs FIRST — owners/employees → state-flip-with-cascade → placed-furniture → storage contents → cashier → shop hooks. Save-restore can't use the coroutine-defer pattern BuildInstantly uses because the synchronous content-restore steps need furniture live in the same call. See [[save-restore-state-flip-no-subscriber]] in gotchas. — claude
 - 2026-05-13 — Player/NPC-placed furniture now persists across save/load. Added `BuildingSaveData.PlacedFurnitures : List<PlacedFurnitureSaveEntry>` capturing every Furniture under the building that isn't matched by `_defaultFurnitureLayout` (dedup via new `Building.IsDefaultLayoutFurniture(furniture)` helper — same ItemSO + LocalPosition within 0.05u). Restore wired in `MapController.RestorePlacedFurnitureForBuilding`, called from `ApplyDynamicSaveDataToBuilding` BEFORE `RestoreStorageFurnitureContents` so storage contents bind to the freshly-spawned instances. Server-only, gated to `Complete` state, mirrors `Building.SpawnDefaultFurnitureSlot` (Instantiate → `NetworkObject.Spawn()` → parent under building root → `FurnitureManager.RegisterSpawnedFurnitureUnchecked` on MainRoom). Both refresh paths (`SnapshotActiveBuildings`, `Hibernate`) copy the new field — same hazard that bit `ConstructionProgress` / `DeliveredMaterials` on 2026-05-07. Pre-fix symptom: storages placed in HarvestingBuilding / CraftingBuilding / FarmingBuilding silently vanished on every load. ShopBuilding appeared to work only because SellShelves are nested-NO prefab children absorbed into `_defaultFurnitureLayout` at Awake by `ConvertNestedNetworkFurnitureToLayout` — Shop's runtime player placements had the same bug. — claude
 - 2026-05-09 (later) — Closed the host-player UUID timing window. `Building.RestoreOwnersFromSaveData` and `CommercialBuilding.RestoreEmployeesFromSaveData` now subscribe to **both** `Character.OnCharacterSpawned` (NPC path — UUID correct at spawn) and a new `Character.OnCharacterIdReassigned` (host player path — UUID arrives via `ImportProfile` AFTER spawn). Previously the host's player Character spawned with a fresh `Guid.NewGuid()` in GameLauncher Step 4, the saved-owner resolver fired in Step 5b with the wrong GUID, and the persistent profile GUID only landed in Step 6 — by which point nothing was listening. Net result: host-owned buildings now restore for the host on load, matching the NPC behaviour. Player jobs already worked because `CharacterJob.Deserialize` runs character-side from `ImportProfile` and binds via BuildingId. — claude

@@ -3,15 +3,17 @@ type: system
 title: "Commercial Treasury"
 tags: [building, furniture, currency, logistics, network, tier-2]
 created: 2026-05-09
-updated: 2026-05-09
+updated: 2026-05-16
 sources: []
 related:
   - "[[commercial-building]]"
   - "[[commercial-storage-roles]]"
   - "[[shops]]"
   - "[[shop-building]]"
+  - "[[building]]"
   - "[[building-logistics-manager]]"
   - "[[jobs-and-logistics]]"
+  - "[[construction]]"
   - "[[management-panel-architecture]]"
 status: stable
 confidence: high
@@ -41,8 +43,13 @@ Before this system, the supply chain only knew producer-to-buyer flows: when Cra
 
 Treasury closes this gap by giving every building a budget of its own, separate from the owner's [[character-wallet|CharacterWallet]] (personal) and the [[cashier|Cashier]] till (revenue accumulator). Funds flow:
 - **Safe seed** — designer pre-populates `SafeFurniture._initialBalances` on the prefab.
+- **BaseTreasury seed (2026-05-16)** — `BuildingCommercialSO.BaseTreasury` credits the Treasury-role safe once on construction-complete. See [Seed source](#seed-source) below + [[commercial-building#Treasury seed flow]].
 - **Treasury accumulation (future)** — owner deposits via management panel; commission payments routed to treasury; etc.
 - **Treasury spend** — B2B shop purchases via `LogisticsStockEvaluator.TryB2BPurchaseFromShop`.
+
+### Seed source
+
+`BuildingCommercialSO.BaseTreasury` (introduced 2026-05-16, see [[building#Public API / entry points]] for the BuildingSO blueprint) seeds the building's Treasury safe **once**, on construction-complete, via `CommercialBuilding.OnDefaultFurnitureSpawned` invoking the `SeedTreasuryIfNeeded()` helper. Currency is resolved at that moment from `MapController.NativeCurrency` (which reads `CommunityData.NativeCurrency`); buildings placed outside any `MapController` fall back to `CurrencyId.Default`. The seed runs in all four spawn paths: cooperative finalize (see [[construction]]), `_spawnAsComplete` designer flag, debug `BuildInstantly`, and `RestoreFromSaveData` Complete-branch. Idempotency is guaranteed by `_treasurySeeded` (server-only runtime flag) persisted to `BuildingSaveData.TreasurySeeded`. The credit itself goes through `CreditTreasury`, so multi-safe ordering follows the standard largest-safe-first selection.
 
 The user-locked product decisions (2026-05-09):
 - **Money source**: new building Treasury (not owner wallet).
@@ -249,6 +256,7 @@ shop.LogisticsManager.ProcessActiveBuyOrders
 
 ## Change log
 
+- 2026-05-16 — BaseTreasury seed source documented. Seeding fires from CommercialBuilding.OnDefaultFurnitureSpawned via SeedTreasuryIfNeeded helper; idempotent via _treasurySeeded server-only flag. — claude
 - 2026-05-09 — Initial implementation. SafeFurniture + SafeFurnitureNetworkSync + SafeRoleType + SafeRoleCatalog data layer. Save/load schema (`SafeFurnitureSaveEntry`, `BuildingSaveData.Safes`, `MapController.RestoreSafeContents`). Treasury aggregator on `CommercialBuilding` (`GetTreasuryBalance` / `TryDebitTreasury` / `CreditTreasury` / `OnTreasuryChanged`). `BuildingLogisticsManager.AssignSafeRolesForShift` auto-assigns safes to Treasury on shift-punch. `LogisticsStockEvaluator.TryB2BPurchaseFromShop` scans same-map shops and atomically commits B2B purchases (debit treasury → credit shop cashier till → move items to shop inventory → IsPlaced BuyOrder). Background commit (no NPC walk). Same-map scope. — claude
 
 ## Sources
