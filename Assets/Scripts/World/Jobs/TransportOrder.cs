@@ -30,6 +30,18 @@ public class TransportOrder : MWI.Quests.IQuest
 
     public BuyOrder AssociatedBuyOrder { get; private set; }
 
+    /// <summary>
+    /// The <see cref="CommercialBuilding"/> (a <c>TransporterBuilding</c> in practice)
+    /// whose worker took ownership of this transport. Used by
+    /// <c>BuildingLogisticsManager.CheckExpiredBuyOrders</c> to dock the transporter's
+    /// reputation when an associated BuyOrder expires with this transport still
+    /// incomplete. Authored 2026-05-17 — see commercial-treasury.md §Reputation.
+    /// Nullable: a TransportOrder that was constructed but never dispatched to a
+    /// carrier (rare race during shutdown) stays at null and is skipped by the
+    /// rep penalty pass.
+    /// </summary>
+    public CommercialBuilding HostTransporter { get; set; }
+
     public TransportOrder(ItemSO item, int quantity, CommercialBuilding source, CommercialBuilding dest, BuyOrder associatedBuyOrder = null)
     {
         ItemToTransport = item;

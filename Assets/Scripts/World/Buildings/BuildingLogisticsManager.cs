@@ -935,6 +935,28 @@ public class BuildingLogisticsManager : MonoBehaviour
                     supplierAsCommercial.TryChangeReputation(-5, $"ExpiredOrder_{expired.ItemToTransport?.ItemName}_undelivered{undelivered}");
                 }
 
+                // Transporter Building reputation hit (2026-05-17, Phase C3). Walks the
+                // supplier's PlacedTransportOrders for any uncompleted TO whose
+                // AssociatedBuyOrder == this expired order, then docks the HostTransporter
+                // -5 per still-uncompleted TO. Multiple TOs from the same carrier compound
+                // (multiple failed runs = larger hit, which is fair). MUST fire BEFORE
+                // CancelBuyOrder below — CancelBuyOrder removes the associated TOs and
+                // the HostTransporter linkage would be lost.
+                if (undelivered > 0)
+                {
+                    var placedTOs = _orderBook.PlacedTransportOrders;
+                    for (int i = 0; i < placedTOs.Count; i++)
+                    {
+                        var to = placedTOs[i];
+                        if (to == null) continue;
+                        if (to.AssociatedBuyOrder != expired) continue;
+                        if (to.IsCompleted) continue;
+                        if (to.HostTransporter == null) continue;
+                        to.HostTransporter.TryChangeReputation(-5,
+                            $"FailedTransport_{expired.ItemToTransport?.ItemName}_for_{expired.Destination?.BuildingName}");
+                    }
+                }
+
                 CancelBuyOrder(expired);
             }
         }

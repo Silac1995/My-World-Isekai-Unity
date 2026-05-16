@@ -224,6 +224,11 @@ public class LogisticsTransportDispatcher
             buyOrder.Destination,
             buyOrder
         );
+        // Tag the responsible carrier (2026-05-17). Used by CheckExpiredBuyOrders to
+        // dock this carrier's reputation if the BuyOrder ends up expiring with this
+        // transport unfinished. transporter is guaranteed non-null here (early-out at
+        // line 213 catches the missing case).
+        transportOrder.HostTransporter = transporter;
 
         for (int j = 0; j < amountToDispatch; j++)
         {
