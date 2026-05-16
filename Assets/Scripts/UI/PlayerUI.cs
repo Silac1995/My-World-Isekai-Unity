@@ -38,6 +38,7 @@ public class PlayerUI : MonoBehaviour
     [Header("UI Windows")]
     [SerializeField] private CharacterEquipmentUI _equipmentUI;
     [SerializeField] private UI_StorageFurniturePanel _storagePanel;
+    [SerializeField] private MWI.UI.Furniture.UI_SafePanel _safePanel;
     [SerializeField] private MWI.UI.Shop.UI_ShopBuyPanel _shopBuyPanel;
     [SerializeField] private UI_CharacterRelations _relationsUI;
     [SerializeField] private UI_CharacterStats _statsUI;
@@ -361,25 +362,53 @@ public class PlayerUI : MonoBehaviour
     }
 
     // =========================================================================
-    // SAFE PANEL — stubs introduced by Task 4 of the safe deposit/withdraw UI
-    // feature (2026-05-16-safe-furniture-deposit-withdraw-ui). Task 7 fills the
-    // real bodies (open the UI_SafeFurniturePanel, route success/failure to
-    // toast + inline feedback). Kept as no-op stubs here so the ClientRpc
-    // callsite on SafeFurnitureNetworkSync compiles.
+    // SAFE PANEL — wired by Task 7 of the safe deposit/withdraw UI feature
+    // (2026-05-16-safe-furniture-deposit-withdraw-ui). Routes the SafeFurniture
+    // interact path + the SafeFurnitureNetworkSync.OperationResultClientRpc
+    // callback into the authored UI_SafePanel.
     // =========================================================================
 
-    /// <summary>Stub for Task 4 — Task 7 wires this to <c>UI_SafeFurniturePanel.Initialize</c>.</summary>
-    public void OpenSafePanel(SafeFurniture safe, Character interactor) { /* fleshed out in Task 7 */ }
-
-    /// <summary>Stub for Task 4 — Task 7 wires this to close the safe panel cleanly.</summary>
-    public void CloseSafePanel() { /* fleshed out in Task 7 */ }
+    /// <summary>
+    /// Open the safe deposit/withdraw panel for <paramref name="safe"/>, bound to
+    /// <paramref name="interactor"/>'s wallet + the safe's per-currency balances.
+    /// Called from <see cref="SafeFurniture.OnInteract"/> when the local owner-player
+    /// taps E inside the safe's interaction zone. Re-binds cleanly if the panel is
+    /// already open against a different target.
+    /// </summary>
+    public void OpenSafePanel(SafeFurniture safe, Character interactor)
+    {
+        if (safe == null || interactor == null) return;
+        if (_safePanel == null)
+        {
+            Debug.LogWarning("PlayerUI: UI_SafePanel component not assigned!");
+            return;
+        }
+        _safePanel.Initialize(safe, interactor);
+    }
 
     /// <summary>
-    /// Stub for Task 4 — Task 7 wires this to surface deposit/withdraw results
-    /// (insufficient-wallet / insufficient-safe / out-of-zone / invalid-amount)
-    /// via toast + inline feedback in the open <c>UI_SafeFurniturePanel</c>.
+    /// Close the safe panel if it is currently open. Safe to call when the panel is
+    /// already closed.
     /// </summary>
-    public void OnSafeOperationResult(SafeFurniture safe, bool success, string reason) { /* fleshed out in Task 7 */ }
+    public void CloseSafePanel()
+    {
+        if (_safePanel == null) return;
+        if (_safePanel.gameObject.activeSelf) _safePanel.CloseWindow();
+    }
+
+    /// <summary>
+    /// Surface deposit/withdraw operation result (success or failure with reason)
+    /// in the open <see cref="MWI.UI.Furniture.UI_SafePanel"/>. Called from
+    /// <see cref="SafeFurnitureNetworkSync.OperationResultClientRpc"/> on the
+    /// requester-owning peer only. Reason values are the wire-format strings from
+    /// spec §9: <c>insufficient-wallet</c>, <c>insufficient-safe</c>,
+    /// <c>out-of-zone</c>, <c>invalid-amount</c>.
+    /// </summary>
+    public void OnSafeOperationResult(SafeFurniture safe, bool success, string reason)
+    {
+        if (_safePanel == null || safe == null) return;
+        _safePanel.OnOperationResult(success, reason);
+    }
 
     /// <summary>
     /// Open the shop buy panel for <paramref name="cashier"/>, bound to
