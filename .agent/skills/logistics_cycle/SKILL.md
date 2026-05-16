@@ -188,9 +188,11 @@ Race detection: if `MoveSellShelfItemsToShopInventory` moves fewer items than re
 
 **Constraint mirrored from producer path**: the shop must have a hired LogisticsManager NPC, otherwise `ProcessActiveBuyOrders` never ticks and the BuyOrder sits undispatched.
 
-**MVP gaps** (tracked on [[commercial-treasury]]): no refund-on-expiration; first-found-shop wins; same-map only.
+**MVP gaps** (tracked on [[commercial-treasury]]): first-found-shop wins (no closest/cheapest sort); same-map only.
 
-See [[commercial-treasury]] for the full Safe + Treasury + B2B architecture page; see [[shop_system]] for the cashier-till credit side.
+**Reputation gate (added 2026-05-17):** shops with `shop.Reputation < CommercialBuilding.ReputationB2BMinimum` (20) are skipped before the catalog / stock / treasury checks even fire. Low-rep shops recover by completing future BuyOrders successfully (+1 each); the rep hit (-5) lands on the supplier in `CheckExpiredBuyOrders` whenever an active order expires with undelivered units. Same hook also drives the new **refund-on-expiration** path: `BuildingLogisticsManager.TryRefundB2BExpiration` debits the shop's cashier till (Tier 1) or treasury (Tier 2) by `undelivered × unitPrice` and credits the buyer's treasury, then walks `shop.Inventory` to return any not-yet-shipped items to a sell-shelf slot. Money is never printed — empty till + empty treasury yields a partial refund + LogWarning, and items already with the transporter when the order expired are lost (the courier was robbed / despawned).
+
+See [[commercial-treasury]] for the full Safe + Treasury + B2B + Reputation architecture page; see [[shop_system]] for the cashier-till credit side.
 
 ### 3d. Furniture-first pickup (transporter side)
 

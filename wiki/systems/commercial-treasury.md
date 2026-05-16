@@ -3,7 +3,7 @@ type: system
 title: "Commercial Treasury"
 tags: [building, furniture, currency, logistics, network, tier-2]
 created: 2026-05-09
-updated: 2026-05-16
+updated: 2026-05-17
 sources: []
 related:
   - "[[commercial-building]]"
@@ -263,17 +263,56 @@ shop.LogisticsManager.ProcessActiveBuyOrders
 - [[jobs-and-logistics]] — the producer-path BuyOrder fallback is unchanged; the B2B preference is opt-in at the building's call site (`RequestStock`).
 - [[building-logistics-manager]] — same dispatcher handles shop-source BuyOrders identically to producer-source (because items live in shop's `Inventory` after commit).
 
+## Reputation
+
+Per-building consequence layer that closes the loop on **failed deliveries**. Authored 2026-05-16 — see [[commercial-building]] for the field shape.
+
+- **`CommercialBuilding._reputation : NetworkVariable<int>`** — replicated, 0–100, default 50 (`ReputationDefault`). Inspector seed `_initialReputation`. Mutated server-only via `TryChangeReputation(delta, reason)` (clamps + logs); event `OnReputationChanged(int oldVal, int newVal)` fans out on every peer. Constants `ReputationMin = 0`, `ReputationMax = 100`, `ReputationDefault = 50`, `ReputationB2BMinimum = 20`.
+- **Persistence** — `BuildingSaveData.Reputation` (default 50 for back-compat). Captured per-building in `BuildingSaveData.FromBuilding` when the building is a `CommercialBuilding`. Restored via `MapController` → `CommercialBuilding.RestoreReputationFromSave` after the safe-content pass.
+- **Events shipped today:**
+  - **−5 on order expiration with undelivered units.** Applies to BOTH B2B orders (Source is `ShopBuilding`, `IsPlaced=true`) AND producer-side orders. The supplier promised delivery and the supply chain failed to honour it. Same penalty per expired order regardless of who's at fault inside the chain.
+  - **+1 on full BuyOrder completion.** Fires once, the moment `BuyOrder.RecordDelivery` flips `IsCompleted` true (inside `BuildingLogisticsManager.UpdateTransportOrderProgress`). Awards the supplier (`order.AssociatedBuyOrder.Source`).
+- **B2B preference gate (consumer):** `LogisticsStockEvaluator.TryB2BPurchaseFromShop` skips shops with `shop.Reputation < ReputationB2BMinimum` (20). Low-rep shops are invisible to the B2B preference scan until they recover through successful future deliveries; the buyer falls through to the producer path.
+- **Not shipped (tracked as follow-ups):**
+  - Transporter Building reputation hit on TransportOrder failure (needs a `TransporterBuilding` linkage field on `TransportOrder` that doesn't exist today).
+  - Reputation-driven shop sort (closest / cheapest / best-rep).
+  - Customer-NPC reputation effects (visit rate, queue priority, price tolerance).
+  - Reputation tooltip + display on the owner management panel.
+  - Decay-over-time.
+  - Hiring-pool effects (workers refusing low-rep workplaces).
+
+## Refund-on-expiration
+
+Atomic financial reverse for the undelivered half of an expired B2B order. Authored 2026-05-16. Lives in `BuildingLogisticsManager.TryRefundB2BExpiration`, invoked from inside the `expiredSupplierOrders` loop of `CheckExpiredBuyOrders` (which already runs on `TimeManager.OnNewDay`).
+
+**Trigger conditions** (all must hold):
+- The expired order's `Source` is **this** building, and this building is a `ShopBuilding`.
+- `BuyOrder.IsPlaced == true` (the atomic B2B commit ran — money + items moved).
+- `BuyOrder.Quantity > BuyOrder.DeliveredQuantity` (something didn't make it).
+
+**Refund payment chain** (Cashier till → shop Treasury → partial accept):
+1. **Tier 1 — `shop.Cashiers[0].DebitTill`** for the full `undelivered × unitPrice`. Symmetric with the commit path (till was credited at commit, debit it back). Returns `false` on insufficient funds; falls through.
+2. **Tier 2 — `shop.TryDebitTreasury`** for whatever Tier 1 didn't cover. The shop's own treasury safes can absorb the shortfall.
+3. **Tier 3 — partial refund + warning.** If till + treasury together can't cover the owed amount, the buyer is credited only the amount actually covered and a `LogWarning` is emitted. Money is **never printed**.
+
+**Item return** — best-effort: `ReturnExpiredOrderItemsToShelf` walks `shop.Inventory` for the expired order's `ItemSO` and moves up to `undelivered` units back to a free sell-shelf slot. Items that don't fit (shelves full) stay in `shop.Inventory`. Items already in transit when the order expired are lost — the shop can't refund what isn't there. The financial refund covers the lost units.
+
+**Refund unit price is re-resolved from the live catalog** at expiration time. If the shop has removed the item from its catalog between commit and expiration, refund is **skipped with a LogWarning** — financial state may drift, but the alternative (refunding at a stale committed price that's no longer canonical) is worse.
+
 ## State & persistence
 
 - **Per-safe runtime state** lives on `SafeFurniture` (server-side dict) and the sibling `SafeFurnitureNetworkSync` (replicated `NetworkVariable` + `NetworkList`). Mirrors the StorageFurniture pattern.
 - **Designer seed** is `_initialRole` (defaults to `Treasury`) + `_initialBalances` (defaults to empty). Read on first server `OnNetworkSpawn` when the network state is still default.
 - **Persistence** is via `SafeFurnitureSaveEntry` on `BuildingSaveData.Safes` (default-empty for back-compat). Captured in `BuildingSaveData.FromBuilding` for every Building subtype (homes can carry safes too). Restored in `MapController.RestoreSafeContents`.
-- **B2B transaction state** is NOT persisted. A B2B BuyOrder is just a regular BuyOrder once committed (with `IsPlaced=true`, `Source` is the shop). The standard BuyOrder save/load handles it.
+- **Per-building reputation** lives on `CommercialBuilding._reputation` (`NetworkVariable<int>`, default 50). Persisted via `BuildingSaveData.Reputation` (default 50 for back-compat). Restored after `RestoreSafeContents`.
+- **B2B transaction state** is NOT persisted. A B2B BuyOrder is just a regular BuyOrder once committed (with `IsPlaced=true`, `Source` is the shop). The standard BuyOrder save/load handles it. Refund-on-expiration also runs purely from the live `_orderBook.ActiveOrders` set on `OnNewDay`; expired orders are flushed via `CancelBuyOrder` immediately after the refund + rep hit.
 
 ## Known gotchas / edge cases
 
 - **Shop must have a hired LogisticsManager** for B2B orders to actually dispatch transporters. The shop's `BuildingLogisticsManager.ProcessActiveBuyOrders` only runs from inside `JobLogisticsManager.Execute` — no NPC, no tick, no dispatch. Same constraint as producer-side BuyOrders today.
-- **No refund-on-expiration.** If a B2B BuyOrder expires via `DecreaseRemainingDays` before the transporter delivers, the coins stay in the shop's cashier till and the items stay in the shop's inventory. The buyer building loses the money and never receives the goods. Acceptable for MVP — flagged as the highest-priority follow-up.
+- **Partial refund when shop's till + treasury are both empty.** `TryRefundB2BExpiration` (2026-05-16) covers the buyer atomically up to what the shop can pay; the shortfall is eaten by the buyer and logged as a `LogWarning`. The supplier still takes the full `-5` reputation hit. Owners who drain their cashier till mid-order risk this outcome — the system never prints money to cover a broke supplier.
+- **Item return is best-effort.** Items still physically in `shop.Inventory` at expiration time return to a sell-shelf slot via `ReturnExpiredOrderItemsToShelf`; items already with the transporter when the order expired are lost (the courier was robbed / died / hit reachability stall). The financial refund covers the lost units; the items themselves are gone from the supply chain.
+- **Refund skipped if catalog entry removed.** If the shop removed the item from its catalog between commit and expiration, the refund pass logs a warning and skips — there's no canonical unit price to refund at. Rare edge case; trade-off favours stable accounting over silently using stale prices.
 - **Race between human/NPC buy and B2B commit** is handled best-effort. After `CountItemOnSellShelves` reports availability, a human customer can swoop in and buy some of the items before `MoveSellShelfItemsToShopInventory` runs. The B2B code detects the shortfall, refunds the missing units (till debit + treasury credit), and shrinks the order to what actually moved. If zero items move, the order is abandoned and the scan continues to the next shop. The atomic guard is "all-or-zero-or-partial-with-refund", not strict atomicity.
 - **Cashier picked is `Cashiers[0]`** — first-in-list. No round-robin / least-balance / etc. Acceptable starting point; polish later if till accounting needs balancing.
 - **Cross-map B2B is NOT supported.** Buyer and shop must share a `MapController` (compared by `MapId`). A future trade-route feature could lift this; today the scan early-exits on map mismatch.
@@ -282,7 +321,12 @@ shop.LogisticsManager.ProcessActiveBuyOrders
 
 ## Open questions / TODO
 
-- **Refund-on-expiration**: extend `BuildingLogisticsManager.CheckExpiredOrders` (subscribed on `TimeManager.OnNewDay`) to detect expired B2B BuyOrders and atomically reverse the till credit + treasury debit + return items to sell-shelves. Highest-priority follow-up.
+- **Transporter Building reputation hit on TransportOrder failure**: today only the supplier loses rep when an order expires undelivered, but the courier shares the blame. Requires a `TransporterBuilding` linkage field on `TransportOrder` (set when a transporter accepts the dispatch) so the expiration sweep knows whom to penalise. Plumbing change — deferred from 2026-05-16 batch.
+- **Reputation-driven shop sort**: `TryB2BPurchaseFromShop` currently filters by `Reputation >= ReputationB2BMinimum` (20) but still uses first-found-wins among the qualifiers. Adding a sort by reputation (descending) gives high-rep shops a structural advantage. Cheap to add; bundled with closest/cheapest sort.
+- **Customer-NPC reputation effects**: visit rate, queue priority, price tolerance. Bigger feature — needs design for how customer AI consumes the score.
+- **Reputation UI**: tooltip on shop hover + permanent slot on the owner management panel. Designer pass.
+- **Decay-over-time**: today reputation only changes on order events. A daily decay (e.g. drift towards 50) would prevent permanent stigma. Optional — measure first.
+- **Hiring-pool reputation gate**: workers refusing to apply to low-rep workplaces. Cross-cuts with [[help-wanted-and-hiring]].
 - **Management UI for Treasury balance + deposit/withdraw**: today the owner has no in-game way to see the treasury or move funds. Phase 1.7 (Safes section in StorageRolesTab) is deferred to a designer pass; a separate "Treasury" widget on the management panel would surface the aggregate balance + buttons to deposit from owner wallet / withdraw to owner wallet.
 - **Pricing logic for closest / cheapest shop**: first-found-wins is acceptable for sparse-shop builds, but with multiple shops on the same map a closer or cheaper shop should win. Sort `BuildingManager.allBuildings` by distance or unit price before the scan.
 - **Owner-allied scoping**: should a building only B2B-buy from shops owned by the same Community / owner / faction? Currently any same-map shop qualifies. Locked product decision was "same-map only" but a follow-up "owner-allied" filter is an obvious extension.
@@ -291,6 +335,7 @@ shop.LogisticsManager.ProcessActiveBuyOrders
 
 ## Change log
 
+- 2026-05-17 — Reputation + refund-on-expiration shipped. New `CommercialBuilding._reputation` NetworkVariable + `TryChangeReputation` mutator + `OnReputationChanged` event + Inspector seed + save-load (`BuildingSaveData.Reputation`, default 50). Hooks: −5 on any expired BuyOrder with undelivered units, +1 on full BuyOrder completion via `UpdateTransportOrderProgress`. Refund-on-expiration: `BuildingLogisticsManager.TryRefundB2BExpiration` atomically debits the shop's cashier till (Tier 1) or treasury (Tier 2) by `undelivered × unitPrice` and credits the buyer's treasury — never prints money, partial refund + warning on empty till+treasury. `ReturnExpiredOrderItemsToShelf` walks `shop.Inventory` and returns matching items to a sell-shelf slot best-effort. B2B preference gate: shops with `Reputation < 20` skipped by `TryB2BPurchaseFromShop`. Transporter-Building rep penalty deferred (needs TransportOrder linkage). Commit `70e29003`. — claude
 - 2026-05-16 — BaseTreasury seed source documented. Seeding fires from CommercialBuilding.OnDefaultFurnitureSpawned via SeedTreasuryIfNeeded helper; idempotent via _treasurySeeded server-only flag. — claude
 - 2026-05-09 — Initial implementation. SafeFurniture + SafeFurnitureNetworkSync + SafeRoleType + SafeRoleCatalog data layer. Save/load schema (`SafeFurnitureSaveEntry`, `BuildingSaveData.Safes`, `MapController.RestoreSafeContents`). Treasury aggregator on `CommercialBuilding` (`GetTreasuryBalance` / `TryDebitTreasury` / `CreditTreasury` / `OnTreasuryChanged`). `BuildingLogisticsManager.AssignSafeRolesForShift` auto-assigns safes to Treasury on shift-punch. `LogisticsStockEvaluator.TryB2BPurchaseFromShop` scans same-map shops and atomically commits B2B purchases (debit treasury → credit shop cashier till → move items to shop inventory → IsPlaced BuyOrder). Background commit (no NPC walk). Same-map scope. — claude
 - 2026-05-16 — Player UI surface shipped. Tap-E on a SafeFurniture opens `UI_SafePanel` (Variant of `UI_WindowBase.prefab` per rule #39, ScreenSpaceCamera, 560×480 frame, ScrollRect for future overflow). Per-currency rows with single amount input + MAX + Deposit + Withdraw + Stardew-style clamp-on-submit (typed > balance → submit clamps to balance). Hold-E also surfaces "Open Safe" verb via new `Furniture.GetExtraInteractionOptions` virtual + `FurnitureInteractable.GetHoldInteractionOptions` integration. Gameplay routes through new `CharacterAction_DepositToSafe` / `CharacterAction_WithdrawFromSafe` for rule #22 NPC parity; raw `safe.Credit` / `safe.TryDebit` continue serving B2B paths. Two new ServerRpcs on `SafeFurnitureNetworkSync` (`RequestDepositServerRpc` / `RequestWithdrawServerRpc`) with the rule-#36 proximity re-validation chain + targeted `OperationResultClientRpc` for failure toasts. Late-joiner replication uses existing `_networkBalances` NetworkList + `CharacterWallet` ClientRpc broadcast; rule #19b repro verified live by Kevin (host + client). Also fixed an inherited Safe.prefab `InteractionZone` BoxCollider that was disabled (rule #36 broken state — see commit `43b5daae`). — claude
