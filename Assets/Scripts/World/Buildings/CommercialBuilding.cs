@@ -2229,11 +2229,17 @@ public abstract class CommercialBuilding : Building
     /// Invalidate the StorageFurniture cache after the default furniture layout spawns,
     /// so logistics/supplier queries pick up freshly-spawned chests within the 2 s TTL window.
     /// See wiki/projects/optimisation-backlog.md entry #2 for the cache rationale.
+    ///
+    /// Also seeds the Treasury safe with <see cref="BuildingCommercialSO.BaseTreasury"/>
+    /// on the first construction-complete (idempotent via <see cref="_treasurySeeded"/>).
+    /// All four spawn paths reach this hook: cooperative finalize, _spawnAsComplete,
+    /// BuildInstantly, and RestoreFromSaveData Complete-branch.
     /// </summary>
     protected override void OnDefaultFurnitureSpawned()
     {
         base.OnDefaultFurnitureSpawned();
         InvalidateStorageFurnitureCache();
+        SeedTreasuryIfNeeded();
     }
 
     /// <summary>
@@ -2908,6 +2914,26 @@ public abstract class CommercialBuilding : Building
     private readonly HashSet<SafeFurniture> _subscribedSafes = new HashSet<SafeFurniture>();
 
     /// <summary>
+    /// Server-only flag. True once <see cref="OnDefaultFurnitureSpawned"/> has
+    /// credited <see cref="BuildingCommercialSO.BaseTreasury"/> into a Treasury
+    /// safe. Persisted via <see cref="BuildingSaveData.TreasurySeeded"/> (Task 10)
+    /// so save/reload does not double-stock the safe. Reset to false ONLY by a
+    /// deliberate Dev-Mode "reseed" action (out of scope here).
+    /// </summary>
+    private bool _treasurySeeded;
+
+#if UNITY_EDITOR
+    /// <summary>Test-only accessor; do NOT call from production code. Public so cross-assembly EditMode tests in Assembly-CSharp-Editor can probe the flag; gated by UNITY_EDITOR so builds don't ship it.</summary>
+    public bool GetTreasurySeededForTests() => _treasurySeeded;
+    public void SetTreasurySeededForTests(bool v) => _treasurySeeded = v;
+#endif
+
+    /// <summary>Non-test accessor for save-write only. Server-side only.</summary>
+    public bool GetTreasurySeededForSave() => _treasurySeeded;
+    /// <summary>Non-test accessor for save-load only. Server-side only.</summary>
+    public void SetTreasurySeededForLoad(bool v) => _treasurySeeded = v;
+
+    /// <summary>
     /// Every <see cref="SafeFurniture"/> child of this building, regardless of role.
     /// Allocates per call — not a hot path (called by management UI + treasury queries).
     /// </summary>
@@ -3027,6 +3053,62 @@ public abstract class CommercialBuilding : Building
             if (bal > best) { best = bal; pick = safes[i]; }
         }
         pick.Credit(currency, amount, reason);
+    }
+
+    /// <summary>
+    /// Server-only. Credits <see cref="BuildingCommercialSO.BaseTreasury"/> into a Treasury
+    /// safe once, on the first construction-complete. Currency is resolved from the
+    /// enclosing <see cref="MapController.NativeCurrency"/> (falls back to
+    /// <see cref="MWI.Economy.CurrencyId.Default"/> when no enclosing map exists — e.g.
+    /// wilderness placements). Idempotency is enforced by <see cref="_treasurySeeded"/>;
+    /// the flag is persisted via <see cref="BuildingSaveData.TreasurySeeded"/> (Task 10)
+    /// so map wake-up after save does not re-credit. Non-positive amounts, non-commercial
+    /// blueprints, and absent blueprints all mark the flag set without crediting.
+    /// </summary>
+    private void SeedTreasuryIfNeeded()
+    {
+        if (!IsServer) return;
+        if (_treasurySeeded) return;
+
+        // Blueprint must be a BuildingCommercialSO with BaseTreasury > 0.
+        if (!(Blueprint is BuildingCommercialSO commercialBlueprint))
+        {
+            // Non-commercial blueprint (or no blueprint) — mark seeded so we don't retry every restart.
+            _treasurySeeded = true;
+            return;
+        }
+
+        int amount = commercialBlueprint.BaseTreasury;
+        if (amount <= 0)
+        {
+            _treasurySeeded = true;
+            return;
+        }
+
+        MWI.Economy.CurrencyId currency = MWI.Economy.CurrencyId.Default;
+        try
+        {
+            var owningMap = MapController.GetMapAtPosition(transform.position);
+            if (owningMap != null) currency = owningMap.NativeCurrency;
+        }
+        catch (System.Exception e)
+        {
+            // Rule #31: don't crash construction if map lookup fails. Default-currency fallback.
+            Debug.LogException(e);
+        }
+
+        try
+        {
+            CreditTreasury(currency, amount, "BaseTreasury seed");
+            _treasurySeeded = true;
+        }
+        catch (System.Exception e)
+        {
+            // Rule #31: log + leave _treasurySeeded false so a future reload's RestoreFromSaveData
+            // may re-attempt the credit (unless the save also carried TreasurySeeded=true,
+            // which Task 10 wires up).
+            Debug.LogException(e);
+        }
     }
 
     /// <summary>
