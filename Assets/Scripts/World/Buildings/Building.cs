@@ -1890,6 +1890,15 @@ public class Building : ComplexRoom
         // would falsely tell subscribers (quest hooks etc.) that the building just finished
         // construction. Visual swap is handled by Start.ApplyConstructionVisuals which reads
         // the now-correct _currentState.Value when Start eventually runs.
+
+        // Restore commercial seed-flag BEFORE TrySpawnDefaultFurniture → OnDefaultFurnitureSpawned
+        // runs, so a previously-seeded building doesn't re-credit. Non-commercial buildings
+        // ignore this field; the cast guards.
+        if (this is CommercialBuilding restoredCb)
+        {
+            restoredCb.SetTreasurySeededForLoad(data.TreasurySeeded);
+        }
+
         if (_currentState.Value == MWI.WorldSystem.BuildingState.Complete && !_isStarted)
         {
             try { TrySpawnDefaultFurniture(); }

@@ -219,6 +219,14 @@ namespace MWI.WorldSystem
         public List<ShopCatalogEntrySaveEntry> ShopCatalog = new List<ShopCatalogEntrySaveEntry>();
 
         /// <summary>
+        /// True once CommercialBuilding.OnDefaultFurnitureSpawned has credited the
+        /// BaseTreasury seed. Default-false so old saves (no field) re-seed exactly
+        /// once on the next load and then flip to true. Non-commercial buildings
+        /// ignore this field.
+        /// </summary>
+        public bool TreasurySeeded;
+
+        /// <summary>
         /// <see cref="ShopBuilding"/>-only: keys of every <see cref="StorageFurniture"/> the
         /// shop owner has flagged as a customer-facing sell-shelf. Persisted as a list of
         /// <see cref="ComputeFurnitureKey"/> strings — same scheme as <see cref="StorageFurnitures"/>
@@ -305,6 +313,9 @@ namespace MWI.WorldSystem
                         JobType = job.GetType().Name
                     });
                 }
+
+                // Persist the treasury seed-flag so the next load doesn't re-credit.
+                data.TreasurySeeded = commercial.GetTreasurySeededForSave();
             }
 
             // Storage furniture contents — walk every StorageFurniture under this

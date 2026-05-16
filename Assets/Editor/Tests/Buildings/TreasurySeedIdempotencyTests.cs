@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using MWI.WorldSystem;
 
 namespace MWI.Tests.Buildings
 {
@@ -26,6 +27,27 @@ namespace MWI.Tests.Buildings
         {
             public bool TreasurySeededProbe => GetTreasurySeededForTests();
             protected override void InitializeJobs() { /* no-op for headless flag-default test */ }
+        }
+    }
+
+    public class BuildingSaveDataTreasurySeededRoundTripTests
+    {
+        [Test]
+        public void BuildingSaveData_round_trips_TreasurySeeded_through_JsonUtility()
+        {
+            var data = new BuildingSaveData { BuildingId = "x", PrefabId = "y", TreasurySeeded = true };
+            var json = UnityEngine.JsonUtility.ToJson(data);
+            var back = UnityEngine.JsonUtility.FromJson<BuildingSaveData>(json);
+            Assert.IsTrue(back.TreasurySeeded);
+        }
+
+        [Test]
+        public void BuildingSaveData_TreasurySeeded_defaults_false_when_field_missing_from_json()
+        {
+            // Synthetic "old save" JSON — no TreasurySeeded key. Verifies legacy save compat.
+            const string oldJson = "{\"BuildingId\":\"x\",\"PrefabId\":\"y\"}";
+            var data = UnityEngine.JsonUtility.FromJson<BuildingSaveData>(oldJson);
+            Assert.IsFalse(data.TreasurySeeded, "Missing TreasurySeeded in JSON must default false so re-seed fires once.");
         }
     }
 }
