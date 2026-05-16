@@ -1,4 +1,5 @@
 using MWI.Economy;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -52,21 +53,25 @@ public sealed class CharacterAction_DepositToSafe : CharacterAction
 
     public override void OnStart()
     {
-        // No animation trigger — deposit is a discreet UI-driven action. Visual feedback
+        // No animation trigger — deposit is a discrete UI-driven action. Visual feedback
         // lives on the safe (OnBalanceChanged → UI repaint) and the wallet (broadcast).
     }
 
     public override void OnApplyEffect()
     {
-        // Server-only path. CharacterActions.ExecuteAction's instant-action branch routes
-        // here for IsServer; remote clients hit the predicted-proxy branch which doesn't
-        // mutate authoritative state. Defensive re-check + atomic guard below.
-        if (_safe == null || _amount <= 0) return;
+        // Server-only path (early-exit on non-server). Queued only via
+        // SafeFurnitureNetworkSync.RequestDepositServerRpc in Task 4, which is server-side.
+        // The explicit IsServer guard makes the action safe-by-construction regardless of
+        // how it's queued (defense in depth — Duration <= 0 actions otherwise run on both
+        // server and remote clients per CharacterActions.cs:78-94).
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
+        if (_safe == null || _amount <= 0 || character == null) return;
 
-        var wallet = character != null ? character.CharacterWallet : null;
+        var wallet = character.CharacterWallet;
         if (wallet == null)
         {
-            Debug.LogWarning($"<color=orange>[DepositToSafe]</color> {character?.CharacterName} aborted: no CharacterWallet.");
+            if (NPCDebug.VerboseActions)
+                Debug.LogWarning($"<color=orange>[DepositToSafe]</color> {character.CharacterName} aborted: no CharacterWallet.");
             return;
         }
 
@@ -76,14 +81,16 @@ public sealed class CharacterAction_DepositToSafe : CharacterAction
             // Insufficient wallet. Route failure feedback to the requesting client through
             // the safe's NetSync dispatcher (Task 4 fleshes out the ClientRpc body).
             _safe.NetSync?.NotifyOperationResult(
-                character != null ? character.OwnerClientId : 0UL,
+                character.OwnerClientId,
                 success: false,
                 reason: "insufficient-wallet");
-            Debug.LogWarning($"<color=orange>[DepositToSafe]</color> {character?.CharacterName} insufficient wallet for {_amount} of {_currency} → safe {_safe.FurnitureName} not credited.");
+            if (NPCDebug.VerboseActions)
+                Debug.LogWarning($"<color=orange>[DepositToSafe]</color> {character.CharacterName} insufficient wallet for {_amount} of {_currency} → safe {_safe.FurnitureName} not credited.");
             return;
         }
 
         _safe.Credit(_currency, _amount, "player-deposit");
-        Debug.Log($"<color=green>[DepositToSafe]</color> {character?.CharacterName} deposited {_amount} of {_currency} into {_safe.FurnitureName}.");
+        if (NPCDebug.VerboseActions)
+            Debug.Log($"<color=green>[DepositToSafe]</color> {character.CharacterName} deposited {_amount} of {_currency} into {_safe.FurnitureName}.");
     }
 }
