@@ -914,3 +914,19 @@ Extends `InteractionInvitation`. Community leader negotiates with the building o
 - If owner returns: negotiation invitation triggered
 - If timeout expires: auto-claimed into community
 - `BuildingManager.FindBuildingById(id)` resolves live Building instances
+
+---
+
+## BuildingSO Blueprint API (2026-05-16)
+
+- `BuildingSO` — base SO at `Assets/Scripts/World/Data/BuildingSO.cs`, namespace `MWI.WorldSystem`. Holds PrefabId / BuildingName / Icon / BuildingPrefab / InteriorPrefab / CommunityPriority / BuildingType / ConstructionRequirements / DefaultFurnitureLayout. One asset per building type under `Assets/Resources/Data/Buildings/`.
+- `BuildingCommercialSO : BuildingSO` — adds `int BaseTreasury` (seed amount credited at construction-complete).
+- `Building._blueprint` — `[SerializeField] BuildingSO _blueprint` on every Building prefab. Replaces the 5 legacy duplicated prefab fields (`_prefabId` / `buildingName` / `_buildingType` / `_constructionRequirements` / `_defaultFurnitureLayout`), all deleted in Task 6 of this migration.
+- `WorldSettingsData.Blueprints` — `List<BuildingSO>` is the new lookup surface. Legacy `BuildingRegistry` marked `[Obsolete]`, deleted in Task 18.
+- `WorldSettingsData.GetBuildingBlueprint(string prefabId)` — new helper returning `BuildingSO` by PrefabId (the existing `GetBuildingPrefab` / `GetInteriorPrefab` still work, now blueprint-first).
+- **PrefabId strings are the cross-session save key — NEVER rename them after authoring.** Renaming silently invalidates every existing save file.
+- **Construction requirements lifted from prefab to SO.** Positional index contract preserved (`DeliveredMaterialEntry.RequirementIndex`).
+- `CommunityData.NativeCurrency` — new `CurrencyId` field on CommunityData (server-driven save data). `MapController.NativeCurrency` is the convenience getter (falls back to `CurrencyId.Default`).
+- `CommercialBuilding.OnDefaultFurnitureSpawned` is the canonical seeding hook: extends the existing override to call `SeedTreasuryIfNeeded()` which credits the Treasury safe in the local map's NativeCurrency. Idempotent via `_treasurySeeded` flag (server-only).
+- `BuildingSaveData.TreasurySeeded` — persists the idempotency flag across save/reload. Default-false on old saves so legacy data re-seeds exactly once on next load.
+- Migration tool: `Assets/Editor/BuildingRegistryToBuildingSOMigration.cs` — Menu: `MWI > Migration > Convert BuildingRegistry → BuildingSO assets`. Already run on this branch; idempotent.
