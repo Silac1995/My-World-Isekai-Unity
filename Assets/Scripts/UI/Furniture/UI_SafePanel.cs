@@ -82,20 +82,42 @@ namespace MWI.UI.Furniture
         }
 
         /// <summary>
-        /// Forces <see cref="_frame"/> (Panel_Main_Background) to at least
-        /// <see cref="_minFrameWidth"/> × <see cref="_minFrameHeight"/>. Defends against
-        /// scene-level prefab overrides that sometimes drift to (0,0) and collapse the
-        /// frame to row-size — see 2026-05-16 incident. Also restores localScale to
-        /// Vector3.one and anchored position to zero for the same reason.
+        /// Unconditionally forces <see cref="_frame"/> (Panel_Main_Background) to
+        /// (<see cref="_minFrameWidth"/>, <see cref="_minFrameHeight"/>) AND restores
+        /// scale to identity AND anchors to center-pivot. Brute-force defensive: we
+        /// observed scene-level overrides drifting to (0,0) at runtime between scene
+        /// load and panel open even when the scene file was saved with the correct
+        /// values (cause unclear — possibly ScrollRect layout-rebuild side effect or
+        /// CanvasScaler interaction). This runs in Awake, Initialize, OnEnable, AND
+        /// every LateUpdate while the panel is active.
         /// </summary>
         private void EnforceMinFrameSize()
         {
             if (_frame == null) return;
-            Vector2 size = _frame.sizeDelta;
-            if (size.x < _minFrameWidth) size.x = _minFrameWidth;
-            if (size.y < _minFrameHeight) size.y = _minFrameHeight;
-            _frame.sizeDelta = size;
-            if (_frame.localScale.sqrMagnitude < 0.0001f) _frame.localScale = Vector3.one;
+            // Hard-set, not min-clamp. The frame is a fixed-size window; if a future
+            // variant wants a larger frame they override _minFrameWidth / _minFrameHeight.
+            var size = new Vector2(_minFrameWidth, _minFrameHeight);
+            if (_frame.sizeDelta != size) _frame.sizeDelta = size;
+            if (_frame.localScale != Vector3.one) _frame.localScale = Vector3.one;
+            var halfCenter = new Vector2(0.5f, 0.5f);
+            if (_frame.anchorMin != halfCenter) _frame.anchorMin = halfCenter;
+            if (_frame.anchorMax != halfCenter) _frame.anchorMax = halfCenter;
+            if (_frame.pivot != halfCenter) _frame.pivot = halfCenter;
+            if (_frame.anchoredPosition != Vector2.zero) _frame.anchoredPosition = Vector2.zero;
+        }
+
+        private void OnEnable()
+        {
+            // Fires every time SetActive(true) — covers both first-open and re-open.
+            EnforceMinFrameSize();
+        }
+
+        private void LateUpdate()
+        {
+            // Last-resort guard: if anything resets the frame size mid-frame, this
+            // restores it on the next frame. Cheap: 5 equality checks, mostly skipped.
+            // Rule #34: no allocations, no LINQ, no logs.
+            EnforceMinFrameSize();
         }
 
         /// <summary>
@@ -112,6 +134,11 @@ namespace MWI.UI.Furniture
             }
 
             UnbindAll();
+
+            // Re-enforce min-size on every open. Awake fires once at first activation,
+            // but scene-level overrides can drift sizeDelta back to (0,0) at any time
+            // (variant re-apply, Inspector poke, etc.). This is the load-bearing call.
+            EnforceMinFrameSize();
 
             _safe = safe;
             _customer = customer;
