@@ -20,14 +20,21 @@ public static class BuildingRegistryToBuildingSOMigration
             return;
         }
 
-        // Read both fields via SerializedObject. The legacy field is still
-        // `List<BuildingRegistryEntry>` at this point (Task 7 added Blueprints
-        // alongside, did NOT delete the legacy). Idempotency: if Blueprints is
-        // already populated, bail.
+        // Read both fields via SerializedObject. Post-Task-18 cleanup the legacy
+        // `List<BuildingRegistryEntry>` field is gone — the C# `BuildingRegistry`
+        // field is now the new `List<BuildingSO>` (renamed from `Blueprints` via
+        // [FormerlySerializedAs]). If the legacy `Blueprints` property still
+        // resolves, Task 7 layout is in place and we can run the migration.
+        // Otherwise we're already on the post-cleanup layout — bail cleanly.
         var so = new SerializedObject(settings);
         var legacyProp = so.FindProperty("BuildingRegistry");
         var blueprintsProp = so.FindProperty("Blueprints");
-        if (legacyProp == null || !legacyProp.isArray || blueprintsProp == null || !blueprintsProp.isArray)
+        if (blueprintsProp == null)
+        {
+            Debug.Log("[Migration] Post-cleanup layout detected (no `Blueprints` field). Migration already complete — nothing to do.");
+            return;
+        }
+        if (legacyProp == null || !legacyProp.isArray || !blueprintsProp.isArray)
         {
             Debug.LogError("[Migration] Expected both BuildingRegistry (legacy) and Blueprints (new) properties on WorldSettingsData. Has Task 7 landed?");
             return;

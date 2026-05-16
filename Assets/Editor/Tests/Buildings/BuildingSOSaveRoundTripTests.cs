@@ -120,7 +120,7 @@ namespace MWI.Tests.Buildings
                 f2.SetValue(so, stubPrefab);
 
                 var settings = ScriptableObject.CreateInstance<WorldSettingsData>();
-                settings.Blueprints.Add(so);
+                settings.BuildingRegistry.Add(so);
 
                 Assert.AreSame(stubPrefab, settings.GetBuildingPrefab("TestPrefabId"));
                 Object.DestroyImmediate(settings);

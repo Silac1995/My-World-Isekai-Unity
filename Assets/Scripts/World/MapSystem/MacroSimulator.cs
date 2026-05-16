@@ -431,7 +431,7 @@ namespace MWI.Time
             if (maxNewBuildings <= 0) return;
 
             WorldSettingsData settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
-            if (settings == null || settings.Blueprints.Count == 0) return;
+            if (settings == null || settings.BuildingRegistry.Count == 0) return;
 
             // Find the leader's offline data
             var leaderData = mapData.HibernatedNPCs.FirstOrDefault(n => n.CharacterId == community.LeaderNpcId);
@@ -445,7 +445,7 @@ namespace MWI.Time
             // Offline/on-map-wake path — LINQ + .ToList() allocation acceptable here (not per-frame).
             var knownBuildings = leaderData.UnlockedBuildingIds;
 
-            var availableToBuild = settings.Blueprints
+            var availableToBuild = settings.BuildingRegistry
                 .Where(entry => entry != null && knownBuildings.Contains(entry.PrefabId))
                 .Where(entry => !community.ConstructedBuildings.Any(cb => cb.PrefabId == entry.PrefabId))
                 .OrderByDescending(entry => entry.CommunityPriority)

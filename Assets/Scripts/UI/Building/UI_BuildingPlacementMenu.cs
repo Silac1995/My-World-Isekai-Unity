@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using MWI.WorldSystem;
-using System.Linq;
 
 namespace MWI.UI.Building
 {
