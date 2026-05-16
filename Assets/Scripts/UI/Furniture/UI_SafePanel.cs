@@ -47,7 +47,6 @@ namespace MWI.UI.Furniture
         private SafeFurniture _safe;
         private Character _customer;
         private InteractableObject _targetInteractable;
-        private NetworkObject _safeNetObject;
         private float _autoClosePollTimer;
         private float _statusHideAt;
         private readonly Dictionary<int, UI_SafeCurrencyRow> _rows = new Dictionary<int, UI_SafeCurrencyRow>();
@@ -95,7 +94,6 @@ namespace MWI.UI.Furniture
             _safe = safe;
             _customer = customer;
             _targetInteractable = safe.GetComponent<InteractableObject>();
-            _safeNetObject = safe.GetComponent<NetworkObject>();
 
             if (_titleLabel != null)
             {
@@ -104,12 +102,13 @@ namespace MWI.UI.Furniture
                 if (string.IsNullOrEmpty(_titleLabel.text)) _titleLabel.text = "Safe";
             }
 
-            // Authoritative-state subscriptions.
+            // Authoritative-state subscriptions. Despawn is handled by the Update
+            // null-check (CloseWindow on _safe == null) within one frame — no need
+            // for a per-NetworkObject despawn event (which doesn't exist on
+            // NetworkObject in this NGO version).
             _safe.OnBalanceChanged += HandleSafeBalanceChanged;
             if (_customer.CharacterWallet != null)
                 _customer.CharacterWallet.OnBalanceChanged += HandleWalletBalanceChanged;
-            if (_safeNetObject != null)
-                _safeNetObject.OnNetworkDespawn += HandleSafeDespawned;
 
             RebuildRows();
 
@@ -132,7 +131,6 @@ namespace MWI.UI.Furniture
             _safe = null;
             _customer = null;
             _targetInteractable = null;
-            _safeNetObject = null;
 
             base.CloseWindow();
         }
@@ -161,10 +159,6 @@ namespace MWI.UI.Furniture
             {
                 _customer.CharacterWallet.OnBalanceChanged -= HandleWalletBalanceChanged;
             }
-            if (_safeNetObject != null)
-            {
-                _safeNetObject.OnNetworkDespawn -= HandleSafeDespawned;
-            }
         }
 
         private void Update()
@@ -176,8 +170,10 @@ namespace MWI.UI.Furniture
             if (Input.GetKeyDown(KeyCode.Escape)) { CloseWindow(); return; }
 
             // Rule #26: UI uses unscaled time so it remains responsive under any
-            // GameSpeedController scale (including pause / 0x).
-            _autoClosePollTimer += Time.unscaledDeltaTime;
+            // GameSpeedController scale (including pause / 0x). Fully qualified to
+            // disambiguate from the project's MWI.Time namespace (resolved before
+            // UnityEngine.Time inside the MWI.UI.Furniture namespace).
+            _autoClosePollTimer += UnityEngine.Time.unscaledDeltaTime;
             if (_autoClosePollTimer >= AutoClosePollInterval)
             {
                 _autoClosePollTimer = 0f;
@@ -193,7 +189,7 @@ namespace MWI.UI.Furniture
             }
 
             // Hide status toast on timeout (cheap per-frame branch).
-            if (_statusLabel != null && _statusLabel.gameObject.activeSelf && Time.unscaledTime >= _statusHideAt)
+            if (_statusLabel != null && _statusLabel.gameObject.activeSelf && UnityEngine.Time.unscaledTime >= _statusHideAt)
             {
                 _statusLabel.gameObject.SetActive(false);
             }
@@ -282,11 +278,6 @@ namespace MWI.UI.Furniture
             }
         }
 
-        private void HandleSafeDespawned()
-        {
-            CloseWindow();
-        }
-
         private void SubmitDeposit(CurrencyId currency, int amount)
         {
             if (_safe == null || _customer == null) return;
@@ -318,7 +309,7 @@ namespace MWI.UI.Furniture
             if (_statusLabel == null) return;
             _statusLabel.text = TranslateReason(reason);
             _statusLabel.gameObject.SetActive(true);
-            _statusHideAt = Time.unscaledTime + _statusVisibleSeconds;
+            _statusHideAt = UnityEngine.Time.unscaledTime + _statusVisibleSeconds;
         }
 
         private static string DisplayNameFor(CurrencyId c)
