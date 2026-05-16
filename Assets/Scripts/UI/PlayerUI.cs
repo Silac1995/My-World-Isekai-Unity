@@ -380,7 +380,7 @@ public class PlayerUI : MonoBehaviour
         if (safe == null || interactor == null) return;
         if (_safePanel == null)
         {
-            Debug.LogWarning("PlayerUI: UI_SafePanel component not assigned!");
+            Debug.LogWarning("<color=orange>[PlayerUI]</color> OpenSafePanel called but _safePanel SerializeField is null — the UI_SafePanel prefab has not been authored yet (Task 8) or has not been wired into PlayerUI._safePanel in the Inspector. Tap-E on a SafeFurniture will silently no-op until this is fixed.");
             return;
         }
         _safePanel.Initialize(safe, interactor);

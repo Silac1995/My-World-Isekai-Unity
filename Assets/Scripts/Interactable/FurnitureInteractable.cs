@@ -71,6 +71,17 @@ public class FurnitureInteractable : InteractableObject
     {
         var options = new List<InteractionOption>();
 
+        // Furniture-type-specific options first (e.g. SafeFurniture's "Open Safe").
+        // Contributed by the underlying Furniture via the GetExtraInteractionOptions
+        // virtual so each furniture type owns its own verb without subclassing
+        // FurnitureInteractable. Pattern mirrors OnInteract — the menu is a
+        // Furniture concern, not an Interactable concern.
+        if (_furniture != null)
+        {
+            var extras = _furniture.GetExtraInteractionOptions(interactor);
+            if (extras != null) options.AddRange(extras);
+        }
+
         // "Pick Up" option — only for furniture that has a FurnitureItemSO assigned
         if (_furniture != null && _furniture.FurnitureItemSO != null)
         {

@@ -66,6 +66,20 @@ public class Furniture : MonoBehaviour
     }
 
     /// <summary>
+    /// Contribute furniture-type-specific options to the player's hold-E menu (in
+    /// addition to the universal "Pick Up" option assembled by
+    /// <see cref="FurnitureInteractable.GetHoldInteractionOptions"/>). Default
+    /// returns null — subclasses override to surface verbs like "Open Safe",
+    /// "Sit", "Use" without subclassing the interactable. Pattern mirrors
+    /// <see cref="OnInteract"/>: the menu is a Furniture concern, not an
+    /// Interactable concern.
+    /// </summary>
+    public virtual System.Collections.Generic.List<InteractionOption> GetExtraInteractionOptions(Character interactor)
+    {
+        return null;
+    }
+
+    /// <summary>
     /// Position où le personnage doit se placer pour utiliser le meuble.
     ///
     /// Resolution order:

@@ -101,6 +101,27 @@ public class SafeFurniture : Furniture
         return true;
     }
 
+    /// <summary>
+    /// Contributes an "Open Safe" verb to the player's hold-E menu. Identical
+    /// effect to tap-E (both call <see cref="PlayerUI.OpenSafePanel"/>) — the
+    /// menu entry just makes the verb discoverable when the player isn't sure
+    /// what a safe does. Owning-player gate mirrors <see cref="OnInteract"/>;
+    /// non-owner peers and NPCs never see the option.
+    /// </summary>
+    public override System.Collections.Generic.List<InteractionOption> GetExtraInteractionOptions(Character interactor)
+    {
+        if (interactor == null) return null;
+        if (!interactor.IsOwner || !interactor.IsPlayer()) return null;
+
+        var options = new System.Collections.Generic.List<InteractionOption>(1);
+        options.Add(new InteractionOption
+        {
+            Name = "Open Safe",
+            Action = () => PlayerUI.Instance?.OpenSafePanel(this, interactor)
+        });
+        return options;
+    }
+
     /// <summary>Read a currency balance. Server + client safe. Returns 0 for absent currencies.</summary>
     public int GetBalance(MWI.Economy.CurrencyId currency)
     {
