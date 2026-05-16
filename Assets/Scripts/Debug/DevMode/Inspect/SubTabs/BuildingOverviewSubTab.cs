@@ -94,6 +94,9 @@ public sealed class BuildingOverviewSubTab : BuildingSubTab
         sb.Append("  <b>GameObject:</b> ").AppendLine(b.gameObject.name);
         sb.Append("  <b>BuildingId:</b> ").AppendLine(string.IsNullOrEmpty(b.BuildingId) ? "<color=grey>—</color>" : b.BuildingId);
         sb.Append("  <b>PrefabId:</b> ").AppendLine(string.IsNullOrEmpty(b.PrefabId) ? "<color=grey>—</color>" : b.PrefabId);
+        sb.Append("  <b>Blueprint:</b> ").AppendLine(b.Blueprint != null
+            ? $"{b.Blueprint.name} <color=#888888>({b.Blueprint.PrefabId})</color>"
+            : "<color=#FFB060>&lt;missing&gt;</color>");
         sb.Append("  <b>Public:</b> ").AppendLine(b.IsPublicLocation ? "Yes" : "No");
 
         string placedById = b.PlacedByCharacterId.Value.ToString();

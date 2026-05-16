@@ -69,15 +69,15 @@ namespace MWI.WorldSystem
                 return;
             }
 
-            var entry = _settings.BuildingRegistry.Find(e => e.PrefabId == prefabId);
-            if (entry.BuildingPrefab == null)
+            var blueprint = _settings.GetBuildingBlueprint(prefabId);
+            if (blueprint == null || blueprint.BuildingPrefab == null)
             {
                 Debug.LogWarning($"[BuildingPlacementManager] No prefab found for PrefabId '{prefabId}'.");
                 return;
             }
 
             _activePrefabId = prefabId;
-            _ghostInstance = Instantiate(entry.BuildingPrefab);
+            _ghostInstance = Instantiate(blueprint.BuildingPrefab);
             _ghostBuildingComponent = _ghostInstance.GetComponent<Building>();
 
             // Disable physics on ghost — it's purely visual
@@ -432,10 +432,10 @@ namespace MWI.WorldSystem
                 }
             }
 
-            var entry = _settings.BuildingRegistry.Find(e => e.PrefabId == prefabId);
-            if (entry.BuildingPrefab == null) return;
+            var blueprint = _settings.GetBuildingBlueprint(prefabId);
+            if (blueprint == null || blueprint.BuildingPrefab == null) return;
 
-            GameObject buildingObj = Instantiate(entry.BuildingPrefab, position, rotation);
+            GameObject buildingObj = Instantiate(blueprint.BuildingPrefab, position, rotation);
 
             // Set PrefabId + PlacedByCharacterId BEFORE Spawn so the value is included in the
             // initial NetworkVariable payload AND is observable inside Building.OnNetworkSpawn.

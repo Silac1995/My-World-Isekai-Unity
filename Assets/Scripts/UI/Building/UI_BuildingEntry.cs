@@ -18,13 +18,19 @@ namespace MWI.UI.Building
         private string _prefabId;
         private Action<string> _onSelected;
 
-        public void Setup(BuildingRegistryEntry entry, Action<string> onSelected)
+        public void Setup(BuildingSO blueprint, Action<string> onSelected)
         {
-            _prefabId = entry.PrefabId;
+            if (blueprint == null) return;
+            _prefabId = blueprint.PrefabId;
             _onSelected = onSelected;
 
-            if (_icon != null) _icon.sprite = entry.Icon;
-            if (_nameText != null) _nameText.text = entry.BuildingName;
+            if (_icon != null) _icon.sprite = blueprint.Icon;
+            if (_nameText != null)
+            {
+                _nameText.text = !string.IsNullOrEmpty(blueprint.BuildingName)
+                    ? blueprint.BuildingName
+                    : blueprint.PrefabId;
+            }
 
             if (_selectButton != null)
             {

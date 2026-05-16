@@ -94,11 +94,11 @@ namespace MWI.UI.Building
             // Populate from unlocked blueprints
             foreach (var blueprintId in _blueprints.UnlockedBuildingIds)
             {
-                var registryEntry = _worldSettings.BuildingRegistry.FirstOrDefault(e => e.PrefabId == blueprintId);
-                if (string.IsNullOrEmpty(registryEntry.PrefabId)) continue;
+                var blueprint = _worldSettings.GetBuildingBlueprint(blueprintId);
+                if (blueprint == null) continue;
 
                 UI_BuildingEntry entry = Instantiate(_entryPrefab, _entryContainer);
-                entry.Setup(registryEntry, OnBuildingSelected);
+                entry.Setup(blueprint, OnBuildingSelected);
             }
         }
 
