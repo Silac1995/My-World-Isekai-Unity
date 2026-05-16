@@ -92,4 +92,44 @@ namespace MWI.Tests.Buildings
             finally { Object.DestroyImmediate(so); }
         }
     }
+
+    public class WorldSettingsDataRegistryTests
+    {
+        [Test]
+        public void GetBuildingPrefab_returns_null_for_unknown_id_without_throwing()
+        {
+            var settings = ScriptableObject.CreateInstance<WorldSettingsData>();
+            try
+            {
+                Assert.IsNull(settings.GetBuildingPrefab("does-not-exist"));
+                Assert.IsNull(settings.GetInteriorPrefab("does-not-exist"));
+            }
+            finally { Object.DestroyImmediate(settings); }
+        }
+
+        [Test]
+        public void GetBuildingPrefab_resolves_by_PrefabId_string_from_SO_list()
+        {
+            var so = ScriptableObject.CreateInstance<BuildingSO>();
+            var stubPrefab = new GameObject("StubPrefab");
+            try
+            {
+                var f1 = typeof(BuildingSO).GetField("_prefabId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                var f2 = typeof(BuildingSO).GetField("_buildingPrefab", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                f1.SetValue(so, "TestPrefabId");
+                f2.SetValue(so, stubPrefab);
+
+                var settings = ScriptableObject.CreateInstance<WorldSettingsData>();
+                settings.Blueprints.Add(so);
+
+                Assert.AreSame(stubPrefab, settings.GetBuildingPrefab("TestPrefabId"));
+                Object.DestroyImmediate(settings);
+            }
+            finally
+            {
+                Object.DestroyImmediate(so);
+                Object.DestroyImmediate(stubPrefab);
+            }
+        }
+    }
 }

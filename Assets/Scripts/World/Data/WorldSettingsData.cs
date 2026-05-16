@@ -51,8 +51,12 @@ namespace MWI.WorldSystem
         [Tooltip("Defines offline resource production rates based on job type.")]
         public JobYieldRegistry JobYields;
 
-        [Tooltip("List of dynamic buildings that can be constructed offline.")]
+        [System.Obsolete("Use Blueprints (List<BuildingSO>) — this field will be removed after Task 18 migration cleanup.")]
+        [Tooltip("DEPRECATED — migrated to Blueprints. Kept until Task 18 cleanup so existing scenes/saves don't lose data during the transition.")]
         public List<BuildingRegistryEntry> BuildingRegistry = new List<BuildingRegistryEntry>();
+
+        [Tooltip("BuildingSO blueprints. After the 2026-05-16 migration this is the source of truth; the legacy BuildingRegistry list above is kept until the Task 18 cleanup so existing scenes/saves don't lose data during the transition.")]
+        public List<BuildingSO> Blueprints = new List<BuildingSO>();
 
         public GameObject GetPrefabForTier(CommunityTier tier)
         {
@@ -65,21 +69,56 @@ namespace MWI.WorldSystem
             }
         }
 
-        public GameObject GetBuildingPrefab(string prefabId)
+        /// <summary>
+        /// Resolves a BuildingSO blueprint by its PrefabId string. Scans the new Blueprints
+        /// list; returns null when not found. Pair with GetBuildingPrefab / GetInteriorPrefab
+        /// when you need the prefab reference instead.
+        /// </summary>
+        public BuildingSO GetBuildingBlueprint(string prefabId)
         {
-            foreach (var entry in BuildingRegistry)
+            if (string.IsNullOrEmpty(prefabId)) return null;
+            for (int i = 0; i < Blueprints.Count; i++)
             {
-                if (entry.PrefabId == prefabId) return entry.BuildingPrefab;
+                var entry = Blueprints[i];
+                if (entry != null && entry.PrefabId == prefabId) return entry;
             }
             return null;
         }
 
+        /// <summary>
+        /// Resolves the placement prefab for a given PrefabId. Prefers the new Blueprints
+        /// list; falls back to the legacy BuildingRegistry during the migration window
+        /// (Task 11 → Task 18). Remove the legacy fall-through with the field deletion.
+        /// </summary>
+        public GameObject GetBuildingPrefab(string prefabId)
+        {
+            var blueprint = GetBuildingBlueprint(prefabId);
+            if (blueprint != null) return blueprint.BuildingPrefab;
+
+            // Legacy fall-through: only fires during the migration window.
+#pragma warning disable CS0618
+            foreach (var entry in BuildingRegistry)
+            {
+                if (entry.PrefabId == prefabId) return entry.BuildingPrefab;
+            }
+#pragma warning restore CS0618
+            return null;
+        }
+
+        /// <summary>
+        /// Resolves the interior prefab for a given PrefabId. Prefers the new Blueprints
+        /// list; falls back to the legacy BuildingRegistry during the migration window.
+        /// </summary>
         public GameObject GetInteriorPrefab(string prefabId)
         {
+            var blueprint = GetBuildingBlueprint(prefabId);
+            if (blueprint != null) return blueprint.InteriorPrefab;
+#pragma warning disable CS0618
             foreach (var entry in BuildingRegistry)
             {
                 if (entry.PrefabId == prefabId) return entry.InteriorPrefab;
             }
+#pragma warning restore CS0618
             return null;
         }
     }
