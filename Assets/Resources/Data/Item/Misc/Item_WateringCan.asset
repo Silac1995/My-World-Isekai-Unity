@@ -23,6 +23,7 @@ MonoBehaviour:
   _weight: 1
   _material: 0
   _tier: 0
+  _basePrice: 5
   _castsShadow: 1
   _blocksPathing: 1
   _requiredCraftingSkill: {fileID: 0}
