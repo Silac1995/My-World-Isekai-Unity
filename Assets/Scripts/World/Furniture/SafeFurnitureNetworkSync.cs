@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using MWI.Economy;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -136,22 +138,170 @@ public class SafeFurnitureNetworkSync : NetworkBehaviour
     }
 
     // ──────────────────────────────────────────────────────────────────
+    // Player UI: deposit/withdraw request RPCs (client → server).
+    //
+    // Mirrors the dispatch shape used by CashierNetSync.RequestStartBuyServerRpc /
+    // RequestUseCashierServerRpc — the only sibling that also (a) extracts the
+    // sender id, (b) validates character ownership server-side, (c) re-validates
+    // interaction-zone proximity as anti-cheat (rule #36), and (d) fires a
+    // targeted ClientRpc back to the requester on failure.
+    //
+    // Wallet-balance checks live INSIDE the CharacterAction (insufficient-wallet /
+    // insufficient-safe) — those failure reasons are emitted by the action and
+    // routed through NotifyOperationResult below. The RPC body only owns
+    // out-of-zone and invalid-amount.
+    // ──────────────────────────────────────────────────────────────────
+
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestDepositServerRpc(NetworkBehaviourReference characterRef, int currencyRawId, int amount, ServerRpcParams p = default)
+    {
+        if (!IsServer) return;
+
+        // 1. Resolve the character that issued the request.
+        if (!characterRef.TryGet(out Character character) || character == null)
+        {
+            if (Debug.isDebugBuild)
+                Debug.LogWarning("[SafeFurnitureNetworkSync] RequestDepositServerRpc: character ref failed to resolve.");
+            return;
+        }
+
+        // 2. Anti-cheat: the sender must own the character they claim to be.
+        ulong senderClientId = p.Receive.SenderClientId;
+        if (character.OwnerClientId != senderClientId)
+        {
+            if (Debug.isDebugBuild)
+                Debug.LogWarning($"[SafeFurnitureNetworkSync] RequestDepositServerRpc: sender {senderClientId} does not own character (owned by {character.OwnerClientId}).");
+            return;
+        }
+
+        // 3. Anti-cheat: proximity re-validation (rule #36 — never trust the client).
+        if (_safe == null)
+        {
+            if (Debug.isDebugBuild)
+                Debug.LogWarning("[SafeFurnitureNetworkSync] RequestDepositServerRpc: _safe sibling missing — cannot validate proximity.");
+            return;
+        }
+        var interactable = _safe.GetComponent<InteractableObject>();
+        if (interactable == null || !interactable.IsCharacterInInteractionZone(character))
+        {
+            NotifyOperationResult(senderClientId, success: false, reason: "out-of-zone");
+            return;
+        }
+
+        // 4. Amount sanity (negative + zero rejected here, wallet sufficiency lives in the action).
+        if (amount <= 0)
+        {
+            NotifyOperationResult(senderClientId, success: false, reason: "invalid-amount");
+            return;
+        }
+
+        // 5. Queue the server-side action. Insufficient-wallet feedback fires from
+        // inside the action via this same NotifyOperationResult path.
+        if (character.CharacterActions == null)
+        {
+            if (Debug.isDebugBuild)
+                Debug.LogWarning($"[SafeFurnitureNetworkSync] RequestDepositServerRpc: character {character.CharacterName} has no CharacterActions.");
+            return;
+        }
+
+        var currency = new CurrencyId(currencyRawId);
+        character.CharacterActions.ExecuteAction(new CharacterAction_DepositToSafe(character, _safe, currency, amount));
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestWithdrawServerRpc(NetworkBehaviourReference characterRef, int currencyRawId, int amount, ServerRpcParams p = default)
+    {
+        if (!IsServer) return;
+
+        // 1. Resolve the character that issued the request.
+        if (!characterRef.TryGet(out Character character) || character == null)
+        {
+            if (Debug.isDebugBuild)
+                Debug.LogWarning("[SafeFurnitureNetworkSync] RequestWithdrawServerRpc: character ref failed to resolve.");
+            return;
+        }
+
+        // 2. Anti-cheat: the sender must own the character they claim to be.
+        ulong senderClientId = p.Receive.SenderClientId;
+        if (character.OwnerClientId != senderClientId)
+        {
+            if (Debug.isDebugBuild)
+                Debug.LogWarning($"[SafeFurnitureNetworkSync] RequestWithdrawServerRpc: sender {senderClientId} does not own character (owned by {character.OwnerClientId}).");
+            return;
+        }
+
+        // 3. Anti-cheat: proximity re-validation (rule #36 — never trust the client).
+        if (_safe == null)
+        {
+            if (Debug.isDebugBuild)
+                Debug.LogWarning("[SafeFurnitureNetworkSync] RequestWithdrawServerRpc: _safe sibling missing — cannot validate proximity.");
+            return;
+        }
+        var interactable = _safe.GetComponent<InteractableObject>();
+        if (interactable == null || !interactable.IsCharacterInInteractionZone(character))
+        {
+            NotifyOperationResult(senderClientId, success: false, reason: "out-of-zone");
+            return;
+        }
+
+        // 4. Amount sanity.
+        if (amount <= 0)
+        {
+            NotifyOperationResult(senderClientId, success: false, reason: "invalid-amount");
+            return;
+        }
+
+        // 5. Queue the server-side action. Insufficient-safe feedback fires from
+        // inside the action via this same NotifyOperationResult path.
+        if (character.CharacterActions == null)
+        {
+            if (Debug.isDebugBuild)
+                Debug.LogWarning($"[SafeFurnitureNetworkSync] RequestWithdrawServerRpc: character {character.CharacterName} has no CharacterActions.");
+            return;
+        }
+
+        var currency = new CurrencyId(currencyRawId);
+        character.CharacterActions.ExecuteAction(new CharacterAction_WithdrawFromSafe(character, _safe, currency, amount));
+    }
+
+    // ──────────────────────────────────────────────────────────────────
     // Per-client deposit/withdraw operation feedback (player UI).
     // ──────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Server-only entry point used by <c>CharacterAction_DepositToSafe</c> and
-    /// <c>CharacterAction_WithdrawFromSafe</c> to report success / failure to the
-    /// requesting client. Stub today — Task 4 of the safe deposit/withdraw UI
-    /// feature replaces this body with a targeted ClientRpc dispatcher that the
-    /// open <c>UI_SafeFurniturePanel</c> listens to for inline status feedback.
+    /// Server-only entry point used by <c>CharacterAction_DepositToSafe</c> /
+    /// <c>CharacterAction_WithdrawFromSafe</c> and by the request RPCs above to
+    /// report success / failure to the requesting client. Fires a targeted
+    /// <see cref="OperationResultClientRpc"/> that lands on exactly one peer —
+    /// the one that owns the character that initiated the operation. The reason
+    /// string is converted to a <see cref="FixedString64Bytes"/> at this
+    /// boundary so action call sites can keep passing C# string literals.
+    ///
+    /// <para><b>Wire reason values (spec §9):</b>
+    /// <c>"insufficient-wallet"</c>, <c>"insufficient-safe"</c>,
+    /// <c>"out-of-zone"</c>, <c>"invalid-amount"</c>.</para>
     /// </summary>
     public void NotifyOperationResult(ulong targetClientId, bool success, string reason)
     {
-        // TODO(Task 4 — 2026-05-16-safe-furniture-deposit-withdraw-ui): replace this
-        // stub with a targeted ClientRpc that pushes (success, reason) to the
-        // requesting client only. Stub body intentionally a no-op so Task 2/3 compile
-        // green without leaking premature wire format.
+        if (!IsServer) return;
+        var fsReason = new FixedString64Bytes(reason ?? string.Empty);
+        var rpcParams = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams { TargetClientIds = new[] { targetClientId } }
+        };
+        OperationResultClientRpc(success, fsReason, rpcParams);
+    }
+
+    [ClientRpc]
+    private void OperationResultClientRpc(bool success, FixedString64Bytes reason, ClientRpcParams rpcParams = default)
+    {
+        // Targeted to the requester only — fires on exactly one client.
+        // PlayerUI.Instance is the safe entry point; Task 7 fleshes out the
+        // body of OnSafeOperationResult (toast + inline panel feedback).
+        if (PlayerUI.Instance != null)
+        {
+            PlayerUI.Instance.OnSafeOperationResult(_safe, success, reason.ToString());
+        }
     }
 
     private void HandleRoleChanged(SafeRoleType _, SafeRoleType newValue)

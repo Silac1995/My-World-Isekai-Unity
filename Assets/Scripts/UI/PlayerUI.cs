@@ -360,6 +360,27 @@ public class PlayerUI : MonoBehaviour
         if (_storagePanel.gameObject.activeSelf) _storagePanel.CloseWindow();
     }
 
+    // =========================================================================
+    // SAFE PANEL — stubs introduced by Task 4 of the safe deposit/withdraw UI
+    // feature (2026-05-16-safe-furniture-deposit-withdraw-ui). Task 7 fills the
+    // real bodies (open the UI_SafeFurniturePanel, route success/failure to
+    // toast + inline feedback). Kept as no-op stubs here so the ClientRpc
+    // callsite on SafeFurnitureNetworkSync compiles.
+    // =========================================================================
+
+    /// <summary>Stub for Task 4 — Task 7 wires this to <c>UI_SafeFurniturePanel.Initialize</c>.</summary>
+    public void OpenSafePanel(SafeFurniture safe, Character interactor) { /* fleshed out in Task 7 */ }
+
+    /// <summary>Stub for Task 4 — Task 7 wires this to close the safe panel cleanly.</summary>
+    public void CloseSafePanel() { /* fleshed out in Task 7 */ }
+
+    /// <summary>
+    /// Stub for Task 4 — Task 7 wires this to surface deposit/withdraw results
+    /// (insufficient-wallet / insufficient-safe / out-of-zone / invalid-amount)
+    /// via toast + inline feedback in the open <c>UI_SafeFurniturePanel</c>.
+    /// </summary>
+    public void OnSafeOperationResult(SafeFurniture safe, bool success, string reason) { /* fleshed out in Task 7 */ }
+
     /// <summary>
     /// Open the shop buy panel for <paramref name="cashier"/>, bound to
     /// <paramref name="customer"/>'s wallet + the cashier's linked shop catalog/shelves.
