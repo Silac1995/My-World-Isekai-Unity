@@ -582,6 +582,13 @@ namespace MWI.WorldSystem
 
         public Vector2Int OriginChunk;
         /// <summary>
+        /// The currency used by this community. Drives BuildingCommercialSO.BaseTreasury
+        /// seeding at construction-complete time (see CommercialBuilding.OnDefaultFurnitureSpawned).
+        /// Defaults to CurrencyId.Default so legacy saves (no field) deserialize cleanly.
+        /// Designer-editable per-community on the CommunityData inspector surface.
+        /// </summary>
+        public MWI.Economy.CurrencyId NativeCurrency = MWI.Economy.CurrencyId.Default;
+        /// <summary>
         /// Exact world-space position where the MapController was spawned. Used on save/load
         /// to respawn dynamic wild maps created via <see cref="MapRegistry.CreateMapAtPosition"/>.
         /// For predefined (scene-authored) maps this stays Vector3.zero and is unused.
