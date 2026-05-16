@@ -16,6 +16,22 @@ namespace MWI.WorldSystem
         [Tooltip("Unique ID matching the Decoupled Character Save (e.g. World_Aethelgard_Region_North)")]
         public string MapId;
 
+        /// <summary>
+        /// Convenience accessor for the community's NativeCurrency. Returns CurrencyId.Default
+        /// when this MapController has no registered CommunityData yet (e.g., during scene
+        /// boot before MapRegistry.Start runs, or for dynamic maps mid-creation).
+        /// </summary>
+        public MWI.Economy.CurrencyId NativeCurrency
+        {
+            get
+            {
+                if (MapRegistry.Instance == null) return MWI.Economy.CurrencyId.Default;
+                if (string.IsNullOrEmpty(MapId)) return MWI.Economy.CurrencyId.Default;
+                var comm = MapRegistry.Instance.GetCommunity(MapId);
+                return comm != null ? comm.NativeCurrency : MWI.Economy.CurrencyId.Default;
+            }
+        }
+
         [SerializeField] private MapType _mapType = MapType.Region;
         public MapType Type => _mapType;
 

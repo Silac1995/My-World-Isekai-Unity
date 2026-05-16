@@ -24,4 +24,24 @@ namespace MWI.Tests.Buildings
             Assert.AreEqual(new CurrencyId(42), back.NativeCurrency);
         }
     }
+
+    public class MapControllerNativeCurrencyTests
+    {
+        [Test]
+        public void MapController_NativeCurrency_falls_back_to_Default_when_no_community()
+        {
+            // Headless: spawn a bare MapController GameObject without a CommunityData entry.
+            var go = new GameObject("TestMap");
+            var map = go.AddComponent<MapController>();
+            try
+            {
+                Assert.AreEqual(CurrencyId.Default, map.NativeCurrency,
+                    "MapController without a registered CommunityData must return CurrencyId.Default.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+    }
 }
