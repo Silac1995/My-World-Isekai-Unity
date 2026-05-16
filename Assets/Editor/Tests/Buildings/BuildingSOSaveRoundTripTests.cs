@@ -44,4 +44,29 @@ namespace MWI.Tests.Buildings
             }
         }
     }
+
+    public class BuildingSOAuthoringTests
+    {
+        [Test]
+        public void BuildingSO_default_fields_are_safe()
+        {
+            var so = ScriptableObject.CreateInstance<BuildingSO>();
+            try
+            {
+                Assert.IsTrue(string.IsNullOrEmpty(so.PrefabId), "PrefabId must default to empty (designer must author it explicitly).");
+                Assert.AreEqual(0, so.CommunityPriority);
+                Assert.IsNull(so.BuildingPrefab);
+                Assert.IsNull(so.InteriorPrefab);
+                Assert.IsNull(so.Icon);
+                Assert.IsNotNull(so.ConstructionRequirements);
+                Assert.AreEqual(0, so.ConstructionRequirements.Count);
+                Assert.IsNotNull(so.DefaultFurnitureLayout);
+                Assert.AreEqual(0, so.DefaultFurnitureLayout.Count);
+            }
+            finally
+            {
+                Object.DestroyImmediate(so);
+            }
+        }
+    }
 }
