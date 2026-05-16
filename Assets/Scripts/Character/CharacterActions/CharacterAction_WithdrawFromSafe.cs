@@ -84,6 +84,20 @@ public sealed class CharacterAction_WithdrawFromSafe : CharacterAction
             return;
         }
 
+        // Despawn race (network-validator finding C2, 2026-05-16): symmetric guard. If the
+        // wallet reference became null between the safe-debit succeeding and us reaching
+        // AddCoins, roll back the safe debit. (For withdraw, "wallet gone null mid-action"
+        // is a less likely scenario than "safe gone null mid-deposit" — but the symmetry
+        // is cheap and the failure mode would be coin drift the other direction.)
+        if (wallet == null)
+        {
+            // Best-effort rollback: put the coins back in the safe.
+            if (_safe != null) _safe.Credit(_currency, _amount, "safe-withdraw-rollback");
+            if (NPCDebug.VerboseActions)
+                Debug.LogWarning($"<color=orange>[WithdrawFromSafe]</color> {character.CharacterName} wallet despawned mid-action → rolled back {_amount} of {_currency} to safe.");
+            return;
+        }
+
         wallet.AddCoins(_currency, _amount, "safe-withdraw");
         if (NPCDebug.VerboseActions)
             Debug.Log($"<color=green>[WithdrawFromSafe]</color> {character.CharacterName} withdrew {_amount} of {_currency} from {_safe.FurnitureName}.");

@@ -89,6 +89,19 @@ public sealed class CharacterAction_DepositToSafe : CharacterAction
             return;
         }
 
+        // Despawn race (network-validator finding C2, 2026-05-16): if the safe got destroyed
+        // between the wallet debit succeeding and us reaching Credit (map hibernation,
+        // building destruction, etc.), Credit would throw NullReferenceException AFTER the
+        // wallet was already debited — leaving the wallet debited but the safe uncredited
+        // (drift). Roll back the wallet debit before returning.
+        if (_safe == null)
+        {
+            wallet.AddCoins(_currency, _amount, "safe-deposit-rollback");
+            if (NPCDebug.VerboseActions)
+                Debug.LogWarning($"<color=orange>[DepositToSafe]</color> {character.CharacterName} safe despawned mid-action → rolled back {_amount} of {_currency} to wallet.");
+            return;
+        }
+
         _safe.Credit(_currency, _amount, "player-deposit");
         if (NPCDebug.VerboseActions)
             Debug.Log($"<color=green>[DepositToSafe]</color> {character.CharacterName} deposited {_amount} of {_currency} into {_safe.FurnitureName}.");
