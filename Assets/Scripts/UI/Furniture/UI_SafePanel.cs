@@ -223,12 +223,26 @@ namespace MWI.UI.Furniture
             row.Initialize(
                 c,
                 DisplayNameFor(c),
+                IconColorFor(c),
                 getSafeBalance: () => _safe != null ? _safe.GetBalance(c) : 0,
                 getWalletBalance: () => _customer != null && _customer.CharacterWallet != null
                     ? _customer.CharacterWallet.GetBalance(c) : 0,
                 onDepositSubmit: amount => SubmitDeposit(c, amount),
                 onWithdrawSubmit: amount => SubmitWithdraw(c, amount));
             _rows[c.Id] = row;
+        }
+
+        /// <summary>
+        /// Deterministic icon-color fallback per CurrencyId until a CurrencySO._iconSprite
+        /// registry exists. Default (the only currency today) is gold. Future Kingdom
+        /// currencies get distinct hues derived from their int id.
+        /// </summary>
+        private static Color IconColorFor(CurrencyId c)
+        {
+            if (c.Id == CurrencyId.Default.Id) return new Color(0.97f, 0.78f, 0.31f, 1f); // gold
+            // Hash the int id to a hue in [0, 1), saturation 0.55, value 0.85.
+            float h = (Mathf.Abs(c.Id) * 137f % 360f) / 360f;
+            return Color.HSVToRGB(h, 0.55f, 0.85f);
         }
 
         private void ClearRows()
