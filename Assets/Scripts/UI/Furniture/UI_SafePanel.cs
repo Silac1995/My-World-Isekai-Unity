@@ -32,7 +32,10 @@ namespace MWI.UI.Furniture
     public sealed class UI_SafePanel : UI_WindowBase
     {
         [Header("Wiring (assign in prefab)")]
+        [Tooltip("Panel_Main_Background — the dark frame. UI_SafePanel.Awake enforces a min size on this so the frame can't collapse to row-size when a scene-level override drifts to (0,0). Bypasses stale Inspector state.")]
+        [SerializeField] private RectTransform _frame;
         [SerializeField] private TMP_Text _titleLabel;
+        [SerializeField] private TMP_Text _subtitleLabel;
 
         [Header("Rows")]
         [SerializeField] private RectTransform _rowContainer;
@@ -42,6 +45,12 @@ namespace MWI.UI.Furniture
         [Tooltip("Transient label that surfaces deposit/withdraw failure reasons fired by SafeFurnitureNetworkSync.OperationResultClientRpc. Hidden by default.")]
         [SerializeField] private TMP_Text _statusLabel;
         [SerializeField] private float _statusVisibleSeconds = 3f;
+
+        [Header("Frame size")]
+        [Tooltip("Minimum width of Panel_Main_Background. Enforced in Awake — variants can't drift below this.")]
+        [SerializeField] private float _minFrameWidth = 560f;
+        [Tooltip("Minimum height of Panel_Main_Background. Enforced in Awake — variants can't drift below this.")]
+        [SerializeField] private float _minFrameHeight = 480f;
 
         // State
         private SafeFurniture _safe;
@@ -69,6 +78,24 @@ namespace MWI.UI.Furniture
         protected override void Awake()
         {
             base.Awake();
+            EnforceMinFrameSize();
+        }
+
+        /// <summary>
+        /// Forces <see cref="_frame"/> (Panel_Main_Background) to at least
+        /// <see cref="_minFrameWidth"/> × <see cref="_minFrameHeight"/>. Defends against
+        /// scene-level prefab overrides that sometimes drift to (0,0) and collapse the
+        /// frame to row-size — see 2026-05-16 incident. Also restores localScale to
+        /// Vector3.one and anchored position to zero for the same reason.
+        /// </summary>
+        private void EnforceMinFrameSize()
+        {
+            if (_frame == null) return;
+            Vector2 size = _frame.sizeDelta;
+            if (size.x < _minFrameWidth) size.x = _minFrameWidth;
+            if (size.y < _minFrameHeight) size.y = _minFrameHeight;
+            _frame.sizeDelta = size;
+            if (_frame.localScale.sqrMagnitude < 0.0001f) _frame.localScale = Vector3.one;
         }
 
         /// <summary>

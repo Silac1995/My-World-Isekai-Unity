@@ -24,6 +24,18 @@ public class UI_WindowBase : MonoBehaviour
         for (int i = 0; i < canvases.Length; i++)
         {
             var c = canvases[i];
+
+            // Safeguard against UI_WindowBase.prefab's historical zero-scale Canvas
+            // RectTransform default — a variant inheriting scale=(0,0,0) renders nothing
+            // even if everything else is correct. Force back to identity scale here so
+            // a forgotten variant override doesn't silently break the window.
+            // (See wiki/systems/player-hud.md "scale=(0,0,0) invisibility" gotcha.)
+            var rt = c.transform as RectTransform;
+            if (rt != null && rt.localScale.sqrMagnitude < 0.0001f)
+            {
+                rt.localScale = Vector3.one;
+            }
+
             if (c.renderMode != RenderMode.ScreenSpaceCamera) continue;
             if (c.worldCamera != null) continue;
             c.worldCamera = Camera.main;
