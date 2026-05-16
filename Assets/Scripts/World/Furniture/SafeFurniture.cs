@@ -79,6 +79,28 @@ public class SafeFurniture : Furniture
         }
     }
 
+    /// <summary>
+    /// Player-only interaction entry-point. Pressing E inside the
+    /// <see cref="FurnitureInteractable.InteractionZone"/> routes here via
+    /// <see cref="Furniture.OnInteract"/>. We open the safe deposit/withdraw
+    /// panel for the owning player only — non-owner peers and non-player
+    /// characters (NPCs) take the GOAP/CharacterAction path instead
+    /// (rule #22 player↔NPC parity: NPCs queue
+    /// <c>CharacterAction_DepositToSafe</c> / <c>CharacterAction_WithdrawFromSafe</c>
+    /// directly without going through the Interact UI).
+    ///
+    /// The InteractionZone proximity gate is enforced upstream by
+    /// <see cref="FurnitureInteractable.Interact"/> before this is called
+    /// (rule #36 — no inline distance math).
+    /// </summary>
+    public override bool OnInteract(Character interactor)
+    {
+        if (interactor == null) return false;
+        if (!interactor.IsOwner || !interactor.IsPlayer()) return false;
+        PlayerUI.Instance?.OpenSafePanel(this, interactor);
+        return true;
+    }
+
     /// <summary>Read a currency balance. Server + client safe. Returns 0 for absent currencies.</summary>
     public int GetBalance(MWI.Economy.CurrencyId currency)
     {
