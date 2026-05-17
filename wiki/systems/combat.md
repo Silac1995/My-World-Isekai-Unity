@@ -250,6 +250,7 @@ BattleManager.Update()
 - Ammo consume on Attack wired in `CharacterRangedAttackAction.SpawnProjectile` (was not consuming previously — magazines were effectively infinite).
 - Hotkey map (PlayerController, rule #33): Space (attack queue), R (reload), Y (swap), 1-6 (abilities), E (toggle items window — preempts the 5-priority E dispatcher when IsInBattle).
 - See [[combat-action-bar-design]] spec + [[2026-05-17-combat-action-bar]] plan + [[2026-05-17-combat-action-bar-prefab-authoring]] prefab checklist.
+- 2026-05-17 (post-prefab landing) — Two follow-up fixes after first playtest: (a) `SetActionIntent(action, target, actionName)` extended with optional human-readable label + `PlannedActionName` property → `UI_CombatQueuedLabel` now reads "Queued: Melee Attack → Lumi" instead of generic "Queued: Action → Lumi"; (b) `PlayerUI._combatActionMenu` + `_combatItemsWindow` re-wired via `SerializedObject` (reflection writes don't persist through scene save — see [[reflection-vs-serializedobject-persistence]]); (c) glyph cleanup: ▶ / 🧪 / ⇄ replaced with ASCII / BMP-safe text because LiberationSans lacks them (see [[tmp-font-glyph-fallback]]).
 
 ## Sources
 - [.agent/skills/combat_system/SKILL.md](../../.agent/skills/combat_system/SKILL.md) — procedural how-to (primary operational source).

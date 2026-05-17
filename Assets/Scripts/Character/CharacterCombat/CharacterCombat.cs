@@ -39,6 +39,14 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
     [Header("Combat Intents")]
     public Func<bool> PlannedAction { get; private set; }
     public Character PlannedTarget { get; private set; }
+    /// <summary>
+    /// Human-readable label for the currently planned action (e.g. "Melee Attack",
+    /// "Ranged Attack", "Fireball"). Set by SetActionIntent's optional actionName
+    /// param; falls back to "Action" when caller doesn't specify. Drives
+    /// UI_CombatQueuedLabel so the player sees WHICH verb is queued, not just THAT
+    /// something is queued.
+    /// </summary>
+    public string PlannedActionName { get; private set; }
     public event Action<Character, Func<bool>> OnActionIntentDecided;
 
     /// <summary>
@@ -54,9 +62,10 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
     /// </summary>
     public event Action OnActionIntentCleared;
 
-    public void SetActionIntent(Func<bool> action, Character target)
+    public void SetActionIntent(Func<bool> action, Character target, string actionName = null)
     {
         PlannedAction = action;
+        PlannedActionName = actionName ?? "Action";
         // Route through SetPlannedTarget for the full targeting chain
         // (look target, graph update, engagement evaluation)
         SetPlannedTarget(target);
@@ -68,6 +77,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
     {
         Debug.Log($"<color=cyan>[Combat]</color> {_character.CharacterName} ClearActionIntent → PlannedTarget: {PlannedTarget?.CharacterName ?? "null"} → null");
         PlannedAction = null;
+        PlannedActionName = null;
         PlannedTarget = null;
 
         OnActionIntentCleared?.Invoke();
@@ -559,6 +569,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         // so ClearActionIntent sees IsInBattle as false and properly clears everything.
         _currentBattleManager = null;
         PlannedAction = null;
+        PlannedActionName = null;
         PlannedTarget = null;
         OnActionIntentCleared?.Invoke();
         _character.CharacterVisual?.ClearLookTarget();
@@ -705,6 +716,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
     {
         _currentBattleManager = null;
         PlannedAction = null;
+        PlannedActionName = null;
         PlannedTarget = null;
         OnActionIntentCleared?.Invoke();
         _character.CharacterVisual?.ClearLookTarget();

@@ -349,7 +349,9 @@ public class PlayerController : CharacterGameController
         var combat = _character.CharacterCombat;
 
         // Space — in-battle attack queue (cancel queued if already set; fall back to
-        // BattleManager.GetBestTargetFor if no PlannedTarget yet).
+        // BattleManager.GetBestTargetFor if no PlannedTarget yet). Action label is
+        // derived from the active weapon so the queued chip reads "Melee Attack" /
+        // "Ranged Attack" consistently with the bar's Attack button.
         if (Input.GetKeyDown(KeyCode.Space))
         {
             if (combat.HasPlannedAction) { combat.ClearActionIntent(); return; }
@@ -362,7 +364,13 @@ public class PlayerController : CharacterGameController
             if (initialTarget == null && bm != null) initialTarget = bm.GetBestTargetFor(_character);
             if (initialTarget != null)
             {
-                combat.SetActionIntent(() => combat.Attack(combat.PlannedTarget), initialTarget);
+                var equipment = _character.CharacterEquipment;
+                var weapons = equipment?.GetInventory()?.GetWeaponInstances();
+                WeaponInstance active = (weapons != null && equipment.ActiveWeaponIndex >= 0 && equipment.ActiveWeaponIndex < weapons.Count)
+                    ? weapons[equipment.ActiveWeaponIndex]
+                    : null;
+                string actionName = active is RangedWeaponInstance ? "Ranged Attack" : "Melee Attack";
+                combat.SetActionIntent(() => combat.Attack(combat.PlannedTarget), initialTarget, actionName);
             }
             return;
         }

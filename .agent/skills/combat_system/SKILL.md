@@ -281,6 +281,16 @@ Queue helpers on `CharacterCombat`:
 - `TryQueueSwapWeapon()` — validates carried weapons ≥ 2 and no swap in flight.
 - `TryQueueUseItem(consumable, target)` — validates ConsumableSO.IsUsableInCombat. Currently routes through existing `CharacterUseConsumableAction` (fires immediately, doesn't queue — future polish to make queue-aware per spec §12).
 
+### Queued-action label name (post-2026-05-17 first-playtest polish)
+
+`SetActionIntent(action, target, actionName)` takes an optional human-readable label. Stored on `PlannedActionName` (cleared in `ClearActionIntent` / `LeaveBattle` / `ForceExitCombatMode` alongside `PlannedAction`). `UI_CombatQueuedLabel` reads it to render `"Queued: Melee Attack → Lumi"` instead of the generic `"Queued: Action → Lumi"` v1 placeholder.
+
+When adding a new caller that queues an action, pass a label:
+- Attack: `"Melee Attack"` or `"Ranged Attack"` derived from `weapon is RangedWeaponInstance`.
+- Ability: pass `AbilitySO.AbilityName` (e.g., `"Fireball"`).
+- Item: pass `ItemSO.ItemName` (e.g., `"Health Potion"`).
+- Default: any caller that omits the param falls back to `"Action"` (matches v1 behavior — no breakage).
+
 ### CharacterEquipment surface
 
 - `ActiveWeaponIndex` — server-authoritative cursor into `Inventory.GetWeaponInstances()`. Server writes via `_activeWeaponIndexNet` NetworkVariable.

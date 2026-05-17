@@ -41,9 +41,16 @@ namespace MWI.UI.Combat
             if (_visualRoot != null) _visualRoot.SetActive(true);
             if (_label != null)
             {
-                string actionName = ResolveActionName(action);
+                // Read the action name set by SetActionIntent's optional actionName
+                // parameter (added 2026-05-17 — see CharacterCombat.PlannedActionName).
+                // Callers without a label fall back to "Action".
+                string actionName = _character?.CharacterCombat?.PlannedActionName ?? "Action";
                 string targetName = target != null ? target.CharacterName : "—";
-                _label.text = $"▶ Queued: {actionName} → {targetName}";
+                // No leading glyph — LiberationSans (project default TMP font) doesn't
+                // include the U+25B6 black-right-pointing-triangle, so it renders as a
+                // square. The "→ <target>" alone conveys direction. See
+                // wiki/gotchas/tmp-font-glyph-fallback.md.
+                _label.text = $"Queued: {actionName} → {targetName}";
             }
         }
 
@@ -52,16 +59,6 @@ namespace MWI.UI.Combat
         private void Hide()
         {
             if (_visualRoot != null) _visualRoot.SetActive(false);
-        }
-
-        private string ResolveActionName(Func<bool> action)
-        {
-            // PlannedAction is a closure with no embedded semantic identity. Until
-            // SetActionIntent gains an ActionDescriptor parameter (deferred polish),
-            // we emit a generic label. The blue glow on the action bar button still
-            // tells the player WHICH button they queued, so the missing per-action
-            // text is acceptable for v1.
-            return "Action";
         }
 
         private void Unsubscribe()

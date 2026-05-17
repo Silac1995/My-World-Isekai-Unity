@@ -55,14 +55,16 @@ _(empty — Spine 2D migration should get its own project page; see memory `proj
 ## Decisions / ADRs (1)
 - [[adr-0001-living-world-hierarchy-refactor]] — Region → { MapController, WildernessZone, WeatherFront } (accepted 2026-04-21).
 
-## Gotchas (8)
+## Gotchas (10)
 - [[chain-action-isvalid-pre-filter]] — Chain-consumer GOAP actions (`PlantCrop`, `WaterCrop`, `ReturnToolToStorage`) must NOT re-check carry state in `IsValid` — Job-side pre-filter would drop them before the planner can chain `Fetch → Consume`.
 - [[dont-clone-prefabs-with-networkobject-for-visuals]] — Cloning a prefab with `NetworkObject` for visual-only purposes silently breaks on clients.
 - [[furnituremanager-replace-style-rescan]] — FurnitureManager rescan flow caveat.
 - [[host-progressive-freeze-debug-log-spam]] — Ungated `Debug.Log` calls in hot paths cause progressive host freeze on Windows.
 - [[material-buildproperties-standalone-crash]] — Standalone Mono build crashes natively in `Material::BuildProperties → UpdateTextureInfo` during scene load when a material the Editor tolerates has subtly-broken serialization. PDB-first diagnostic protocol + Editor-vs-build serialization tolerance lessons from the May 2026 5-hour debug session.
+- [[reflection-vs-serializedobject-persistence]] — `FieldInfo.SetValue` on a scene `SerializeField` bypasses Unity's SerializedProperty tracking, so SaveScene writes back the OLD value — field reverts to null on next scene load. Always use `SerializedObject.FindProperty(...).objectReferenceValue = x` + `ApplyModifiedPropertiesWithoutUndo()` for scene wiring.
 - [[singular-owner-vs-multi-owner-isowner]] — Auth gates that compare against `building.Owner` (singular first-entry getter) silently reject every owner except the first. Use `building.IsOwner(character)` against the full replicated `_ownerIds` list.
 - [[static-registry-late-joiner-race]] — Static registries (`TerrainTypeRegistry`, `CropRegistry`, …) are uninitialised on joining clients because `LaunchSequence` is host-only — fix is lazy auto-init in `Get()`.
+- [[tmp-font-glyph-fallback]] — LiberationSans (project default TMP font) doesn't cover emoji or many geometric/math glyphs (▶ 🧪 ⇄). TMP substitutes `□` and logs a warning. Use ASCII / BMP-safe alternatives in UI strings, or add a fallback font with emoji coverage.
 - [[worldstate-predicate-action-isvalid-divergence]] — `Job._scratchWorldState` predicates (e.g. `hasUnfilledHarvestTask`) MUST mirror the consuming GOAP action's `IsValid` filter exactly — divergence freezes the worker on a goal whose plan can't form.
 
 ## Meetings (0)

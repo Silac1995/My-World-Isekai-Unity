@@ -210,7 +210,9 @@ public class UI_CombatActionMenu : MonoBehaviour
         if (initialTarget == null && bm != null) initialTarget = bm.GetBestTargetFor(_character);
         if (initialTarget == null) return;
 
-        _characterCombat.SetActionIntent(() => _characterCombat.Attack(_characterCombat.PlannedTarget), initialTarget);
+        // active was resolved at the top of this method — re-use it to label the queued action.
+        string actionName = active is RangedWeaponInstance ? "Ranged Attack" : "Melee Attack";
+        _characterCombat.SetActionIntent(() => _characterCombat.Attack(_characterCombat.PlannedTarget), initialTarget, actionName);
     }
 
     private void OnReloadClicked() { _characterCombat?.TryQueueReload(); }
