@@ -74,6 +74,21 @@ namespace MWI.WorldSystem
         [SerializeField] private bool _hibernationEnabled = false;
 
         private BoxCollider _mapTrigger;
+
+        /// <summary>
+        /// Server-only per-map building occupancy grid. Initialised in <see cref="Awake"/>;
+        /// populated lazily as each <see cref="Building.OnNetworkSpawn"/> fires. Never replicated.
+        /// </summary>
+        private BuildingGrid _buildingGrid;
+
+        /// <summary>
+        /// The per-map <see cref="BuildingGrid"/>. Returns a usable instance on every spawned
+        /// MapController (even pre-OnNetworkSpawn, as long as Awake has fired). Returns null
+        /// only for un-instantiated MapControllers (test fixtures using <see cref="AddComponent"/>
+        /// inside the same frame without Awake having run — extremely rare in production).
+        /// </summary>
+        public BuildingGrid BuildingGrid => _buildingGrid;
+
         public NetworkVariable<bool> IsActive = new NetworkVariable<bool>(false);
 
         [Header("Biome & Map Type")]
@@ -221,6 +236,14 @@ namespace MWI.WorldSystem
         {
             _mapTrigger = GetComponent<BoxCollider>();
             _mapTrigger.isTrigger = true;
+
+            // BuildingGrid is created with a world-space origin of Vector2.zero so cells
+            // are indexed from world origin (not map center). This means two maps in the
+            // same Region share a coordinate system — never confusing two cells that look
+            // close visually but belong to different maps. Sparse-by-design (Dictionary
+            // under the hood) so the grid implicitly spans the entire Region with zero
+            // allocation cost until cells are actually occupied.
+            _buildingGrid = new BuildingGrid(Vector2.zero);
         }
 
         /// <summary>
