@@ -926,7 +926,7 @@ public class BuildingLogisticsManager : MonoBehaviour
                 // delivery and failed. The buyer is unaffected; they did their part.
                 if (undelivered > 0 && _building is CommercialBuilding supplierAsCommercial)
                 {
-                    supplierAsCommercial.TryChangeReputation(-5, $"ExpiredOrder_{expired.ItemToTransport?.ItemName}_undelivered{undelivered}");
+                    supplierAsCommercial.TryChangeReputation(-2, $"ExpiredOrder_{expired.ItemToTransport?.ItemName}_undelivered{undelivered}");
                 }
 
                 // Transporter Building reputation hit (2026-05-17, Phase C3). Walks the
@@ -946,7 +946,7 @@ public class BuildingLogisticsManager : MonoBehaviour
                         if (to.AssociatedBuyOrder != expired) continue;
                         if (to.IsCompleted) continue;
                         if (to.HostTransporter == null) continue;
-                        to.HostTransporter.TryChangeReputation(-5,
+                        to.HostTransporter.TryChangeReputation(-2,
                             $"FailedTransport_{expired.ItemToTransport?.ItemName}_for_{expired.Destination?.BuildingName}");
                     }
                 }
