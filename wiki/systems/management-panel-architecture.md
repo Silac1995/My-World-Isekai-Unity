@@ -3,7 +3,7 @@ type: system
 title: "Owner Management Panel — Polymorphic Tabs"
 tags: [building, ui, owner, management, tabs, tier-2]
 created: 2026-05-07
-updated: 2026-05-08
+updated: 2026-05-17
 sources: []
 related:
   - "[[commercial-building]]"
@@ -253,6 +253,7 @@ OnDestroy → `_instance = null` (when applicable) → cascade `Dispose` to rema
 
 ## Change log
 
+- 2026-05-17 — **Multi-owner gate fix.** `ManagementFurniture.OnInteract` (toast "Only the owner can use this management desk") and `UI_OwnerManagementPanel.ShowInternal` (defense-in-depth gate) both compared against `building.Owner` — the singular getter that returns only `_ownerIds[0]`. A secondary owner added via `CommercialBuilding.AddOwner` (the canonical multi-owner path — exposed by the dev console's `[DEV] Add Owner` button and reserved for future co-ownership flows) was incorrectly rejected by both gates. Fixed both call sites to route through `Room.IsOwner(Character)`, which compares against the full replicated `_ownerIds` `NetworkList<FixedString64Bytes>`. Network-safe: `_ownerIds` is server-write / everyone-read, late-joiners receive the full list on subscribe. Same multi-owner predicate the building's internal authority check (`CommercialBuilding.CanRequester...`) and `ResidentialBuilding.IsOwner` already use — this fix brings the furniture/panel auth into alignment with that pattern. — claude
 - 2026-05-07 — Initial documentation of the polymorphic tab system. Foundation only; per-job hiring + universal Storage tab deferred to dedicated phases. — claude
 
 ## Sources

@@ -49,7 +49,13 @@ public class ManagementFurniture : Furniture
             return false;
         }
 
-        if (!building.HasOwner || building.Owner != character)
+        // Multi-owner aware: route through Room.IsOwner(Character) — compares the character's
+        // UUID against the FULL replicated _ownerIds NetworkList. The legacy
+        // `building.Owner != character` check only matched the FIRST owner (the singular
+        // Owner getter returns `_ownerIds[0]`), so a secondary owner added via
+        // `CommercialBuilding.AddOwner` (e.g. the dev console's "[DEV] Add Owner" button
+        // or any future co-ownership flow) was incorrectly rejected with the toast below.
+        if (!building.IsOwner(character))
         {
             UI_Toast.Show("Only the owner can use this management desk.", ToastType.Warning, duration: 3f, title: "Not your desk");
             return true;
