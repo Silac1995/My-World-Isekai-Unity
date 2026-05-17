@@ -240,6 +240,13 @@ public class PlayerController : CharacterGameController
                     HandleEKeyUp();
                 }
 
+                // --- In-battle combat hotkeys: Space (attack queue), R (reload), Y (swap),
+                //     1-6 (abilities). Gated by IsInBattle inside the handler. Per rule #33,
+                //     all combat input lives here in PlayerController, never scattered into
+                //     UI scripts. UI button onClick handlers call the same CharacterCombat /
+                //     CharacterAbilities / PlayerUI methods these hotkeys invoke.
+                HandleCombatHotkeys();
+
                 // Auto-Trigger Combat Command when in battle. The command handles pacing and action execution.
                 if (_character.CharacterCombat.IsInBattle && !(_currentOrder is PlayerCombatCommand))
                 {
@@ -292,6 +299,9 @@ public class PlayerController : CharacterGameController
                     SetOrder(null);
                 }
 
+                // Out-of-battle Space → direct attack. The in-battle Space branch is owned
+                // by HandleCombatHotkeys above (queues via SetActionIntent for initiative-paced
+                // execution rather than firing immediately).
                 if (!_character.CharacterCombat.IsInBattle && Input.GetKeyDown(KeyCode.Space))
                 {
                     _character.CharacterCombat.Attack(null);
@@ -323,6 +333,57 @@ public class PlayerController : CharacterGameController
         _character.CharacterActions.ExecuteAction(new CharacterDropItem(_character, hands.CarriedItem));
     }
 
+    /// <summary>
+    /// In-battle hotkey block (rule #33 — all player-character input lives in PlayerController).
+    /// Space queues an attack via SetActionIntent for ATB-paced execution.
+    /// R queues a reload (magazine weapons only).
+    /// Y queues a weapon swap (carried >= 2).
+    /// 1-6 fire the corresponding active ability slot — suppressed while the
+    /// CombatItemsWindow owns numeric input (the window's 1-9 row select binding).
+    /// E is handled in HandleEKeyDown's PRIORITY 0 branch (toggles the items window).
+    /// </summary>
+    private void HandleCombatHotkeys()
+    {
+        if (_character?.CharacterCombat == null || !_character.CharacterCombat.IsInBattle) return;
+
+        var combat = _character.CharacterCombat;
+
+        // Space — in-battle attack queue (cancel queued if already set; fall back to
+        // BattleManager.GetBestTargetFor if no PlannedTarget yet).
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            if (combat.HasPlannedAction) { combat.ClearActionIntent(); return; }
+            Character initialTarget = combat.PlannedTarget;
+            var bm = combat.CurrentBattleManager;
+            if (initialTarget != null && bm != null && (bm.GetTeamOf(initialTarget) == null || !initialTarget.IsAlive()))
+            {
+                initialTarget = null;
+            }
+            if (initialTarget == null && bm != null) initialTarget = bm.GetBestTargetFor(_character);
+            if (initialTarget != null)
+            {
+                combat.SetActionIntent(() => combat.Attack(combat.PlannedTarget), initialTarget);
+            }
+            return;
+        }
+
+        if (Input.GetKeyDown(KeyCode.R)) { combat.TryQueueReload(); return; }
+        if (Input.GetKeyDown(KeyCode.Y)) { combat.TryQueueSwapWeapon(); return; }
+
+        // 1-6 ability hotkeys — suppressed when the items window owns numeric input.
+        bool itemsWindowOpen = PlayerUI.Instance != null && PlayerUI.Instance.IsCombatItemsWindowOpen;
+        if (itemsWindowOpen) return;
+
+        for (int i = 0; i < 6; i++)
+        {
+            if (Input.GetKeyDown((KeyCode)(KeyCode.Alpha1 + i)))
+            {
+                _character.CharacterAbilities?.TryUseSlot(i, combat.PlannedTarget);
+                return;
+            }
+        }
+    }
+
     private const float E_HOLD_THRESHOLD = 0.4f;
     private float _eHeldStartTime;
     private bool _eMenuOpened;
@@ -336,6 +397,18 @@ public class PlayerController : CharacterGameController
     {
         _eHeldStartTime = UnityEngine.Time.unscaledTime;
         _eMenuOpened = false;
+
+        // PRIORITY 0: in-battle E toggles the combat items sub-window. Short-circuits
+        // the entire 5-priority chain below — combat consumable use routes exclusively
+        // through the Items window (which queues TryQueueUseItem for initiative-paced
+        // firing), not through the field-eat path (priority 5 below). Out of battle
+        // the existing 5-priority dispatcher is unchanged.
+        if (_character?.CharacterCombat?.IsInBattle == true)
+        {
+            PlayerUI.Instance?.ToggleCombatItemsWindow(_character);
+            _eMenuOpened = true;
+            return;
+        }
 
         var hands = _character?.CharacterVisual?.BodyPartsController?.HandsController;
         var heldItemSO = hands != null && hands.CarriedItem != null ? hands.CarriedItem.ItemSO : null;
