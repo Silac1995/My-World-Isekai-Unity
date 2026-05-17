@@ -16,7 +16,4 @@ public class CharacterBehavioralTraitsSO : ScriptableObject
     [Tooltip("How likely the character is to help acquaintances (not just friends) in combat.")]
     public float loyalty = 0.5f;
 
-    [Header("Abilities")]
-    [Tooltip("Can this character found a new community?")]
-    public bool canCreateCommunity = false;
 }

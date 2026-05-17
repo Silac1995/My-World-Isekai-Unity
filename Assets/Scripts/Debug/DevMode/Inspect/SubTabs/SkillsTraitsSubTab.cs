@@ -17,7 +17,6 @@ public class SkillsTraitsSubTab : CharacterSubTab
             sb.AppendLine($"  Aggressivity: {traits.GetAggressivity():F2}");
             sb.AppendLine($"  Sociability: {traits.GetSociability():F2}");
             sb.AppendLine($"  Loyalty: {traits.GetLoyalty():F2}");
-            sb.AppendLine($"  Can Create Community: {traits.CanCreateCommunity()}");
         }
         else
         {

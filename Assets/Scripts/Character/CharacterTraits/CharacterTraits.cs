@@ -30,14 +30,6 @@ public class CharacterTraits : CharacterSystem, ICharacterSaveData<TraitsSaveDat
         return behavioralTraitsProfile != null ? behavioralTraitsProfile.loyalty : 0f;
     }
 
-    /// <summary>
-    /// Checks if the character has the ability to found a community.
-    /// </summary>
-    public bool CanCreateCommunity()
-    {
-        return behavioralTraitsProfile != null ? behavioralTraitsProfile.canCreateCommunity : false;
-    }
-
     // --- ICharacterSaveData IMPLEMENTATION ---
 
     public string SaveKey => "CharacterTraits";
