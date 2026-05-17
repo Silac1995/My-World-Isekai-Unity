@@ -35,7 +35,7 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
         if (_character.CharacterTraits == null || !_character.CharacterTraits.CanCreateCommunity()) return;
 
         // 2. Requirement: Not already leading a community (cannot lead two)
-        if (_currentCommunity != null && _currentCommunity.leader == _character) return;
+        if (_currentCommunity != null && _currentCommunity.IsLeader(_character)) return;
 
         // 3. Requirement: 4 Friends
         int friendCount = _character.CharacterRelation != null ? _character.CharacterRelation.GetFriendCount() : 0;
@@ -83,7 +83,7 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
     /// </summary>
     public void BreakFreeFromParent()
     {
-        if (_currentCommunity != null && _currentCommunity.leader == _character)
+        if (_currentCommunity != null && _currentCommunity.IsLeader(_character))
         {
             _currentCommunity.DeclareIndependence();
         }
@@ -114,7 +114,7 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
 
     public void InviteToCommunity(Character target)
     {
-        if (target == null || _currentCommunity == null || _currentCommunity.leader != _character) return;
+        if (target == null || _currentCommunity == null || !_currentCommunity.IsLeader(_character)) return;
 
         // In a real scenario, this might trigger an Interaction "Offer to join".
         // For now, immediately force join.
@@ -126,7 +126,7 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
 
     public void RemoveFromCommunity(Character target)
     {
-        if (target == null || _currentCommunity == null || _currentCommunity.leader != _character) return;
+        if (target == null || _currentCommunity == null || !_currentCommunity.IsLeader(_character)) return;
 
         if (target.CharacterCommunity != null)
         {
@@ -150,8 +150,8 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
             {
                 foreach (var commData in MWI.WorldSystem.MapRegistry.Instance.GetAllCommunities())
                 {
-                    // Match by leader — communities are uniquely led
-                    if (_currentCommunity.leader != null && commData.IsLeader(_currentCommunity.leader.CharacterId))
+                    // Match by primary leader — communities are uniquely led
+                    if (_currentCommunity.PrimaryLeader != null && commData.IsLeader(_currentCommunity.PrimaryLeader.CharacterId))
                     {
                         mapId = commData.MapId;
                         break;

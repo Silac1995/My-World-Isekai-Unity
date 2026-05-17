@@ -10,7 +10,7 @@ public class InteractionInviteCommunity : InteractionInvitation
         // Source must lead a community
         if (source.CharacterCommunity == null || 
             source.CharacterCommunity.CurrentCommunity == null || 
-            source.CharacterCommunity.CurrentCommunity.leader != source)
+            !source.CharacterCommunity.CurrentCommunity.IsLeader(source))
         {
             return false;
         }
