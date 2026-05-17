@@ -35,6 +35,10 @@ namespace MWI.UI.Management
         [Tooltip("Optional header label (e.g. 'Roster: 2 / 3'). Null is fine.")]
         [SerializeField] private TextMeshProUGUI _rosterHeaderLabel;
 
+        [Header("Reputation (read-only — 2026-05-17f)")]
+        [Tooltip("Optional label showing 'Reputation: N/100' with a colour-coded current value. Subscribes to CommercialBuilding.OnReputationChanged for live updates. Leave null to skip the section entirely (no Inspector wiring required for older HiringTab prefab variants).")]
+        [SerializeField] private TextMeshProUGUI _reputationLabel;
+
         private CommercialBuilding _building;
         private readonly List<HiringRosterRow> _rosterRows = new();
 
@@ -49,9 +53,11 @@ namespace MWI.UI.Management
             {
                 _building.OnHiringStateChanged += HandleHiringChanged;
                 _building.OnJobsChanged += RefreshRoster;
+                _building.OnReputationChanged += HandleReputationChanged;
             }
             Refresh();
             RefreshRoster();
+            RefreshReputation();
         }
 
         public void OnTabActivated()   { /* no-op — view is live the whole time it's bound */ }
@@ -64,6 +70,7 @@ namespace MWI.UI.Management
             {
                 _building.OnHiringStateChanged -= HandleHiringChanged;
                 _building.OnJobsChanged -= RefreshRoster;
+                _building.OnReputationChanged -= HandleReputationChanged;
             }
             _building = null;
             ClearRosterRows();
@@ -71,11 +78,35 @@ namespace MWI.UI.Management
         }
 
         private void HandleHiringChanged(bool _) => Refresh();
+        private void HandleReputationChanged(int _, int __) => RefreshReputation();
 
         private void Refresh()
         {
             if (_building == null || _toggleHiringLabel == null) return;
             _toggleHiringLabel.text = _building.IsHiring ? "Close Hiring" : "Open Hiring";
+        }
+
+        /// <summary>
+        /// Update the reputation label (if wired) with the current `Reputation/100`
+        /// value, colour-coded against the B2B floor:
+        ///   green  ≥ ReputationB2BMinimum (procurement-eligible)
+        ///   amber  1..(B2B-1)             (visible to customers, invisible to B2B)
+        ///   red    0                      (rock bottom)
+        /// Silent no-op when the label SerializeField is unwired — older
+        /// HiringTab prefab variants don't carry the label yet (designer adds
+        /// it without code changes).
+        /// </summary>
+        private void RefreshReputation()
+        {
+            if (_reputationLabel == null || _building == null) return;
+            int rep = _building.Reputation;
+            string color = rep >= CommercialBuilding.ReputationB2BMinimum
+                ? "#64FF64"
+                : rep > 0 ? "#FFB060" : "#FF6464";
+            string suffix = rep < CommercialBuilding.ReputationB2BMinimum
+                ? "  <size=80%><color=#999999>(below B2B floor)</color></size>"
+                : "";
+            _reputationLabel.text = $"Reputation: <color={color}>{rep}/{CommercialBuilding.ReputationMax}</color>{suffix}";
         }
 
         private void ClearRosterRows()

@@ -3737,6 +3737,23 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
+    /// Dev-only: tweak the building's reputation directly by <paramref name="delta"/>.
+    /// Routes through <see cref="TryChangeReputation"/> so the standard clamp
+    /// (<see cref="ReputationMin"/>..<see cref="ReputationMax"/>), the
+    /// <see cref="OnReputationChanged"/> event, the replicated <c>_reputation</c>
+    /// NetworkVariable, and the existing audit-log call all fire as if a
+    /// production rep event had happened. Bypasses no auth (rep has no owner
+    /// gate today — the only writers are server-side game events). Authored
+    /// 2026-05-17f to feed the dev-mode console-management +/- buttons.
+    /// </summary>
+    public void DevForceChangeReputation(int delta)
+    {
+        if (!DevAssertHostAndDevMode("DevForceChangeReputation")) return;
+        if (delta == 0) return;
+        TryChangeReputation(delta, $"DevForceChangeReputation:delta={delta}");
+    }
+
+    /// <summary>
     /// Dev-only: assign a <see cref="StorageRoleType"/> directly to a child
     /// <see cref="StorageFurniture"/>, bypassing the owner auth check applied
     /// by <see cref="TrySetStorageRoleServerRpc"/>. Still honours the

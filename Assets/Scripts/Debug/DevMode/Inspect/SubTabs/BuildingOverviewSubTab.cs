@@ -206,6 +206,19 @@ public sealed class BuildingOverviewSubTab : BuildingSubTab
             ? "<color=#64FF64>Yes</color>"
             : "<color=#FFB060>No</color>");
 
+        // Reputation read-out (2026-05-17f). Range [0..100]; B2B floor is 20.
+        // Colour-coded: ≥B2B-floor green, 1..<B2B-floor amber, 0 red.
+        int rep = cb.Reputation;
+        string repColor = rep >= CommercialBuilding.ReputationB2BMinimum
+            ? "#64FF64"
+            : rep > 0 ? "#FFB060" : "#FF6464";
+        sb.Append("  <b>Reputation:</b> <color=").Append(repColor).Append(">")
+          .Append(rep).Append('/').Append(CommercialBuilding.ReputationMax).Append("</color>")
+          .Append(rep < CommercialBuilding.ReputationB2BMinimum
+              ? " <color=grey>(below B2B floor — procurement skips this shop)</color>"
+              : "")
+          .AppendLine();
+
         var community = cb.OwnerCommunity;
         if (community != null)
         {

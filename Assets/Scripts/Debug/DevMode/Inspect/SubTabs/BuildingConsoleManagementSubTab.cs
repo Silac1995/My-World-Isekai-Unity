@@ -76,6 +76,7 @@ public sealed class BuildingConsoleManagementSubTab : BuildingSubTab
         if (_bound is CommercialBuilding cb)
         {
             BuildHiringSection(cb);
+            BuildReputationSection(cb);
             BuildOwnerSection(cb);
             BuildJobsSection(cb);
             BuildStorageRolesSection(cb);
@@ -136,6 +137,32 @@ public sealed class BuildingConsoleManagementSubTab : BuildingSubTab
             cb.DevForceSetHiring(!cb.IsHiring);
             RebuildAll();
         }, row.transform);
+    }
+
+    /// <summary>
+    /// Dev-mode reputation panel — current value (colour-coded against the B2B floor)
+    /// + four nudge buttons that route through <c>CommercialBuilding.DevForceChangeReputation</c>.
+    /// Authored 2026-05-17f. Read-only mirror lives in <see cref="BuildingOverviewSubTab"/>
+    /// — this tab adds the mutator buttons.
+    /// </summary>
+    private void BuildReputationSection(CommercialBuilding cb)
+    {
+        MakeHeader("Reputation");
+
+        int rep = cb.Reputation;
+        string repColor = rep >= CommercialBuilding.ReputationB2BMinimum
+            ? "#64FF64"
+            : rep > 0 ? "#FFB060" : "#FF6464";
+        string suffix = rep < CommercialBuilding.ReputationB2BMinimum
+            ? "  <color=grey>(below B2B floor — procurement skips)</color>"
+            : "";
+
+        var row = MakeRow();
+        MakeLabel($"<color={repColor}>{rep}/{CommercialBuilding.ReputationMax}</color>{suffix}", row.transform);
+        MakeButton("[DEV] −10", () => { cb.DevForceChangeReputation(-10); RebuildAll(); }, row.transform);
+        MakeButton("[DEV] −1",  () => { cb.DevForceChangeReputation(-1);  RebuildAll(); }, row.transform);
+        MakeButton("[DEV] +1",  () => { cb.DevForceChangeReputation(+1);  RebuildAll(); }, row.transform);
+        MakeButton("[DEV] +10", () => { cb.DevForceChangeReputation(+10); RebuildAll(); }, row.transform);
     }
 
     private void BuildOwnerSection(CommercialBuilding cb)
