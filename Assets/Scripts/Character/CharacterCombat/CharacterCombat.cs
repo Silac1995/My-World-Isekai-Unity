@@ -41,6 +41,19 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
     public Character PlannedTarget { get; private set; }
     public event Action<Character, Func<bool>> OnActionIntentDecided;
 
+    /// <summary>
+    /// Fired whenever the per-character Initiative value changes (in tick percent 0..1).
+    /// Drives UI_CombatInitiativeBar repaint. Fires from UpdateInitiativeTick after the
+    /// stat mutation; does NOT fire on every frame regardless of change.
+    /// </summary>
+    public event Action<float> OnInitiativeChanged;
+
+    /// <summary>
+    /// Fired when the queued action intent is cleared (player cancelled, action consumed,
+    /// battle ended). Drives UI_CombatQueuedLabel.Hide.
+    /// </summary>
+    public event Action OnActionIntentCleared;
+
     public void SetActionIntent(Func<bool> action, Character target)
     {
         PlannedAction = action;
@@ -56,6 +69,8 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         Debug.Log($"<color=cyan>[Combat]</color> {_character.CharacterName} ClearActionIntent → PlannedTarget: {PlannedTarget?.CharacterName ?? "null"} → null");
         PlannedAction = null;
         PlannedTarget = null;
+
+        OnActionIntentCleared?.Invoke();
 
         // Only clear look target outside of battle.
         // During combat, the character should keep facing their target between actions
@@ -151,6 +166,13 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         if (_character.Stats != null && _character.Stats.Initiative != null)
         {
             _character.Stats.Initiative.IncreaseCurrentAmount(tickAmount);
+
+            // Surface initiative percent 0..1 to UI subscribers (rule #34 — fires only when value changes via IncreaseCurrentAmount).
+            float maxVal = _character.Stats.Initiative.MaxValue;
+            float pct = maxVal > 0f
+                ? Mathf.Clamp01(_character.Stats.Initiative.CurrentAmount / maxVal)
+                : 0f;
+            OnInitiativeChanged?.Invoke(pct);
         }
     }
 
@@ -186,6 +208,64 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
     #endregion
 
     #region Action Methods
+
+    #region Queue Helpers (UI / NPC entry points)
+    /// <summary>
+    /// Queues a reload action if the active weapon is a MagazineWeaponInstance with room to
+    /// reload and no reload already in progress. Player UI + R hotkey entry point; NPC AI
+    /// can call the same helper. Returns true if the action was queued.
+    /// Real implementation lives in CharacterAction_Reload (Task 5).
+    /// </summary>
+    public bool TryQueueReload()
+    {
+        var equipment = _character?.CharacterEquipment;
+        if (equipment == null) return false;
+
+        // Task 4 adds ActiveWeaponIndex + multi-weapon list; until then CurrentWeapon is the single slot.
+        if (!(equipment.CurrentWeapon is MagazineWeaponInstance mag)) return false;
+        if (mag.IsReloading) return false;
+        if (mag.CurrentAmmo >= mag.MagazineSize) return false;
+
+        _character.CharacterActions?.ExecuteAction(new CharacterAction_Reload(_character, mag));
+        return true;
+    }
+
+    /// <summary>
+    /// Queues a weapon-swap action if the character carries 2+ weapons and no swap is already
+    /// in flight. Player UI + Y hotkey entry; NPC AI can call the same helper.
+    /// Real implementation lives in CharacterAction_SwapWeapon (Task 6).
+    /// </summary>
+    public bool TryQueueSwapWeapon()
+    {
+        var equipment = _character?.CharacterEquipment;
+        if (equipment == null) return false;
+
+        // Reject if a swap is already running (the action class enforces server-side too).
+        if (_character.CharacterActions?.CurrentAction is CharacterAction_SwapWeapon) return false;
+
+        _character.CharacterActions?.ExecuteAction(new CharacterAction_SwapWeapon(_character));
+        return true;
+    }
+
+    /// <summary>
+    /// Queues a consumable use against a target (self for healing, planned target for thrown).
+    /// Routes through CharacterUseConsumableAction — the same path the player and NPC AI use
+    /// outside of combat. Task 7 will wire initiative gating if needed.
+    /// Returns true if the action was queued.
+    /// </summary>
+    public bool TryQueueUseItem(ConsumableInstance consumable, Character target)
+    {
+        if (consumable == null) return false;
+        if (consumable.ConsumableData != null && !consumable.ConsumableData.IsUsableInCombat) return false;
+
+        // For self-target items (potions), default to _character when no target is supplied.
+        if (target == null) target = _character;
+
+        return _character.CharacterActions?.ExecuteAction(
+            new CharacterUseConsumableAction(_character, consumable)) ?? false;
+    }
+    #endregion
+
     public bool ExecuteAction(System.Func<bool> combatAction)
     {
         if (combatAction != null && combatAction.Invoke())
@@ -472,6 +552,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         _currentBattleManager = null;
         PlannedAction = null;
         PlannedTarget = null;
+        OnActionIntentCleared?.Invoke();
         _character.CharacterVisual?.ClearLookTarget();
 
         _lastCombatActionTime = Time.time;
@@ -617,6 +698,7 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         _currentBattleManager = null;
         PlannedAction = null;
         PlannedTarget = null;
+        OnActionIntentCleared?.Invoke();
         _character.CharacterVisual?.ClearLookTarget();
         ChangeCombatMode(false);
     }
