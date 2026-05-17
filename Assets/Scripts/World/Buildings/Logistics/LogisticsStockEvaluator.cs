@@ -205,10 +205,17 @@ public class LogisticsStockEvaluator
     /// Attempts to route a BuyOrder for <paramref name="itemSO"/> × <paramref name="quantityToOrder"/>
     /// to the best-matching supplier. Dedupes against existing in-flight and
     /// in-queue orders (so tick-after-tick calls don't spam orders).
+    ///
+    /// Returns <c>true</c> if stock was sourced — either a B2B purchase committed, an
+    /// existing in-flight or pending order absorbed the demand, or a new BuyOrder was
+    /// placed. Returns <c>false</c> when no supplier of any tier (B2B, producer chain,
+    /// or virtual) could fulfil the request — callers (e.g.
+    /// <see cref="BuildingLogisticsManager.ProcessActiveBuildOrders"/>) use this signal
+    /// to fall back to physical-harvest via the AB's unfulfillable-material queue.
     /// </summary>
-    public void RequestStock(ItemSO itemSO, int quantityToOrder)
+    public bool RequestStock(ItemSO itemSO, int quantityToOrder)
     {
-        if (itemSO == null || quantityToOrder <= 0) return;
+        if (itemSO == null || quantityToOrder <= 0) return false;
 
         // B2B preference scan (2026-05-09): before falling through to the producer-based
         // BuyOrder path, see if a same-map ShopBuilding sells this item, has the stock,
@@ -216,7 +223,7 @@ public class LogisticsStockEvaluator
         // atomically (debit treasury → credit shop till → move items from sell-shelf
         // into shop inventory → enqueue BuyOrder with IsPlaced=true). The standard
         // transporter dispatch then ships items from shop to buyer.
-        if (TryB2BPurchaseFromShop(itemSO, quantityToOrder)) return;
+        if (TryB2BPurchaseFromShop(itemSO, quantityToOrder)) return true;
 
         var supplier = FindSupplierFor(itemSO);
         if (supplier == null)
@@ -226,7 +233,7 @@ public class LogisticsStockEvaluator
                 Debug.Log($"<color=#ff8866>[LogisticsDBG]</color> RequestStock → NO supplier found for {itemSO.ItemName} (qty={quantityToOrder}). Building '{_building.BuildingName}' cannot restock this item.");
             }
             Debug.LogWarning($"<color=orange>[BuildingLogisticsManager]</color>   Aucun fournisseur trouvé pour {itemSO.ItemName}.");
-            return;
+            return false;
         }
 
         if (_facade.LogLogisticsFlow)
@@ -238,14 +245,14 @@ public class LogisticsStockEvaluator
         if (supplierLogistics == null)
         {
             Debug.LogWarning($"<color=orange>[BuildingLogisticsManager]</color>   {supplier.BuildingName} n'a pas de LogisticsManager assigné.");
-            return;
+            return false;
         }
 
         bool alreadyOrdered = supplierLogistics.ActiveOrders.Any(o => o.ItemToTransport == itemSO && o.Destination == _building);
         if (alreadyOrdered)
         {
             Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   ⏳ {itemSO.ItemName}: BuyOrder déjà en cours chez {supplier.BuildingName}.");
-            return;
+            return true;
         }
 
         var pendingOrder = _orderBook.FindUnplacedBuyOrder(itemSO, supplier);
@@ -253,7 +260,7 @@ public class LogisticsStockEvaluator
         {
             Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   ⏳ {itemSO.ItemName}: Une commande en attente existe! Ajout de la quantité (+{quantityToOrder}) à celle-ci.");
             pendingOrder.AddQuantity(quantityToOrder);
-            return;
+            return true;
         }
 
         var buyOrder = new BuyOrder(
@@ -270,6 +277,7 @@ public class LogisticsStockEvaluator
         _orderBook.EnqueuePending(new BuildingLogisticsManager.PendingOrder(buyOrder, supplier));
 
         Debug.Log($"<color=cyan>[BuildingLogisticsManager]</color>   📦 Enregistrement d'une commande d'achat (BuyOrder) de {quantityToOrder}x {itemSO.ItemName} auprès de {supplier.BuildingName}.");
+        return true;
     }
 
     /// <summary>

@@ -681,6 +681,46 @@ public class BuildingLogisticsManager : MonoBehaviour
     public void RetryUnplacedOrders(Character worker = null) => _dispatcher.RetryUnplacedOrders(worker);
 
     /// <summary>
+    /// Plan 4b Task 6 — driven each <see cref="JobLogisticsManager"/> tick (alongside the
+    /// existing <see cref="ProcessActiveBuyOrders"/> + restock evaluation passes). For
+    /// every active <see cref="BuildOrder"/> on this building's order book, computes the
+    /// shortfall (missing − in-storage − in-flight) per required material and routes the
+    /// gap through <see cref="LogisticsStockEvaluator.RequestStock"/> (which cascades
+    /// B2B → producer → virtual). When no supplier of any tier exists — RequestStock
+    /// returns <c>false</c> — and this building is an <see cref="AdministrativeBuilding"/>,
+    /// the (item, qty) pair lands on the AB's
+    /// <c>_unfulfillableMaterialHarvestQueue</c> so the CityHarvester JobHarvester (Task 7)
+    /// can physically harvest the missing material.
+    ///
+    /// Server-only. No-op when no orders or no evaluator.
+    /// </summary>
+    public void ProcessActiveBuildOrders()
+    {
+        if (_evaluator == null || _orderBook == null) return;
+
+        var orders = _orderBook.ActiveBuildOrders;
+        for (int i = 0; i < orders.Count; i++)
+        {
+            var order = orders[i];
+            if (order == null || order.IsCompleted) continue;
+
+            foreach (var (itemSO, missing) in order.GetMissingMaterials())
+            {
+                int inStorage = _building != null ? _building.GetItemCount(itemSO) : 0;
+                int inFlight = _orderBook.SumInFlightQuantityFor(itemSO);
+                int needed = missing - inStorage - inFlight;
+                if (needed <= 0) continue;
+
+                bool sourced = _evaluator.RequestStock(itemSO, needed);
+                if (!sourced && _building is AdministrativeBuilding ab)
+                {
+                    ab.EnqueueUnfulfillableMaterial(itemSO, needed);
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Shift-punch storage-role assignment pass. Called by
     /// <see cref="CommercialBuilding.WorkerStartingShift"/> every time a worker punches
     /// in. Walks every <see cref="StorageFurniture"/> in the building (deterministic

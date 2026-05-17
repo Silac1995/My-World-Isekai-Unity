@@ -133,6 +133,12 @@ public class JobLogisticsManager : Job
         // Evaluer nos propres engagements envers les autres (BuyOrders reçues)
         _workplace.LogisticsManager.ProcessActiveBuyOrders();
 
+        // Plan 4b Task 6 — city construction supply chain. For every active BuildOrder,
+        // request materials through B2B → producer → virtual; fall back to physical
+        // harvest via AB._unfulfillableMaterialHarvestQueue when no supplier exists.
+        // No-op on non-AB workplaces (no BuildOrders ever placed).
+        _workplace.LogisticsManager.ProcessActiveBuildOrders();
+
 
         // Si on a une action en cours, l'exécuter
         if (_currentAction != null)
