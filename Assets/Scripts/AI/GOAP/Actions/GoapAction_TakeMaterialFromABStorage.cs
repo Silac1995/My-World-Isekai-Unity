@@ -187,7 +187,7 @@ public class GoapAction_TakeMaterialFromABStorage : GoapAction
     private BuildOrder GetActiveBuildOrder()
     {
         if (_ab == null) return null;
-        var blm = _ab.BuildingLogisticsManager;
+        var blm = _ab.LogisticsManager;
         return blm != null ? blm.GetFirstActiveBuildOrder() : null;
     }
 

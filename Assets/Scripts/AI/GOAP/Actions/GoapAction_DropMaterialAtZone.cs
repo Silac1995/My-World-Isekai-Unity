@@ -123,7 +123,7 @@ public class GoapAction_DropMaterialAtZone : GoapAction
     private BuildOrder GetActiveBuildOrder()
     {
         if (_ab == null) return null;
-        var blm = _ab.BuildingLogisticsManager;
+        var blm = _ab.LogisticsManager;
         return blm != null ? blm.GetFirstActiveBuildOrder() : null;
     }
 
