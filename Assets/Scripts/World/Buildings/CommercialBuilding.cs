@@ -37,11 +37,10 @@ public abstract class CommercialBuilding : Building
     [SerializeField] private bool _initialHiringOpen = true;
 
     [Header("Reputation")]
-    [Tooltip("Starting reputation on first spawn / fresh save (clamped 0–100). 50 = neutral. Tanks on failed B2B deliveries, recovers on successful ones. Below 20, the B2B preference scan skips this building when picking a supplier.")]
+    [Tooltip("Starting reputation on first spawn / fresh save. 50 = neutral. Tanks on failed B2B deliveries, recovers on successful ones. Below 20, the B2B preference scan skips this building when picking a supplier. NOTE (2026-05-17g): reputation has NO upper bound at runtime — exceptional buildings can climb arbitrarily high. The Inspector Range below is a designer-authoring sanity cap; runtime values may exceed it. Lower bound stays at 0 (rep can't go negative).")]
     [SerializeField, Range(0, 100)] private int _initialReputation = ReputationDefault;
 
     public const int ReputationMin     = 0;
-    public const int ReputationMax     = 100;
     public const int ReputationDefault = 50;
     /// <summary>Reputation floor below which the B2B preference scan refuses to source from this building.</summary>
     public const int ReputationB2BMinimum = 20;
@@ -54,11 +53,13 @@ public abstract class CommercialBuilding : Building
     public bool IsHiring => _isHiring.Value;
 
     /// <summary>
-    /// Server-authoritative per-building reputation (0–100). Replicated to every peer for
-    /// management UI / debug overlays. Default = <see cref="ReputationDefault"/> (50). Mutated
-    /// server-only via <see cref="TryChangeReputation"/>; clients listen via
-    /// <see cref="OnReputationChanged"/>. Authored 2026-05-16 as the consequence layer for
-    /// failed B2B deliveries — see [[commercial-treasury]] §Reputation.
+    /// Server-authoritative per-building reputation. Replicated to every peer for
+    /// management UI / debug overlays. Default = <see cref="ReputationDefault"/> (50).
+    /// <b>No upper bound (2026-05-17g)</b> — exceptional buildings can climb arbitrarily
+    /// high; <b>lower bound = <see cref="ReputationMin"/> (0)</b>. Mutated server-only
+    /// via <see cref="TryChangeReputation"/>; clients listen via
+    /// <see cref="OnReputationChanged"/>. Authored 2026-05-16 as the consequence layer
+    /// for failed B2B deliveries — see [[commercial-treasury]] §Reputation.
     /// </summary>
     private NetworkVariable<int> _reputation = new(
         ReputationDefault,
@@ -71,15 +72,18 @@ public abstract class CommercialBuilding : Building
     public event System.Action<int, int> OnReputationChanged;
 
     /// <summary>
-    /// Server-only mutator. Clamps the new value to [<see cref="ReputationMin"/>, <see cref="ReputationMax"/>],
-    /// no-ops if the clamped value equals the current value, and logs the transition + reason for
-    /// debugging. Returns true when the value actually moved.
+    /// Server-only mutator. Clamps the new value at <see cref="ReputationMin"/> only —
+    /// no upper bound (2026-05-17g — rep can exceed the 100 starting cap arbitrarily so
+    /// reliable suppliers / shops can pull away from the pack). No-ops if the clamped
+    /// value equals the current value. Logs the transition + reason for debugging.
+    /// Returns true when the value actually moved.
     /// </summary>
     public bool TryChangeReputation(int delta, string reason)
     {
         if (!IsServer) return false;
         int oldVal = _reputation.Value;
-        int newVal = Mathf.Clamp(oldVal + delta, ReputationMin, ReputationMax);
+        int newVal = oldVal + delta;
+        if (newVal < ReputationMin) newVal = ReputationMin;
         if (newVal == oldVal) return false;
         _reputation.Value = newVal;
         Debug.Log($"<color=#aa88ff>[Reputation]</color> {BuildingName}: {oldVal} → {newVal} (delta={(delta >= 0 ? "+" : "")}{delta}, reason='{reason}').");
@@ -87,14 +91,15 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
-    /// Server-only — overwrites reputation from save data. Bypasses the +delta clamp logic so
-    /// a saved-but-out-of-range value is still tolerated (clamped) without firing the "moved by X"
-    /// log line. Used by <c>MapController</c> save-restore.
+    /// Server-only — overwrites reputation from save data. Floor-clamps at
+    /// <see cref="ReputationMin"/> only; saved values above any historical cap are
+    /// trusted as-is (back-compat with the pre-2026-05-17g 0–100 range is automatic —
+    /// every saved value 0–100 falls inside the new unbounded range).
     /// </summary>
     public void RestoreReputationFromSave(int saved)
     {
         if (!IsServer) return;
-        int clamped = Mathf.Clamp(saved, ReputationMin, ReputationMax);
+        int clamped = saved < ReputationMin ? ReputationMin : saved;
         if (_reputation.Value == clamped) return;
         _reputation.Value = clamped;
     }
@@ -575,7 +580,11 @@ public abstract class CommercialBuilding : Building
         // RestoreReputationFromSave, so this seed only takes effect on a fresh world.
         if (IsServer && _reputation.Value == ReputationDefault && _initialReputation != ReputationDefault)
         {
-            _reputation.Value = Mathf.Clamp(_initialReputation, ReputationMin, ReputationMax);
+            // Floor-only clamp (2026-05-17g — no upper bound on reputation). Designer
+            // _initialReputation is [Range(0,100)] for authoring sanity but we don't
+            // re-enforce the 100 cap here since runtime is unbounded.
+            int seed = _initialReputation < ReputationMin ? ReputationMin : _initialReputation;
+            _reputation.Value = seed;
         }
         _reputation.OnValueChanged += HandleReputationChanged;
 
@@ -3738,8 +3747,8 @@ public abstract class CommercialBuilding : Building
 
     /// <summary>
     /// Dev-only: tweak the building's reputation directly by <paramref name="delta"/>.
-    /// Routes through <see cref="TryChangeReputation"/> so the standard clamp
-    /// (<see cref="ReputationMin"/>..<see cref="ReputationMax"/>), the
+    /// Routes through <see cref="TryChangeReputation"/> so the floor-clamp at
+    /// <see cref="ReputationMin"/> (no upper bound — 2026-05-17g), the
     /// <see cref="OnReputationChanged"/> event, the replicated <c>_reputation</c>
     /// NetworkVariable, and the existing audit-log call all fire as if a
     /// production rep event had happened. Bypasses no auth (rep has no owner

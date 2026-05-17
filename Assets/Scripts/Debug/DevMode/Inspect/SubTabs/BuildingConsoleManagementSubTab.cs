@@ -158,7 +158,7 @@ public sealed class BuildingConsoleManagementSubTab : BuildingSubTab
             : "";
 
         var row = MakeRow();
-        MakeLabel($"<color={repColor}>{rep}/{CommercialBuilding.ReputationMax}</color>{suffix}", row.transform);
+        MakeLabel($"<color={repColor}>{rep}</color>{suffix}", row.transform);
         MakeButton("[DEV] −10", () => { cb.DevForceChangeReputation(-10); RebuildAll(); }, row.transform);
         MakeButton("[DEV] −1",  () => { cb.DevForceChangeReputation(-1);  RebuildAll(); }, row.transform);
         MakeButton("[DEV] +1",  () => { cb.DevForceChangeReputation(+1);  RebuildAll(); }, row.transform);

@@ -87,8 +87,9 @@ namespace MWI.UI.Management
         }
 
         /// <summary>
-        /// Update the reputation label (if wired) with the current `Reputation/100`
-        /// value, colour-coded against the B2B floor:
+        /// Update the reputation label (if wired) with the current `Reputation`
+        /// value (unbounded since 2026-05-17g — no upper cap, just the number),
+        /// colour-coded against the B2B floor:
         ///   green  ≥ ReputationB2BMinimum (procurement-eligible)
         ///   amber  1..(B2B-1)             (visible to customers, invisible to B2B)
         ///   red    0                      (rock bottom)
@@ -106,7 +107,7 @@ namespace MWI.UI.Management
             string suffix = rep < CommercialBuilding.ReputationB2BMinimum
                 ? "  <size=80%><color=#999999>(below B2B floor)</color></size>"
                 : "";
-            _reputationLabel.text = $"Reputation: <color={color}>{rep}/{CommercialBuilding.ReputationMax}</color>{suffix}";
+            _reputationLabel.text = $"Reputation: <color={color}>{rep}</color>{suffix}";
         }
 
         private void ClearRosterRows()
