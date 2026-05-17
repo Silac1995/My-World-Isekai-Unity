@@ -3,7 +3,7 @@ type: system
 title: "Commercial Treasury"
 tags: [building, furniture, currency, logistics, network, tier-2]
 created: 2026-05-09
-updated: 2026-05-17d
+updated: 2026-05-17e
 sources: []
 related:
   - "[[commercial-building]]"
@@ -317,10 +317,28 @@ Per-building consequence layer that closes the loop on **failed deliveries**. Au
   - **−5 on order expiration with undelivered units (supplier).** Applies to BOTH B2B orders (Source is `ShopBuilding`, `IsPlaced=true`) AND producer-side orders. The supplier promised delivery and the supply chain failed to honour it. Same penalty per expired order regardless of who's at fault inside the chain.
   - **−5 on order expiration with undelivered units (transporter)** *(2026-05-17)*. Walks the supplier's `_orderBook.PlacedTransportOrders` for any `!IsCompleted` TO whose `AssociatedBuyOrder == expired`, then docks each `TransportOrder.HostTransporter` (captured at dispatch time in `LogisticsTransportDispatcher.DispatchTransportOrder`). Multiple TOs from the same carrier compound — failing several runs costs more rep than failing one.
   - **+1 on full BuyOrder completion (supplier).** Fires once, the moment `BuyOrder.RecordDelivery` flips `IsCompleted` true (inside `BuildingLogisticsManager.UpdateTransportOrderProgress`). Awards the supplier (`order.AssociatedBuyOrder.Source`).
-- **B2B preference gate (consumer):** `LogisticsStockEvaluator.TryB2BPurchaseFromShop` skips shops with `shop.Reputation < ReputationB2BMinimum` (20). Low-rep shops are invisible to the B2B preference scan until they recover through successful future deliveries; the buyer falls through to the producer path. Among qualifying shops the picker is currently first-found.
-- **Customer-NPC weighted shop pick** *(2026-05-17b)*: `GoapAction_GoShopping.FindQualifyingShopsWithItem` collects all shops on the map that sell the desired item, have an available cashier, and have at least one matching `ItemInstance` on a sell-shelf; then `PickShopByReputation` does a weighted-random pick where `weight = max(10, shop.Reputation)`. The floor of 10 vs a top-rep weight of 100 guarantees a 10:100 = 10% minimum relative weight for the lowest-rep shop — no shop is ever permanently invisible to customers. No hard B2B-style floor (`ReputationB2BMinimum`) applies to customers — they're random shoppers, not procurement officers.
+- **B2B preference gate (consumer):** `LogisticsStockEvaluator.TryB2BPurchaseFromShop` skips shops with `shop.Reputation < ReputationB2BMinimum` (20). Low-rep shops are invisible to the B2B preference scan until they recover through successful future deliveries; the buyer falls through to the producer path. Among the qualifying shops, the picker is reputation-weighted (see convention below).
+
+### Convention: NPC-buys-from-building → reputation-weighted decision *(2026-05-17d)*
+
+**Every NPC decision to buy goods or use a service from a `CommercialBuilding` is reputation-weighted.** This is a project-wide convention enforced by routing all such picks through the single helper:
+
+```csharp
+T pickedBuilding = ReputationWeightedPicker.Pick<T>(qualifiers); // T : CommercialBuilding
+```
+
+- **Formula:** `weight = max(ReputationWeightedPicker.WeightFloor, building.Reputation)` — `WeightFloor` is `10`, the rep ceiling is `100`. Lowest-rep building keeps a 10:100 = **10% minimum relative weight** vs a top-rep building. With more candidates in the pool, the lowest's raw probability dilutes naturally (10 / total-weight).
+- **Caller responsibility:** the qualifier filter (catalog match, stock, gates, subtype-specific hard floors like `ReputationB2BMinimum`). The picker only sorts already-qualifying candidates.
+- **Hard floor vs soft weight:** B2B procurement applies the hard floor `Reputation < ReputationB2BMinimum=20 → skip outright` (LogisticsManager NPC is rational procurement). Customer-NPC shopping does NOT — every qualifying shop competes by weight only (customers are random shoppers, not procurement officers).
+- **Server-only.** `UnityEngine.Random` is per-peer state; all NPC decision logic runs server-authoritatively.
+
+**Shipped consumers** (the canonical sites to copy from when adding a new NPC-buys-from-building flow):
+- `GoapAction_GoShopping.IsValid` → `FindQualifyingShopsWithItem` (Pass 1) → `ReputationWeightedPicker.Pick` (Pass 2).
+- `LogisticsStockEvaluator.TryB2BPurchaseFromShop` → qualifier collection (Pass 1: same-map, rep ≥ B2B floor, sells item, stock, treasury can afford, cashier exists) → `ReputationWeightedPicker.Pick` (Pass 2) → atomic commit on the picked shop (Pass 3: treasury debit, till credit, item move, `BuyOrder.IsPlaced=true` register).
+
+**Future consumers should mirror the two-pass / three-pass shape** — collect qualifiers, pick weighted, then either enqueue an action (customer side) or atomic-commit (procurement side).
+
 - **Not shipped (tracked as follow-ups):**
-  - Reputation-weighted picker on the B2B procurement side (currently still first-found among qualifiers; mirror the customer picker if/when desired).
   - Reputation-driven shop sort by closest / cheapest (geometry / pricing tie-breakers on top of rep).
   - Further customer-NPC effects (queue priority, price tolerance).
   - Reputation tooltip + display on the owner management panel.
@@ -381,6 +399,7 @@ Atomic financial reverse for the undelivered half of an expired B2B order. Autho
 
 ## Change log
 
+- 2026-05-17e — **Project-wide convention: every NPC-buys-from-building decision is reputation-weighted.** Promoted the customer-NPC weighted-pick helper to a shared `ReputationWeightedPicker.Pick<T>(IList<T>) where T : CommercialBuilding`. `GoapAction_GoShopping` refactored to call the shared helper (deleted its private `PickShopByReputation`). `LogisticsStockEvaluator.TryB2BPurchaseFromShop` refactored from one-pass iterate-and-commit into a three-pass shape (collect qualifiers → weighted pick → atomic commit on picked shop), so B2B procurement now uses weighted pick across qualifiers instead of first-found. The `ReputationB2BMinimum=20` hard floor still excludes low-rep shops outright on the procurement side; the picker only sorts among qualifying ones. New convention paragraph in the Reputation section documents the two-pass / three-pass pattern future consumers must follow. Commit `9958b2d9`. — claude
 - 2026-05-17d — **Customer-NPC reputation-weighted shop pick + stale-doc cleanup.** `GoapAction_GoShopping.FindShopWithItem` (single `FirstOrDefault` shop pick) replaced with two-step `FindQualifyingShopsWithItem` (collects all qualifying shops) + `PickShopByReputation` (weighted random where `weight = max(10, shop.Reputation)`). The 10-floor guarantees a 10:100 = 10% minimum relative weight for the lowest-rep shop — no shop is permanently invisible to customers. No B2B-style hard floor on customers. Also removed the stale "Does not implement refund-on-expiration" line from Non-responsibilities (refund shipped in `70e29003`). Commit `324d579a`. — claude
 - 2026-05-17c — **Dev-mode mirror of the Safes section.** `BuildingConsoleManagementSubTab` ([DEV] Console Management) gets a new Safes section between Storage Roles and Catalog: per-safe row (role + per-currency balance) + a button per supported role + an aggregate-treasury header line. New `CommercialBuilding.DevForceSetSafeRole(SafeFurniture, SafeRoleType)` host-only mutator (`#if UNITY_EDITOR || DEVELOPMENT_BUILD`, `DevAssertHostAndDevMode`, routes through `DoSetSafeRole`). New `SafeRoleCatalog.Get(SafeRoleType)` symmetric descriptor lookup (mirror of `StorageRoleCatalog.Get`). Bypasses owner gate (dev mode is host-only) but enforces `SupportedSafeRoles` subtype filter. — claude
 - 2026-05-17b — **Phase 1.7: owner-facing Safes section in the management panel.** New `CommercialBuilding.SupportedSafeRoles` virtual + `TrySetSafeRoleServerRpc` + canonical `DoSetSafeRole` helper + `TrySetSafeRoleServer` internal entry — mirror of the 2026-05-14b storage-role convergence pair. `BuildingLogisticsManager.AssignSafeRolesForShift` migrated to route through `TrySetSafeRoleServer` so the player UI path and the NPC shift-punch path share identical validation + side-effects. New `StorageRolesTabSafeRow` MonoBehaviour + `StorageRolesSafeRow.prefab` (mirrors `StorageRolesTabRow` / `StorageRolesRow.prefab`). `StorageRolesTabView` extended with a Safes section (header + rows + empty-state label) that subscribes to `OnTreasuryChanged` for repaint on every balance + role change. Row label shows per-currency balance with role prefix. Network safety: owner gate matches `TrySetStorageRoleServerRpc` exactly (`p.Receive.SenderClientId` → `ConnectedClients[…].PlayerObject.GetComponent<Character>()` → `caller == Owner` else reject), subtype filter against `SupportedSafeRoles`, late-joiner safe via existing per-safe `NetworkVariable<SafeRoleType>` + `NetworkList<BuildingTreasuryEntry>` (auto-delivered on subscription, no extra channel introduced). `StorageRolesTab.prefab` tree now has `StoragesHeader` + `SafesHeader` so the two sections read symmetrically. — claude
