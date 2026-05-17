@@ -34,6 +34,7 @@ public class PlayerUI : MonoBehaviour
     [Header("Combat UI")]
     [SerializeField] private UI_CombatActionMenu _combatActionMenu;
     [SerializeField] private UI_PlayerTargeting _playerTargeting;
+    [SerializeField] private MWI.UI.Combat.UI_CombatItemsWindow _combatItemsWindow;
 
     [Header("UI Windows")]
     [SerializeField] private CharacterEquipmentUI _equipmentUI;
@@ -394,6 +395,49 @@ public class PlayerUI : MonoBehaviour
     {
         if (_safePanel == null) return;
         if (_safePanel.gameObject.activeSelf) _safePanel.CloseWindow();
+    }
+
+    /// <summary>
+    /// True when the combat items sub-window is currently open. PlayerController reads
+    /// this to suppress the global 1-6 ability hotkey binding while the window owns
+    /// numeric input (spec §8 hotkey coexistence rule).
+    /// </summary>
+    public bool IsCombatItemsWindowOpen => _combatItemsWindow != null && _combatItemsWindow.IsOpen;
+
+    /// <summary>
+    /// Open the combat items sub-window for the given character. Idempotent — re-opening
+    /// rebuilds the row list (e.g., after picking up a new consumable mid-combat).
+    /// </summary>
+    public void OpenCombatItemsWindow(Character customer)
+    {
+        if (customer == null) return;
+        if (_combatItemsWindow == null)
+        {
+            Debug.LogWarning("<color=orange>[PlayerUI]</color> OpenCombatItemsWindow called but _combatItemsWindow SerializeField is null — author the prefab (variant of UI_WindowBase.prefab) and wire it to PlayerUI._combatItemsWindow in the Inspector.");
+            return;
+        }
+        _combatItemsWindow.Initialize(customer);
+        _combatItemsWindow.OpenWindow();
+    }
+
+    /// <summary>
+    /// Close the combat items sub-window if currently open. Safe to call when closed.
+    /// </summary>
+    public void CloseCombatItemsWindow()
+    {
+        if (_combatItemsWindow == null) return;
+        if (_combatItemsWindow.gameObject.activeSelf) _combatItemsWindow.CloseWindow();
+    }
+
+    /// <summary>
+    /// Toggle the combat items sub-window — open if closed, close if open. Bound to
+    /// the E hotkey while IsInBattle (PlayerController preempts the 5-priority E
+    /// dispatcher when in battle, per spec §8).
+    /// </summary>
+    public void ToggleCombatItemsWindow(Character customer)
+    {
+        if (IsCombatItemsWindowOpen) CloseCombatItemsWindow();
+        else OpenCombatItemsWindow(customer);
     }
 
     /// <summary>
