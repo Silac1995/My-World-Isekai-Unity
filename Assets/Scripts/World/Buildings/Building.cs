@@ -414,6 +414,21 @@ public class Building : ComplexRoom
         {
             TrySpawnDefaultFurniture();
         }
+
+        // Register this building's footprint on the host map's BuildingGrid (server-only).
+        // Grid is derived state — re-built on every wake-up because every Building.OnNetworkSpawn
+        // fires for restored buildings too. No separate save channel needed.
+        if (IsServer)
+        {
+            var enclosingMap = GetEnclosingMap();
+            if (enclosingMap != null && enclosingMap.BuildingGrid != null)
+            {
+                Vector3 worldPos = transform.position;
+                Vector2Int originCell = enclosingMap.BuildingGrid.GetCellCoord(worldPos);
+                Vector2Int footprint = GridFootprintCells;
+                enclosingMap.BuildingGrid.Register(NetworkObjectId, originCell, footprint);
+            }
+        }
     }
 
     /// <summary>
@@ -1801,6 +1816,20 @@ public class Building : ComplexRoom
     }
 
     /// <summary>
+    /// Server-only. Resolves the <see cref="MapController"/> this building lives under.
+    /// Returns null for buildings whose parent isn't a MapController (e.g. mid-spawn before
+    /// <c>SetParent</c> has run — defensive). Used by the <see cref="BuildingGrid"/>
+    /// register/release calls.
+    /// </summary>
+    private MapController GetEnclosingMap()
+    {
+        // GetComponentInParent walks the transform tree upward — preferred over a
+        // FindObjectsOfType scan because BuildingPlacementManager.RegisterBuildingWithMap
+        // (or MapController.SpawnSavedBuildings) parents us to the map BEFORE OnNetworkSpawn.
+        return GetComponentInParent<MapController>();
+    }
+
+    /// <summary>
     /// Server-only. Removes the <see cref="Character.OnCharacterSpawned"/> +
     /// <see cref="Character.OnCharacterIdReassigned"/> subscriptions if they are still
     /// active. Idempotent — safe to call from despawn paths even if all owners
@@ -1816,6 +1845,16 @@ public class Building : ComplexRoom
 
     public override void OnNetworkDespawn()
     {
+        // Release this building's grid cells (server-only) so a future placement can reuse them.
+        if (IsServer)
+        {
+            var enclosingMap = GetEnclosingMap();
+            if (enclosingMap != null && enclosingMap.BuildingGrid != null)
+            {
+                enclosingMap.BuildingGrid.Release(NetworkObjectId);
+            }
+        }
+
         // Drop any outstanding owner-restore subscription so a building that despawns
         // before all owners resolve doesn't leak the static-event reference.
         UnsubscribeOwnerRestoreListener();
