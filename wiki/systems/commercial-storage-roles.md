@@ -3,8 +3,8 @@ type: system
 title: "Commercial Storage Roles"
 tags: [building, furniture, storage, owner, management, network, tier-2]
 created: 2026-05-08
-updated: 2026-05-15
-last_change: sellshelf-routing-filter-in-generic-first-fit
+updated: 2026-05-17
+last_change: safes-section-sibling-extension-in-storagerolestab
 sources: []
 related:
   - "[[commercial-building]]"
@@ -231,6 +231,7 @@ Legacy migration (one-time on load):
 
 ## Change log
 
+- 2026-05-17 — **`StorageRolesTab` extended with a parallel Safes section** (see [[commercial-treasury]] for the per-safe role catalog + `TrySetSafeRoleServerRpc` mutator pair). The same tab the owner already uses to flip each `StorageFurniture`'s role now also surfaces every `SafeFurniture` child with a role dropdown + per-currency balance row. New tab tree: `StoragesHeader / RowsParent / EmptyStateLabel / SafesHeader / SafesRowsParent / SafesEmptyStateLabel`. New `StorageRolesTabView` SerializeFields: `_safesRowsParent`, `_safeRowPrefab`, `_safesEmptyStateLabel`. New per-safe row script `StorageRolesTabSafeRow` mirrors `StorageRolesTabRow`. No storage-side behaviour changed. — claude
 - 2026-05-14 — **SellShelf role is now actively enforced by the LogisticsManager NPC.** Beyond just being a deposit destination, the SellShelf role now drives both (a) automatic routing of catalog items by `CommercialBuilding.FindStorageFurnitureForItem` (SellShelf pre-pass for catalog items in shops) and (b) a new `GoapAction_RestockSellShelves` that physically transports misplaced catalog items from `InventoryStorage` (or any non-SellShelf role) into a SellShelf during shifts. The role flag is no longer cosmetic — it changes runtime worker behavior. The shift-punch assignment rule remains the source of truth for which storage gets which role; this entry is purely about what happens AFTER the role is set. See [[building-logistics-manager]] and [[shop-building]]. — claude
 - 2026-05-14 — **Playtest-confirmed.** Shift-punch storage-role assignment + canonical `DoSetStorageRole` helper + dev-mode inspector `role=<X>` display all verified in a host run. The "rule overrides owner choice on every punch-in" trade-off — flagged when the initial 8c67179b entry shipped — is the accepted behaviour; no follow-up action needed. — claude
 - 2026-05-15 — **Routing-side filter for SellShelf.** Both `CommercialBuilding.FindStorageFurnitureForItem` and `GoapAction_GatherStorageItems.DetermineStoragePosition` now skip `Role == SellShelf` storages in the generic first-fit walk. Catalog items still land on SellShelves via the catalog-gated shop-shelf pre-pass; non-catalog items can only reach an InventoryStorage chest. Closes part of the "Per-role contents filter" open question for the SellShelf axis — implemented as a routing exclusion (not a slot-level rejection), symmetric to the existing tool-storage exclusion for non-tools. Tool-storage and inventory-storage axes still defer per the open-questions section. — claude

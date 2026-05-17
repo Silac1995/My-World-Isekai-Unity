@@ -3,7 +3,7 @@ type: system
 title: "Commercial Treasury"
 tags: [building, furniture, currency, logistics, network, tier-2]
 created: 2026-05-09
-updated: 2026-05-17
+updated: 2026-05-17b
 sources: []
 related:
   - "[[commercial-building]]"
@@ -131,6 +131,17 @@ public bool CanAffordFromTreasury(CurrencyId currency, int amount);
 public bool TryDebitTreasury(CurrencyId currency, int amount, string reason); // drains largest safe first
 public void CreditTreasury  (CurrencyId currency, int amount, string reason); // credits largest safe
 public event Action OnTreasuryChanged;
+
+// Safe role taxonomy + owner mutator pair (Phase 1.7 — 2026-05-17b).
+// Mirror of the storage-role pair (TrySetStorageRoleServerRpc / DoSetStorageRole /
+// TrySetStorageRoleServer). Both the player UI ServerRpc and the NPC shift-punch
+// auto-assign (BuildingLogisticsManager.AssignSafeRolesForShift) converge through
+// DoSetSafeRole — any future side-effect added there lands on both code paths.
+public virtual IReadOnlyList<SafeRoleDescriptor> SupportedSafeRoles { get; } // default: SafeRoleCatalog.Generic
+[ServerRpc(RequireOwnership=false)]
+public void TrySetSafeRoleServerRpc(NetworkObjectReference furnitureRef, SafeRoleType newRole, ServerRpcParams p = default);
+private void DoSetSafeRole(SafeFurniture safe, SafeRoleType newRole);                 // canonical server-only mutator
+internal bool TrySetSafeRoleServer(SafeFurniture safe, SafeRoleType newRole);          // non-RPC entry for AssignSafeRolesForShift
 ```
 
 **Auto-assign (`BuildingLogisticsManager`):**
@@ -178,6 +189,38 @@ The player UI queues these via `character.CharacterActions.ExecuteAction(...)` f
 - `Assets/Scripts/UI/Furniture/UI_SafePanel.cs` — variant of [[player-hud]] `UI_WindowBase`. Subscribes to `SafeFurniture.OnBalanceChanged` + `CharacterWallet.OnBalanceChanged` for live repaint. Auto-closes on out-of-zone (1Hz `IsCharacterInInteractionZone` poll), ESC, target despawn.
 - `Assets/Scripts/UI/Furniture/UI_SafeCurrencyRow.cs` — one row per `CurrencyId`. Single amount input + MAX + Deposit + Withdraw. Forward-compat for multi-currency Kingdom system (renders one row per currency in `safe.Balances`).
 - Asset locations: `Assets/UI/Player HUD/UI_SafePanel.prefab` (Variant of `UI_WindowBase.prefab` per rule #39), `Assets/UI/Player HUD/UI_SafeCurrencyRow.prefab` (leaf).
+
+**Owner UI — added 2026-05-17b (Phase 1.7):**
+
+The owner-facing role editor lives inside the existing [[commercial-storage-roles|StorageRolesTab]] — a unified Storages tab that already surfaces every `StorageFurniture` child with a per-storage role dropdown. Phase 1.7 extends that same tab with a parallel **Safes** section so a single panel exposes both furniture-type role taxonomies side by side.
+
+```
+StorageRolesTab.prefab tree (post-Phase-1.7):
+  StoragesHeader        — TMP label "Storages"
+  RowsParent            — VerticalLayoutGroup, holds StorageRolesTabRow instances
+  EmptyStateLabel       — "Place a storage furniture inside the building to assign roles."
+  SafesHeader           — TMP label "Safes"
+  SafesRowsParent       — VerticalLayoutGroup, holds StorageRolesTabSafeRow instances
+  SafesEmptyStateLabel  — "Place a Safe Base furniture inside to track treasury."
+```
+
+```csharp
+// Per-safe row, mirror of StorageRolesTabRow (lives at Assets/Scripts/UI/Management/StorageRolesTabSafeRow.cs).
+public sealed class StorageRolesTabSafeRow : MonoBehaviour
+{
+    public void Bind(CommercialBuilding building, SafeFurniture safe,
+                     IReadOnlyList<SafeRoleDescriptor> supportedRoles);
+}
+```
+
+- Row label format: `"{SafeName}    {Role}: {amount} {Currency}, …"` (e.g. `Safe (north)    Treasury: 120 Coin`). Empty balance shows `"Treasury: empty"` so the owner can see whether a safe is contributing zero or carries funds.
+- Subscribes to **both** `SafeFurniture.OnRoleChanged` AND `SafeFurniture.OnBalanceChanged` per safe — deposits / withdraws / B2B debits / refunds all repaint the row without a full tab rebuild.
+- Dropdown change fires `CommercialBuilding.TrySetSafeRoleServerRpc` (owner-gated server-side). Optimistic UI is corrected via the `OnRoleChanged` round-trip — rejected calls revert visually because the authoritative `_networkRole` doesn't change.
+- View subscribes to `CommercialBuilding.OnTreasuryChanged` for the full-section rebuild. The aggregate event fires on every peer through the existing per-safe fan-out chain (`_networkRole.OnValueChanged` / `_networkBalances.OnListChanged` → `safe.OnRoleChanged` / `OnBalanceChanged` → `HandleSafeRoleChanged` / `HandleSafeBalanceChanged` → `OnTreasuryChanged`).
+
+**Convergence with the NPC path** (2026-05-17b): `BuildingLogisticsManager.AssignSafeRolesForShift` now routes through `building.TrySetSafeRoleServer` → `DoSetSafeRole` so any future side-effect (cache invalidation, audit log, broadcast event) added to the canonical mutator lands on both the player UI path AND the NPC shift-punch path. Same divergence-proof pattern shipped 2026-05-14b for the storage-role pair.
+
+**Assets:** `Assets/Resources/UI/Management/StorageRolesSafeRow.prefab` (row prefab), `Assets/Resources/UI/Management/StorageRolesTab.prefab` (tab — extended with the Safes section).
 
 ## Data flow
 
@@ -326,7 +369,8 @@ Atomic financial reverse for the undelivered half of an expired B2B order. Autho
 - **Reputation UI**: tooltip on shop hover + permanent slot on the owner management panel. Designer pass.
 - **Decay-over-time**: today reputation only changes on order events. A daily decay (e.g. drift towards 50) would prevent permanent stigma. Optional — measure first.
 - **Hiring-pool reputation gate**: workers refusing to apply to low-rep workplaces. Cross-cuts with [[help-wanted-and-hiring]].
-- **Management UI for Treasury balance + deposit/withdraw**: today the owner has no in-game way to see the treasury or move funds. Phase 1.7 (Safes section in StorageRolesTab) is deferred to a designer pass; a separate "Treasury" widget on the management panel would surface the aggregate balance + buttons to deposit from owner wallet / withdraw to owner wallet.
+- **Aggregate "Treasury" widget on the management panel**: today the per-safe rows in the Safes section (Phase 1.7) show each safe's balance individually but the panel has no rollup number. Per-safe is the source of truth for B2B selection (largest-safe-first); a header chip showing `Σ Treasury = N Coin` would let the owner see at-a-glance funding pressure without summing rows mentally. Cheap to add — `GetTreasuryBalance(CurrencyId.Default)`.
+- **Owner-side deposit/withdraw of building treasury**: the per-safe player UI (`UI_SafePanel`) already moves coins between wallet ↔ safe, but only through proximity interaction at the safe itself. A management-panel button (Deposit-from-wallet / Withdraw-to-wallet) would let an owner top up Treasury from anywhere they can open the management panel. Cross-cuts with rule #36 (proximity gate would need to be relaxed for this specific action — or the panel would queue the same `CharacterAction_DepositToSafe` / `CharacterAction_WithdrawFromSafe` once the owner gets near a safe).
 - **Pricing logic for closest / cheapest shop**: first-found-wins is acceptable for sparse-shop builds, but with multiple shops on the same map a closer or cheaper shop should win. Sort `BuildingManager.allBuildings` by distance or unit price before the scan.
 - **Owner-allied scoping**: should a building only B2B-buy from shops owned by the same Community / owner / faction? Currently any same-map shop qualifies. Locked product decision was "same-map only" but a follow-up "owner-allied" filter is an obvious extension.
 - **Currency-as-item migration**: when coin stacks become `ItemInstance`s, `SafeFurniture` could merge into the regular `StorageFurniture` system (currency-typed slots). At that point this page collapses into [[commercial-storage-roles]].
@@ -334,6 +378,7 @@ Atomic financial reverse for the undelivered half of an expired B2B order. Autho
 
 ## Change log
 
+- 2026-05-17b — **Phase 1.7: owner-facing Safes section in the management panel.** New `CommercialBuilding.SupportedSafeRoles` virtual + `TrySetSafeRoleServerRpc` + canonical `DoSetSafeRole` helper + `TrySetSafeRoleServer` internal entry — mirror of the 2026-05-14b storage-role convergence pair. `BuildingLogisticsManager.AssignSafeRolesForShift` migrated to route through `TrySetSafeRoleServer` so the player UI path and the NPC shift-punch path share identical validation + side-effects. New `StorageRolesTabSafeRow` MonoBehaviour + `StorageRolesSafeRow.prefab` (mirrors `StorageRolesTabRow` / `StorageRolesRow.prefab`). `StorageRolesTabView` extended with a Safes section (header + rows + empty-state label) that subscribes to `OnTreasuryChanged` for repaint on every balance + role change. Row label shows per-currency balance with role prefix. Network safety: owner gate matches `TrySetStorageRoleServerRpc` exactly (`p.Receive.SenderClientId` → `ConnectedClients[…].PlayerObject.GetComponent<Character>()` → `caller == Owner` else reject), subtype filter against `SupportedSafeRoles`, late-joiner safe via existing per-safe `NetworkVariable<SafeRoleType>` + `NetworkList<BuildingTreasuryEntry>` (auto-delivered on subscription, no extra channel introduced). `StorageRolesTab.prefab` tree now has `StoragesHeader` + `SafesHeader` so the two sections read symmetrically. — claude
 - 2026-05-17 — Phase C3: transporter Building reputation hit on `TransportOrder` failure. New `TransportOrder.HostTransporter` field (nullable `CommercialBuilding`) tagged at dispatch in `LogisticsTransportDispatcher.DispatchTransportOrder`. `CheckExpiredBuyOrders` now docks every `HostTransporter` whose `AssociatedBuyOrder == expired && !IsCompleted` by −5, mirroring the supplier penalty. Closes the user's original "transporter also impacted" design intent. Commit `e5b48cb8`. — claude
 - 2026-05-17 — Reputation + refund-on-expiration shipped. New `CommercialBuilding._reputation` NetworkVariable + `TryChangeReputation` mutator + `OnReputationChanged` event + Inspector seed + save-load (`BuildingSaveData.Reputation`, default 50). Hooks: −5 on any expired BuyOrder with undelivered units, +1 on full BuyOrder completion via `UpdateTransportOrderProgress`. Refund-on-expiration: `BuildingLogisticsManager.TryRefundB2BExpiration` atomically debits the shop's cashier till (Tier 1) or treasury (Tier 2) by `undelivered × unitPrice` and credits the buyer's treasury — never prints money, partial refund + warning on empty till+treasury. `ReturnExpiredOrderItemsToShelf` walks `shop.Inventory` and returns matching items to a sell-shelf slot best-effort. B2B preference gate: shops with `Reputation < 20` skipped by `TryB2BPurchaseFromShop`. Transporter-Building rep penalty deferred (needs TransportOrder linkage). Commit `70e29003`. — claude
 - 2026-05-16 — BaseTreasury seed source documented. Seeding fires from CommercialBuilding.OnDefaultFurnitureSpawned via SeedTreasuryIfNeeded helper; idempotent via _treasurySeeded server-only flag. — claude
@@ -351,4 +396,7 @@ Atomic financial reverse for the undelivered half of an expired B2B order. Autho
 - [Assets/Scripts/World/Buildings/CommercialBuilding.cs](../../Assets/Scripts/World/Buildings/CommercialBuilding.cs) — Treasury aggregator section.
 - [Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs](../../Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs) — `AssignSafeRolesForShift`.
 - [Assets/Scripts/World/Buildings/Logistics/LogisticsStockEvaluator.cs](../../Assets/Scripts/World/Buildings/Logistics/LogisticsStockEvaluator.cs) — `TryB2BPurchaseFromShop`.
+- [Assets/Scripts/UI/Management/StorageRolesTabSafeRow.cs](../../Assets/Scripts/UI/Management/StorageRolesTabSafeRow.cs) — Phase 1.7 owner-facing per-safe row.
+- [Assets/Scripts/UI/Management/StorageRolesTabView.cs](../../Assets/Scripts/UI/Management/StorageRolesTabView.cs) — Phase 1.7 Safes section host.
 - 2026-05-09 conversation with [[kevin]] driving the design (Safe-as-furniture pivot, same-map scope, transporter delivery, Cashier till credit, background commit).
+- 2026-05-17b session with [[kevin]] — Phase 1.7 Safes section in StorageRolesTab.
