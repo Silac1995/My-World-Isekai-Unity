@@ -26,9 +26,10 @@ using UnityEngine.UI;
 ///   4.  Owner                     — CommercialBuilding
 ///   5.  Jobs (force-hire/-fire)   — CommercialBuilding
 ///   6.  Storage Roles             — CommercialBuilding (any subtype with SupportedStorageRoles)
-///   7.  Catalog                   — ShopBuilding
-///   8.  Cashiers                  — ShopBuilding
-///   9.  Inventory                 — CommercialBuilding
+///   7.  Safes                     — CommercialBuilding (any subtype with SupportedSafeRoles)
+///   8.  Catalog                   — ShopBuilding
+///   9.  Cashiers                  — ShopBuilding
+///   10. Inventory                 — CommercialBuilding
 ///
 /// Hook: bind change triggers full rebuild; widget callbacks call <see cref="RebuildAll"/>
 /// after their action so per-frame Refresh stays cheap (and avoids re-allocating
@@ -78,6 +79,7 @@ public sealed class BuildingConsoleManagementSubTab : BuildingSubTab
             BuildOwnerSection(cb);
             BuildJobsSection(cb);
             BuildStorageRolesSection(cb);
+            BuildSafesSection(cb);
             if (cb is ShopBuilding sb)
             {
                 BuildCatalogSection(sb);
@@ -276,6 +278,82 @@ public sealed class BuildingConsoleManagementSubTab : BuildingSubTab
                 MakeButton(label, () =>
                 {
                     cb.DevForceSetStorageRole(capturedStorage, capturedRole);
+                    RebuildAll();
+                }, row.transform);
+            }
+        }
+    }
+
+    private void BuildSafesSection(CommercialBuilding cb)
+    {
+        MakeHeader("Safes");
+
+        var safes = cb.Safes;
+        if (safes == null || safes.Count == 0)
+        {
+            MakeLabel("<color=grey>(no safe furniture under building)</color>");
+            return;
+        }
+
+        var supported = cb.SupportedSafeRoles;
+        if (supported == null || supported.Count == 0)
+        {
+            MakeLabel("<color=grey>(building reports no SupportedSafeRoles)</color>");
+            return;
+        }
+
+        // Aggregate-treasury line — quick at-a-glance view of every Treasury safe's
+        // contribution. Dev-only sugar; the production management panel surfaces
+        // per-safe balances in the same tab via StorageRolesTabSafeRow.
+        int aggregateDefault = cb.GetTreasuryBalance(MWI.Economy.CurrencyId.Default);
+        MakeLabel($"<color=#FFD27A>Σ Treasury (Default)</color>  <color=#888888>= {aggregateDefault} coin · across {cb.TreasurySafes.Count} treasury-role safe(s)</color>");
+
+        for (int i = 0; i < safes.Count; i++)
+        {
+            var s = safes[i];
+            if (s == null) continue;
+
+            var row = MakeRow();
+            var currentRole = s.Role;
+            var currentDescriptor = SafeRoleCatalog.Get(currentRole);
+
+            // Per-safe balance summary: roll every currency into one comma-separated
+            // string so the row stays one line. Empty balance prints "empty" so the
+            // dev can tell zero-balance from missing-data.
+            string balanceText;
+            var balances = s.Balances;
+            if (balances == null || balances.Count == 0)
+            {
+                balanceText = "empty";
+            }
+            else
+            {
+                var sb = new System.Text.StringBuilder(32);
+                for (int b = 0; b < balances.Count; b++)
+                {
+                    if (b > 0) sb.Append(", ");
+                    var e = balances[b];
+                    sb.Append(e.Amount).Append(' ').Append(e.CurrencyId == 0 ? "Coin" : $"Cur#{e.CurrencyId}");
+                }
+                balanceText = sb.ToString();
+            }
+
+            MakeLabel($"{s.FurnitureName}  <color=#888888>current: {currentDescriptor.Icon} {currentDescriptor.DisplayName} · balance: {balanceText}</color>", row.transform);
+
+            // One small button per supported role — clicking switches the safe to that
+            // role via the canonical DoSetSafeRole convergence (same fan-out as the
+            // production owner UI + NPC shift-punch).
+            for (int r = 0; r < supported.Count; r++)
+            {
+                var desc = supported[r];
+                var capturedSafe = s;
+                var capturedRole = desc.Type;
+                string label = currentRole == desc.Type
+                    ? $"<b>{desc.DisplayName}</b>"
+                    : desc.DisplayName;
+                MakeButton(label, () =>
+                {
+                    cb.DevForceSetSafeRole(capturedSafe, capturedRole);
                     RebuildAll();
                 }, row.transform);
             }

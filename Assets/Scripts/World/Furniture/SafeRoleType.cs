@@ -64,4 +64,17 @@ public static class SafeRoleCatalog
         None,
         Treasury,
     };
+
+    /// <summary>O(N) lookup; N = 2 today, never gets large enough to warrant a dictionary.
+    /// Sibling of <see cref="StorageRoleCatalog.Get"/> — same shape so UI / dev-tool
+    /// code can resolve a display descriptor from a role enum value uniformly.</summary>
+    public static SafeRoleDescriptor Get(SafeRoleType type)
+    {
+        switch (type)
+        {
+            case SafeRoleType.Treasury: return Treasury;
+            case SafeRoleType.None:
+            default:                    return None;
+        }
+    }
 }

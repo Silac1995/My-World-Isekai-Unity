@@ -3,7 +3,7 @@ type: system
 title: "Dev Mode"
 tags: [debug, host-only, dev-tools, tier-2]
 created: 2026-04-21
-updated: 2026-05-16
+updated: 2026-05-17
 sources: []
 related:
   - "[[engine-plumbing]]"
@@ -279,6 +279,7 @@ No gameplay system declares a hard dependency on dev mode — it is strictly add
 - [ ] Move wilderness `Harvestable` prefabs (`Tree.prefab`, `Gatherable.prefab`) onto the `Harvestable` layer (currently they sit on `Default`) so Ctrl+Click selects them too. Currently only `CropHarvestable` is selectable because it's the only harvestable family on the `Harvestable` layer.
 
 ## Change log
+- 2026-05-17 — `BuildingConsoleManagementSubTab` gets a new **Safes** section (between Storage Roles and Catalog). Lists every child `SafeFurniture` with its current role + per-currency balance summary, plus a header line showing the aggregate Treasury (Default currency) across the building. One button per role in `CommercialBuilding.SupportedSafeRoles` flips the safe instantly via the new `CommercialBuilding.DevForceSetSafeRole(SafeFurniture, SafeRoleType)` host-only mutator — wrapped in `#if UNITY_EDITOR || DEVELOPMENT_BUILD`, gated by `DevAssertHostAndDevMode`, routes through the canonical `DoSetSafeRole` convergence helper so dev / player UI / NPC shift-punch all share identical fan-out. Also added `SafeRoleCatalog.Get(SafeRoleType)` (sibling of `StorageRoleCatalog.Get`) for symmetric descriptor lookup. Tracks the Phase 1.7 owner-side `StorageRolesTab` Safes section (commits `b58ffc6a` + `79bd2f24` + `f660f707`). See [[commercial-treasury]]. — claude
 - 2026-05-14 — `BuildingOverviewSubTab` Furniture section now prints `role=<X>` after the type-name suffix for any `StorageFurniture`. Reflects role changes from every trigger — player UI mutator, NPC shift-punch auto-assignment (`BuildingLogisticsManager.AssignStorageRolesForShift`), dev-mode `DevForceSetStorageRole`, save-restore. Polls every frame via `BuildingInspectorView.Update`, so the next replication tick is picked up automatically. Playtest-confirmed. See [[commercial-storage-roles]]. — claude
 - 2026-04-21 — Initial page. Documents F3/chat activation, input gating, click arbitration, Spawn + Select modules, `IDevAction` contract, `DevActionAssignBuilding`, god-mode WASD speed + unbounded zoom. — Claude / [[kevin]]
 - 2026-04-23 — Added Inspect tab (IInspectorView + CharacterInspectorView + 10 sub-tabs); generalized DevSelectionModule to InteractableObject; extracted CharacterAIDebugFormatter; updated Key classes, Public API, Data flow, Dependencies, Open questions, Sources. — claude
