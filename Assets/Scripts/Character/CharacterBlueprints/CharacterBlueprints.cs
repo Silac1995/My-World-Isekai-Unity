@@ -61,4 +61,26 @@ public class CharacterBlueprints : CharacterSystem
     {
         return _unlockedBuildingIds.Contains(buildingId);
     }
+
+    /// <summary>
+    /// Server-only. Grants knowledge of a building by SO (the preferred call surface for
+    /// new code — keeps callers type-safe). Idempotent — a second grant of the same SO is
+    /// a silent no-op. Used by <c>CharacterCommunity.CreateCommunity</c> (Plan 1) to seed
+    /// the founder with the AB blueprint, and by tier-up unlock flows (Plan 4).
+    /// </summary>
+    public void GrantBlueprint(BuildingSO so)
+    {
+        if (so == null) return;
+        UnlockBuilding(so.PrefabId);
+    }
+
+    /// <summary>
+    /// SO-typed convenience predicate. Equivalent to <see cref="KnowsBlueprint(string)"/>
+    /// with <c>so.PrefabId</c> but null-safe on the SO ref.
+    /// </summary>
+    public bool HasBlueprint(BuildingSO so)
+    {
+        if (so == null || string.IsNullOrEmpty(so.PrefabId)) return false;
+        return KnowsBlueprint(so.PrefabId);
+    }
 }
