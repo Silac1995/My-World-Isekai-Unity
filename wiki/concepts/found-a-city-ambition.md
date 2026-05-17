@@ -7,15 +7,19 @@ updated: 2026-05-17
 sources:
   - "[Task_CreateCommunity.cs](../../Assets/Scripts/Character/Ambition/Tasks/Task_CreateCommunity.cs)"
   - "[Task_PromoteCommunity.cs](../../Assets/Scripts/Character/Ambition/Tasks/Task_PromoteCommunity.cs)"
+  - "[Task_PlaceBuilding.cs](../../Assets/Scripts/Character/Ambition/Tasks/Task_PlaceBuilding.cs)"
+  - "[Task_FinishConstruction.cs](../../Assets/Scripts/Character/Ambition/Tasks/Task_FinishConstruction.cs)"
   - "[Ambition_FoundACity.cs](../../Assets/Scripts/Character/Ambition/AmbitionSOs/Ambition_FoundACity.cs)"
+  - "[Ambition_FoundACity.asset](../../Assets/Resources/Data/Ambitions/Ambition_FoundACity.asset)"
 related:
   - "[[character-ambition]]"
   - "[[character-community]]"
   - "[[world-community]]"
   - "[[building-grid]]"
   - "[[citizenship]]"
-status: draft
-confidence: medium
+  - "[[administrative-building]]"
+status: active
+confidence: high
 ---
 
 # Found a City Ambition
@@ -37,10 +41,12 @@ Ambition_FoundACity
  └─ Quest_PromoteEmpire        (Plan 3 — Task_PromoteCommunity(Empire))
 ```
 
-Plan 3 ships the AB-independent task scaffolding (`Task_CreateCommunity`,
+Plan 3 shipped the AB-independent task scaffolding (`Task_CreateCommunity`,
 `Task_PromoteCommunity`, the `Ambition_FoundACity` AmbitionSO subclass).
-Plan 4 ships the AB-coupled tasks and the actual `.asset` files that wire
-the chain end-to-end.
+**Plan 4a (2026-05-17)** shipped the AB-coupled tasks (`Task_PlaceBuilding`,
+`Task_FinishConstruction`) AND the full `.asset` chain — `Ambition_FoundACity.asset`
+plus all 8 quest assets wired end-to-end. The chain is now end-to-end runnable
+against the AB BuildingSO (no prefab yet; Plan 4c authors that).
 
 ## Why the actor-as-anchor design (no `Community` in `AmbitionContext`)
 

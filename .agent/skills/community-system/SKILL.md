@@ -34,6 +34,8 @@ The Community System handles the social grouping and territorial management of c
 | `TransferPrimaryLeadership` | `void (Character c)` | Moves c to index 0. |
 | `Citizens` | `IReadOnlyList<Character>` (getter) | Members where `CharacterCommunity.Citizenship == this`. |
 | `members` | `List<Character>` | All members (superset of Citizens). |
+| `AdministrativeBuilding` | `AdministrativeBuilding` ([NonSerialized]) | The chartering AB (Plan 4a). Server-only ref. Null until an AB is placed for this community. |
+| `IsChartered` | `bool` (getter) | `AdministrativeBuilding != null`. Used by drifter migration (Plan 4c) + the 1-per-community placement gate. |
 | `AddMember` | `void (Character c)` | — |
 | `RemoveMember` | `void (Character c)` | — |
 | `DeclareIndependence` | `void ()` | Detaches from parent community. |
@@ -170,3 +172,4 @@ community.ChangeLevel(CommunityLevel.Village);
 - (date unknown) — Initial skill file. Founding, hierarchy, membership, zones, leader blueprints documented.
 - 2026-04-21 — Phase 1 refactor notice added (`CommunityTracker` → `MapRegistry`, cluster-promotion deleted).
 - 2026-05-17 — Multi-leader migration: `leader` → `leaders : List<Character>`; `SetLeader` deleted; `IsLeader(c)`, `PromoteToSecondaryLeader`, `DemoteFromLeadership`, `TransferPrimaryLeadership` added. Citizenship (`SetCitizenship`, `RenounceCitizenship`, `Community.Citizens`). Founding gate simplified (no trait / 4-friends). Public API table added. Common pitfalls section updated.
+- 2026-05-17 — Plan 4a: `Community.AdministrativeBuilding` + `IsChartered` getter added (see `[[administrative-building]]` wiki page). `CharacterCommunity.CreateCommunity` auto-grants the AB blueprint via `Resources.Load<BuildingSO>("Data/Buildings/AdministrativeBuilding")` + `GrantBlueprint(so)`. `AdministrativeBuilding.OnFinalize` grants founder citizenship.

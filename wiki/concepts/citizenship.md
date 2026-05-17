@@ -10,8 +10,10 @@ sources:
 related:
   - "[[character-community]]"
   - "[[world-community]]"
-status: draft
-confidence: medium
+  - "[[administrative-building]]"
+  - "[[found-a-city-ambition]]"
+status: active
+confidence: high
 ---
 
 # Citizenship
@@ -50,8 +52,9 @@ Systems that reference citizenship:
 ## Lifecycle
 
 1. **Grant**: a character is granted citizenship when an
-   `AdministrativeBuilding.OnFinalize` runs for an AB they founded (Plan 4), or
-   when a `JoinRequestDesk` accepts their join request (Plan 4).
+   `AdministrativeBuilding.OnFinalize` runs for an AB they founded (Plan 4a —
+   landed 2026-05-17), or when a `JoinRequestDesk` accepts their join request
+   (Plan 4c — pending).
 2. **Hold**: the `_citizenship : Community` field on `CharacterCommunity` holds
    the reference. The matching map ID is round-tripped through
    `CommunitySaveData.citizenshipMapId`.

@@ -128,7 +128,7 @@ MapRegistry.Instance.ImposeJobOnCitizen(mapId, leaderId, citizen, job, building)
 - The `Citizens` accessor recomputes on every call (linear scan of `members`). Do not call it in a hot path.
 
 ## Open questions / TODO
-- Plan 4: `AdministrativeBuilding.OnFinalize` must call `SetCitizenship` on the founder — not yet implemented.
+- Plan 4c: AB.prefab — preplaced CityManagementFurniture / JoinRequestDesk / SafeFurniture (Treasury) / storage authoring + hibernation-aware founder citizenship retry hook.
 - Plan 5: admin console Leaders tab (`PromoteToSecondaryLeader`, `DemoteFromLeadership`) — not yet implemented.
 - `Community.Citizens` performance: if member counts grow to >200, wrap in an explicit-invalidation cache.
 
@@ -137,6 +137,7 @@ MapRegistry.Instance.ImposeJobOnCitizen(mapId, leaderId, citizen, job, building)
 - 2026-04-21 — Added pending-refactor notice pointing to [[adr-0001-living-world-hierarchy-refactor]]. — Claude / [[kevin]]
 - 2026-04-21 — Refactor implemented. `CommunityTracker` renamed to `MapRegistry`, cluster-promotion deleted, wild-map save/load round-trip working. — Claude / [[kevin]]
 - 2026-05-17 — Multi-leader migration: `leader` field → `leaders : List<Character>`; `IsLeader(c)` is canonical auth predicate; `SetLeader` deleted; `PromoteToSecondaryLeader` / `DemoteFromLeadership` / `TransferPrimaryLeadership` added. Citizenship (`Citizens` accessor, [[citizenship]] concept page). Public API, Data flow, State & persistence, Gotchas, Open questions sections added. — claude
+- 2026-05-17 — Plan 4a: `Community.AdministrativeBuilding : AdministrativeBuilding` ([NonSerialized]) + `IsChartered` getter added; `AdministrativeBuilding.OnFinalize` now grants founder citizenship via `CharacterCommunity.SetCitizenship`. See [[administrative-building]]. — claude
 
 ## Sources
 - [Assets/Scripts/World/Community/Community.cs](../../Assets/Scripts/World/Community/Community.cs) — primary implementation.
