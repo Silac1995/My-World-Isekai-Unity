@@ -175,6 +175,14 @@ public class Building : ComplexRoom
     public virtual BuildingType BuildingType =>
         _blueprint != null ? _blueprint.BuildingType : BuildingType.Residential;
 
+    /// <summary>
+    /// Footprint size in <see cref="BuildingGrid"/> cells, sourced from
+    /// <see cref="_blueprint"/>.GridFootprintCells. Defaults to (1, 1) when no blueprint
+    /// is assigned — same defensive shape as <see cref="BuildingName"/> / <see cref="BuildingType"/>.
+    /// </summary>
+    public Vector2Int GridFootprintCells =>
+        _blueprint != null ? _blueprint.GridFootprintCells : new Vector2Int(1, 1);
+
     public bool IsPublicLocation => _isPublicLocation;
     public Collider BuildingZone => _buildingZone;
     public Zone DeliveryZone => _deliveryZone;
