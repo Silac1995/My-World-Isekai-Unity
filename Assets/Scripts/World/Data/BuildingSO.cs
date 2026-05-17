@@ -47,6 +47,16 @@ namespace MWI.WorldSystem
         [Tooltip("Layout spawned by the server on first construction-complete (and not on save-restore). Mirrors the legacy Building._defaultFurnitureLayout authoring surface.")]
         [SerializeField] private List<Building.DefaultFurnitureSlot> _defaultFurnitureLayout = new List<Building.DefaultFurnitureSlot>();
 
+        [Header("Placement (Plan 2 — City Founding)")]
+        [Tooltip("Footprint in BuildingGrid cells (default 1×1 = one 8-unit cell). Larger blueprints occupy a rectangle of cells; placement is rejected if any cell is occupied. Authoritative dimension; ghost preview snaps the bottom-left cell under the cursor.")]
+        [SerializeField] private Vector2Int _gridFootprintCells = new Vector2Int(1, 1);
+
+        [Tooltip("Placement-authority category. Personal = anyone with the blueprint can place via the normal ghost flow. Civic = only a community leader can place via the admin console (Plan 5).")]
+        [SerializeField] private BlueprintCategory _blueprintCategory = BlueprintCategory.Personal;
+
+        [Tooltip("Minimum community tier required for placement. Only enforced for Civic blueprints by Plan 5's admin-console authority gate.")]
+        [SerializeField] private CommunityLevel _minTier = CommunityLevel.SmallGroup;
+
         public string PrefabId => _prefabId;
         public string BuildingName => _buildingName;
         public Sprite Icon => _icon;
@@ -56,5 +66,8 @@ namespace MWI.WorldSystem
         public int CommunityPriority => _communityPriority;
         public IReadOnlyList<CraftingIngredient> ConstructionRequirements => _constructionRequirements;
         public IReadOnlyList<Building.DefaultFurnitureSlot> DefaultFurnitureLayout => _defaultFurnitureLayout;
+        public Vector2Int GridFootprintCells => _gridFootprintCells;
+        public BlueprintCategory BlueprintCategory => _blueprintCategory;
+        public CommunityLevel MinTier => _minTier;
     }
 }
