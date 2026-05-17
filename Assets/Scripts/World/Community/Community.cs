@@ -35,6 +35,25 @@ public class Community
     public List<Zone> communityZones = new List<Zone>();
     public List<Building> ownedBuildings = new List<Building>();
 
+    [Header("City Charter")]
+    /// <summary>
+    /// The <see cref="AdministrativeBuilding"/> chartering this community.
+    /// Server-only state; set when an AB's <see cref="AdministrativeBuilding.SetOwnerCommunity"/>
+    /// runs during placement (Plan 4a). NonSerialized — Communities are plain C# objects,
+    /// the AB ref doesn't survive JSON serialization. On wake-up the ref is rebuilt
+    /// by scanning <see cref="BuildingManager"/> for AB instances whose owner community
+    /// matches (handled by Plan 4c's lifecycle hooks; Plan 4a leaves the rebuild gap
+    /// documented as a known limitation — a save/load round-trip in Plan 4a-only state
+    /// loses the AB ref until Plan 4c ships).
+    /// </summary>
+    [System.NonSerialized] public AdministrativeBuilding AdministrativeBuilding;
+
+    /// <summary>True iff this community has a chartered AdministrativeBuilding (placed,
+    /// not necessarily complete). Plan 4c's drifter migration gates on
+    /// <c>AdministrativeBuilding != null &amp;&amp; AdministrativeBuilding.IsUnderConstruction == false</c>;
+    /// Plan 4a's placement gate uses this for the 1-per-community check.</summary>
+    public bool IsChartered => AdministrativeBuilding != null;
+
     // ── Convenience accessors ─────────────────────────────────────────────
     /// <summary>The primary leader (index 0), or null if the community is currently leaderless.</summary>
     public Character PrimaryLeader => leaders.Count > 0 ? leaders[0] : null;

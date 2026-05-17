@@ -83,7 +83,18 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
 
             SetCurrentCommunity(newComm);
             newComm.ChangeLevel(CommunityLevel.SmallGroup);
-            
+
+            // Auto-grant the AdministrativeBuilding blueprint so the founder can
+            // place their city's capital (Plan 4a + Plan 3's Ambition_FoundACity).
+            // Resources.Load is defensive: no-op if the AB SO doesn't exist yet
+            // (e.g. a designer hasn't authored it). Lives at the canonical path
+            // Resources/Data/Buildings/AdministrativeBuilding.
+            if (_character.CharacterBlueprints != null)
+            {
+                var abBlueprint = Resources.Load<MWI.WorldSystem.BuildingSO>("Data/Buildings/AdministrativeBuilding");
+                if (abBlueprint != null) _character.CharacterBlueprints.GrantBlueprint(abBlueprint);
+            }
+
             Debug.Log($"<color=cyan>[Character Community]</color> {_character.CharacterName} founded a new {(parent != null ? "sub-" : "independent ")}Community '{newCommName}'.");
         }
     }
@@ -270,6 +281,16 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
         {
             SetCurrentCommunity(newComm);
             newComm.ChangeLevel(CommunityLevel.SmallGroup);
+
+            // Auto-grant the AdministrativeBuilding blueprint so the founder can
+            // place their city's capital (Plan 4a + Plan 3's Ambition_FoundACity).
+            // Resources.Load is defensive: no-op if the AB SO doesn't exist yet.
+            if (_character.CharacterBlueprints != null)
+            {
+                var abBlueprint = Resources.Load<MWI.WorldSystem.BuildingSO>("Data/Buildings/AdministrativeBuilding");
+                if (abBlueprint != null) _character.CharacterBlueprints.GrantBlueprint(abBlueprint);
+            }
+
             Debug.Log($"<color=cyan>[Character Community]</color> {_character.CharacterName} founded '{name}'.");
         }
     }

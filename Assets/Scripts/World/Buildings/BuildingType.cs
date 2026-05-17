@@ -8,5 +8,6 @@ public enum BuildingType
     Warehouse,
     HarvestingSite,
     Commercial,
-    Farm
+    Farm,
+    Administrative,
 }

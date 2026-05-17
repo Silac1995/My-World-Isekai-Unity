@@ -1653,7 +1653,24 @@ public class Building : ComplexRoom
         _currentState.Value = MWI.WorldSystem.BuildingState.Complete;
         if (ConstructionProgress.Value < 1f) ConstructionProgress.Value = 1f;
         Debug.Log($"<color=green>[Building.Construction]</color> {BuildingName} completed by Finalize().");
+
+        // Subclass extension point. Fires server-side, after the state-flip. Defensive
+        // try/catch so a buggy subclass override never blocks the Complete transition (rule #31).
+        try { OnFinalize(); }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError($"<color=red>[Building.Finalize]</color> OnFinalize override threw for '{BuildingName}'.");
+        }
     }
+
+    /// <summary>
+    /// Server-only. Extension point that fires immediately after construction completes
+    /// (state flipped to Complete, progress = 1). Subclasses use this to apply one-shot
+    /// completion effects — e.g. <see cref="AdministrativeBuilding"/> grants the founder
+    /// citizenship here. Default implementation is a no-op.
+    /// </summary>
+    protected virtual void OnFinalize() { }
 
     /// <summary>
     /// Owner/Client → Server relay. Asks the server to start
