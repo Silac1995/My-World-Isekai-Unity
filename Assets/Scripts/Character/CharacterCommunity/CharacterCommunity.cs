@@ -174,15 +174,15 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
     {
         var data = new CommunitySaveData();
 
+        // --- communityMapId (existing) ---
         if (_currentCommunity != null)
         {
-            // Try to find the community's map ID via MapRegistry
             string mapId = "";
             if (MWI.WorldSystem.MapRegistry.Instance != null)
             {
                 foreach (var commData in MWI.WorldSystem.MapRegistry.Instance.GetAllCommunities())
                 {
-                    // Match by primary leader — communities are uniquely led
+                    // Match by primary leader — every chartered community has a unique primary.
                     if (_currentCommunity.PrimaryLeader != null && commData.IsLeader(_currentCommunity.PrimaryLeader.CharacterId))
                     {
                         mapId = commData.MapId;
@@ -190,13 +190,33 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
                     }
                 }
             }
-
             data.communityMapId = mapId;
         }
         else if (!string.IsNullOrEmpty(_pendingCommunityMapId))
         {
-            // Preserve unresolved pending data
             data.communityMapId = _pendingCommunityMapId;
+        }
+
+        // --- citizenshipMapId (new) ---
+        if (_citizenship != null)
+        {
+            string mapId = "";
+            if (MWI.WorldSystem.MapRegistry.Instance != null)
+            {
+                foreach (var commData in MWI.WorldSystem.MapRegistry.Instance.GetAllCommunities())
+                {
+                    if (_citizenship.PrimaryLeader != null && commData.IsLeader(_citizenship.PrimaryLeader.CharacterId))
+                    {
+                        mapId = commData.MapId;
+                        break;
+                    }
+                }
+            }
+            data.citizenshipMapId = mapId;
+        }
+        else if (!string.IsNullOrEmpty(_pendingCitizenshipMapId))
+        {
+            data.citizenshipMapId = _pendingCitizenshipMapId;
         }
 
         return data;
@@ -207,9 +227,11 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
         if (data == null) return;
 
         _pendingCommunityMapId = data.communityMapId;
+        _pendingCitizenshipMapId = data.citizenshipMapId;
 
-        // Community references are resolved at runtime when the map loads
-        // and MapRegistry becomes available.
+        // Community + Citizenship references are resolved at runtime when the map
+        // loads and MapRegistry becomes available. Defensive try/catch lives in
+        // whichever subsystem performs the late-rebind (rule #31).
     }
 
     string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);

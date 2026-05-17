@@ -629,6 +629,20 @@ namespace MWI.WorldSystem
         }
 
         /// <summary>
+        /// Primary leader ID — <c>LeaderIds[0]</c> if any, otherwise the legacy
+        /// <c>LeaderNpcId</c> (back-compat for save files authored before the
+        /// multi-leader migration). Returns null if the community is leaderless.
+        /// </summary>
+        public string PrimaryLeaderId
+        {
+            get
+            {
+                if (LeaderIds != null && LeaderIds.Count > 0) return LeaderIds[0];
+                return string.IsNullOrEmpty(LeaderNpcId) ? null : LeaderNpcId;
+            }
+        }
+
+        /// <summary>
         /// Adds a leader to the community. If this is the first leader, also sets LeaderNpcId (primary).
         /// </summary>
         public void AddLeader(string characterId)
