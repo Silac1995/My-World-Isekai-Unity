@@ -120,7 +120,17 @@ public class BuildingLogisticsManager : MonoBehaviour
     public IReadOnlyList<TransportOrder> PlacedTransportOrders => _orderBook.PlacedTransportOrders;
     public IReadOnlyList<TransportOrder> ActiveTransportOrders => _orderBook.ActiveTransportOrders;
     public IReadOnlyList<CraftingOrder> ActiveCraftingOrders => _orderBook.ActiveCraftingOrders;
+    public IReadOnlyList<BuildOrder> ActiveBuildOrders => _orderBook != null ? _orderBook.ActiveBuildOrders : System.Array.Empty<BuildOrder>();
     public bool HasPendingOrders => _orderBook.HasPendingOrders;
+
+    /// <summary>Server-only facade. Adds a BuildOrder so JobBuilder employees can pick it up.</summary>
+    public bool AddBuildOrder(BuildOrder order) => _orderBook != null && _orderBook.AddBuildOrder(order);
+
+    /// <summary>Server-only facade. Removes a BuildOrder (on completion / cancellation).</summary>
+    public bool RemoveBuildOrder(BuildOrder order) => _orderBook != null && _orderBook.RemoveBuildOrder(order);
+
+    /// <summary>Server-only facade. JobBuilder uses this to pick the next BuildOrder to work.</summary>
+    public BuildOrder GetFirstActiveBuildOrder() => _orderBook?.GetFirstActiveBuildOrder();
 
     // =========================================================================
     // UNITY LIFECYCLE

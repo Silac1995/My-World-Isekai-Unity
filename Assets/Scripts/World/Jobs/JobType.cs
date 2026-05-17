@@ -14,6 +14,7 @@ namespace MWI.WorldSystem
         Server = 9,
         Vendor = 10,
         Transporter = 11,
-        Farmer = 12
+        Farmer = 12,
+        Builder = 13,
     }
 }

@@ -36,6 +36,10 @@ public class LogisticsOrderBook
     private readonly List<CraftingOrder> _activeCraftingOrders = new List<CraftingOrder>();
     public IReadOnlyList<CraftingOrder> ActiveCraftingOrders => _activeCraftingOrders;
 
+    // --- BuildOrders placed by leaders/admin-console (Plan 4b) ---
+    private readonly List<BuildOrder> _activeBuildOrders = new List<BuildOrder>();
+    public IReadOnlyList<BuildOrder> ActiveBuildOrders => _activeBuildOrders;
+
     // --- Physical-walk queue (a courier must visit the supplier to 'place' each one) ---
     private Queue<BuildingLogisticsManager.PendingOrder> _pendingOrders = new Queue<BuildingLogisticsManager.PendingOrder>();
     public bool HasPendingOrders => _pendingOrders.Count > 0;
@@ -46,6 +50,7 @@ public class LogisticsOrderBook
     public event System.Action<BuyOrder> OnBuyOrderAdded;
     public event System.Action<TransportOrder> OnTransportOrderAdded;
     public event System.Action<CraftingOrder> OnCraftingOrderAdded;
+    public event System.Action<BuildOrder> OnBuildOrderAdded;
     public event System.Action<MWI.Quests.IQuest> OnAnyOrderRemoved;
 
     // --- Dispatcher dirty flag (perf, see wiki/projects/optimisation-backlog.md entry #2 / B).
@@ -216,6 +221,51 @@ public class LogisticsOrderBook
         }
         return nextOrder;
     }
+
+    // =========================================================================
+    // BUILD ORDERS (Plan 4b — construction commissioned at this building)
+    // =========================================================================
+
+    public bool AddBuildOrder(BuildOrder order)
+    {
+        if (order == null) return false;
+        _activeBuildOrders.Add(order);
+        _dispatchDirty = true;
+        OnBuildOrderAdded?.Invoke(order);
+        return true;
+    }
+
+    public bool RemoveBuildOrder(BuildOrder order)
+    {
+        if (order == null) return false;
+        bool removed = _activeBuildOrders.Remove(order);
+        if (removed)
+        {
+            _dispatchDirty = true;
+            OnAnyOrderRemoved?.Invoke(order);
+        }
+        return removed;
+    }
+
+    /// <summary>
+    /// Returns the first not-yet-completed BuildOrder, or null. Plan 4b's
+    /// JobBuilder uses this to pick work. FIFO ordering by insertion;
+    /// Plan Next can add a priority field for "rush this one".
+    /// </summary>
+    public BuildOrder GetFirstActiveBuildOrder()
+    {
+        for (int i = 0; i < _activeBuildOrders.Count; i++)
+        {
+            var b = _activeBuildOrders[i];
+            if (b == null) continue;
+            if (b.IsCompleted) continue;
+            return b;
+        }
+        return null;
+    }
+
+    /// <summary>Mutable backing list for internal iteration (matches the existing pattern).</summary>
+    public List<BuildOrder> ActiveBuildOrdersForIteration() => _activeBuildOrders;
 
     // =========================================================================
     // PENDING (courier) QUEUE
