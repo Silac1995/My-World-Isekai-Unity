@@ -429,13 +429,15 @@ All `Debug.Log` calls in hot paths (Update-frequency, BT-tick-frequency) gated b
 
 - **Future ally action queueing surface.** Option C chrome (party panel) was rejected; if it returns later, the queued-label component generalizes to per-row state. No spec change needed today.
 
-## 13. Out-of-band follow-up (user directive 2026-05-17)
+## 13. Out-of-band follow-up (user directive 2026-05-17) — ✅ COMPLETED
 
-After this spec ships:
+After this spec shipped:
 
 > **Ranged weapons should only do ranged attacks.** Remove melee-attack damage from ranged weapons in `WeaponSO` and related code paths. Update `wiki/systems/combat.md`, `wiki/systems/items.md` (or wherever), and `.agent/skills/combat_system/SKILL.md` to reflect "ranged weapon = ranged only; for melee, swap to a melee weapon."
 
-This work is **out of scope for this spec** but design choices here (active-weapon-only UI, no secondary attack button, no `MeleeBash` backend routing) are forward-compatible with that cleanup.
+This work was **out of scope for this spec** but design choices here (active-weapon-only UI, no secondary attack button, no `MeleeBash` backend routing) were forward-compatible with that cleanup.
+
+**Resolution (2026-05-17, post-prefab-landing)**: Single-site change in `CharacterCombat.ExecuteAttackLocally` — the "if (target within `RangedCombatStyleSO.MeleeRange`) fall-through to `MeleeAttack()`" branch was removed. Ranged styles now do `RangedAttack(target, rangedStyle)` unconditionally; `target == null` bails as a no-op. No `WeaponSO` field deletion was needed because `_maxSharpness` (labeled "Melee Specifics") is consumed only by `MeleeWeaponInstance` — ranged instances ignore it, so it's dead data on ranged-WeaponSO assets but not actively harmful. Docs updated: `wiki/systems/combat.md` change log + `.agent/skills/combat_system/SKILL.md` "Ranged weapons = ranged-only" subsection.
 
 ## 14. Testing matrix (multiplayer mandatory)
 

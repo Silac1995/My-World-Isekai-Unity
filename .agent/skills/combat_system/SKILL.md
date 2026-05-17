@@ -281,6 +281,17 @@ Queue helpers on `CharacterCombat`:
 - `TryQueueSwapWeapon()` — validates carried weapons ≥ 2 and no swap in flight.
 - `TryQueueUseItem(consumable, target)` — validates ConsumableSO.IsUsableInCombat. Currently routes through existing `CharacterUseConsumableAction` (fires immediately, doesn't queue — future polish to make queue-aware per spec §12).
 
+### Ranged weapons = ranged-only (2026-05-17)
+
+Ranged weapons (Bow / Pistol / Crossbow — anything backed by `RangedCombatStyleSO`) fire ONLY ranged attacks. The historical "auto-melee at close range" fall-through in `CharacterCombat.ExecuteAttackLocally` was removed because:
+
+- It contradicted the active-weapon-only UI (`UI_CombatActionMenu` shows only the equipped weapon's verbs per spec [[combat-action-bar-design]] §3 decision #2 — there's no melee button when ranged is equipped, so a hidden melee swing is surprise behavior).
+- It made `WeaponSO._maxSharpness` semantically meaningful on ranged weapons even though no `RangedWeaponInstance` subclass consumes it.
+
+To melee while carrying a ranged weapon, the player **must Swap to a melee weapon first** (Y hotkey or Swap button on the action bar). The 0.5s swap window (per `CharacterAction_SwapWeapon`) is the intentional tactical cost.
+
+Code: `CharacterCombat.cs:370` — the `if (style is RangedCombatStyleSO rangedStyle)` branch now does `if (target == null) return false; return RangedAttack(target, rangedStyle);` (no distance check, no melee fallback).
+
 ### Queued-action label name (post-2026-05-17 first-playtest polish)
 
 `SetActionIntent(action, target, actionName)` takes an optional human-readable label. Stored on `PlannedActionName` (cleared in `ClearActionIntent` / `LeaveBattle` / `ForceExitCombatMode` alongside `PlannedAction`). `UI_CombatQueuedLabel` reads it to render `"Queued: Melee Attack → Lumi"` instead of the generic `"Queued: Action → Lumi"` v1 placeholder.

@@ -367,14 +367,16 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         // Consume initiative on the executor (Owner predicts, Server validates+broadcasts)
         ConsumeInitiative();
 
-        if (target != null
-            && _currentCombatStyleExpertise?.Style is RangedCombatStyleSO rangedStyle)
+        // Ranged weapons fire ONLY ranged attacks — no melee fallback at close
+        // range (user directive 2026-05-17, "ranged weapon = ranged only"). To
+        // melee while carrying a ranged weapon, the player must Swap to a melee
+        // weapon first (Y hotkey / Swap button on the combat action bar).
+        // Mirrored in UI: UI_CombatActionMenu shows only the active weapon's
+        // verbs (spec §3 decision #2, active-weapon-only).
+        if (_currentCombatStyleExpertise?.Style is RangedCombatStyleSO rangedStyle)
         {
-            float distToTarget = Vector3.Distance(_character.transform.position, target.transform.position);
-            if (distToTarget > rangedStyle.MeleeRange)
-            {
-                return RangedAttack(target, rangedStyle);
-            }
+            if (target == null) return false; // ranged needs a target; nothing to fire at
+            return RangedAttack(target, rangedStyle);
         }
 
         return MeleeAttack();
