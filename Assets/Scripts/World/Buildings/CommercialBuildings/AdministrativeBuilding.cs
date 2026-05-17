@@ -60,10 +60,76 @@ public class AdministrativeBuilding : CommercialBuilding
     // ── CommercialBuilding contract ───────────────────────────────────────
 
     /// <summary>
-    /// Plan 4b adds JobBuilder, JobHarvester, and JobLogisticsManager here.
-    /// Deliberate no-op for Plan 4a — the skeleton ships without staffed roles.
+    /// Staffs the AB with the canonical city-management roster: two
+    /// <see cref="JobBuilder"/>s, one <see cref="JobHarvester"/> (which switches into
+    /// CityHarvester runtime mode when its workplace is an AB — Plan 4b Task 7), and
+    /// one <see cref="JobLogisticsManager"/> (which extends to drive BuildOrder material
+    /// sourcing — Plan 4b Task 6).
     /// </summary>
-    protected override void InitializeJobs() { }
+    protected override void InitializeJobs()
+    {
+        _jobs.Add(new JobBuilder("Builder"));
+        _jobs.Add(new JobBuilder("Builder 2"));
+        _jobs.Add(new JobHarvester("Harvester"));
+        _jobs.Add(new JobLogisticsManager("Logistics Manager"));
+    }
+
+    // ── Unfulfillable-material harvest queue ─────────────────────────────
+
+    /// <summary>
+    /// Server-only scratch list. When <see cref="JobLogisticsManager.ProcessActiveBuildOrders"/>
+    /// requests stock for a missing build material and every supplier tier (B2B shop scan,
+    /// crafter producer chain, VirtualResourceSupplier) fails, the requested
+    /// <c>(ItemSO, qty)</c> lands here. <see cref="JobHarvester"/>'s CityHarvester branch
+    /// then scans for a nearby <see cref="Harvestable"/> yielding the wanted item and
+    /// runs the existing harvest→pickup→deposit chain.
+    /// </summary>
+    private readonly List<UnfulfillableMaterial> _unfulfillableMaterialHarvestQueue = new List<UnfulfillableMaterial>();
+
+    /// <summary>Server-only. Read-only view used by JobHarvester's CityHarvester branch.</summary>
+    public IReadOnlyList<UnfulfillableMaterial> GetUnfulfillableHarvestQueue() => _unfulfillableMaterialHarvestQueue;
+
+    /// <summary>
+    /// Server-only. Adds (or refreshes) a queued material. Idempotent on
+    /// <c>(item)</c> — re-enqueueing the same item with a higher demand overrides the
+    /// stored qty; otherwise the existing entry is left alone (its <c>LastEnqueuedDay</c>
+    /// is bumped so the entry stays "fresh").
+    /// </summary>
+    public void EnqueueUnfulfillableMaterial(ItemSO item, int qty)
+    {
+        if (!IsServer || item == null || qty <= 0) return;
+        int day = MWI.Time.TimeManager.Instance != null ? MWI.Time.TimeManager.Instance.CurrentDay : 0;
+        for (int i = 0; i < _unfulfillableMaterialHarvestQueue.Count; i++)
+        {
+            var entry = _unfulfillableMaterialHarvestQueue[i];
+            if (entry.Item == item)
+            {
+                entry.Qty = Mathf.Max(entry.Qty, qty);
+                entry.LastEnqueuedDay = day;
+                return;
+            }
+        }
+        _unfulfillableMaterialHarvestQueue.Add(new UnfulfillableMaterial(item, qty, day));
+    }
+
+    /// <summary>
+    /// Server-only. Decrements a queued material entry after a successful harvest-deposit.
+    /// Removes the entry entirely when its qty hits zero. No-op if the item isn't queued.
+    /// </summary>
+    public void DecrementUnfulfillableMaterial(ItemSO item, int qtyDelivered)
+    {
+        if (!IsServer || item == null || qtyDelivered <= 0) return;
+        for (int i = 0; i < _unfulfillableMaterialHarvestQueue.Count; i++)
+        {
+            var entry = _unfulfillableMaterialHarvestQueue[i];
+            if (entry.Item == item)
+            {
+                entry.Qty = Mathf.Max(0, entry.Qty - qtyDelivered);
+                if (entry.Qty == 0) _unfulfillableMaterialHarvestQueue.RemoveAt(i);
+                return;
+            }
+        }
+    }
 
     // ── Building.OnFinalize override ──────────────────────────────────────
 
