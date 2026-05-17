@@ -3,7 +3,7 @@ type: system
 title: "Building & Furniture"
 tags: [building, furniture, world, tier-1]
 created: 2026-04-18
-updated: 2026-05-16
+updated: 2026-05-17
 sources: []
 related:
   - "[[world]]"
@@ -13,6 +13,7 @@ related:
   - "[[ai]]"
   - "[[save-load]]"
   - "[[construction]]"
+  - "[[building-grid]]"
   - "[[kevin]]"
 status: stable
 confidence: high
@@ -69,6 +70,14 @@ Give the world a single containment model that every gameplay system can hang of
 | `Assets/Scripts/World/Buildings/CommercialBuilding.cs` | Adds `BuildingTaskManager` + `BuildingLogisticsManager` (consumed by [[jobs-and-logistics]] and [[shops]]). |
 | `Assets/Scripts/World/Data/BuildingSO.cs` | Base ScriptableObject blueprint (`namespace MWI.WorldSystem`). One asset per building type under `Assets/Resources/Data/Buildings/`. Holds `PrefabId`, `BuildingName`, `Icon`, `BuildingPrefab`, `InteriorPrefab`, `CommunityPriority`, `BuildingType`, `ConstructionRequirements`, `DefaultFurnitureLayout`. Replaces the legacy inline `BuildingRegistryEntry` + the 5 duplicated SerializeFields previously on every Building prefab. |
 | `Assets/Scripts/World/Data/BuildingCommercialSO.cs` | `BuildingSO` subclass adding `int BaseTreasury` (currency seed credited once at construction-complete via [[commercial-building#Treasury seed flow]]). |
+| `Assets/Scripts/World/Buildings/BuildingGrid.cs` | Plain C# class (not `NetworkBehaviour`). Per-`MapController` 8-unit cell grid. Sparse `Dictionary<Vector2Int, ulong>` occupancy indexed by cell → `NetworkObjectId`. See [[building-grid]] for full design rationale. |
+
+### BuildingSO additions (Plan 2 — 2026-05-17)
+| Field | Type | Purpose |
+|-------|------|---------|
+| `GridFootprintCells` | `Vector2Int` | Width × depth in 8-unit grid cells. Default `(1,1)`. Drives `BuildingGrid.Register` and `CanPlace`. |
+| `BlueprintCategory` | `BlueprintCategory` enum (`Personal` \| `Civic`) | Gates whether the blueprint appears in personal-placement vs. admin/city-founding flows. |
+| `MinTier` | `CommunityLevel` | Minimum community tier required before the blueprint becomes placeable in a city. |
 
 ### Furniture
 | File | Role |
@@ -96,6 +105,7 @@ Room:
 
 Building:
 - `Building._blueprint` — `[SerializeField] BuildingSO` per prefab. **Single source of truth** for `PrefabId` (saved string key — preserved verbatim across the 2026-05-16 migration so zero save migration was required), `BuildingName`, `BuildingType`, `ConstructionRequirements`, `DefaultFurnitureLayout`. The legacy duplicated SerializeFields (`_prefabId`, `buildingName`, `_buildingType`, `_constructionRequirements`, `_defaultFurnitureLayout`) have been removed; all accessors read through `_blueprint`. `BuildingCommercialSO` subclasses also expose `BaseTreasury` (see [[commercial-building#Treasury seed flow]]). `WorldSettingsData.Blueprints : List<BuildingSO>` is the live registry; the legacy `[Obsolete] BuildingRegistry` lives alongside for one cycle.
+- `Building.GridFootprintCells : Vector2Int` — convenience getter that reads `_blueprint.GridFootprintCells`. Used by `OnNetworkSpawn` / `OnNetworkDespawn` when registering with `MapController.BuildingGrid`.
 - `Building.CurrentState` (`BuildingState` enum).
 - `Building.ContributeMaterial(ItemSO, int)` — server-side ledger increment for construction (called from `CharacterAction_FinishConstruction.OnTick`).
 - `Building.BuildInstantly()` — debug/cheat/admin path.
@@ -156,6 +166,31 @@ FurnitureGrid.CanPlace(furniturePrefab, cell)?
 FurnitureManager.Place(instance) ──► serialize cell occupancy
 ```
 
+BuildingGrid integration (Plan 2 — 2026-05-17):
+```
+BuildingPlacementManager.UpdateGhostPosition
+       │  BuildingGrid.SnapToGridCenter(hit.point)
+       ▼
+Ghost positioned at cell centre
+
+BuildingPlacementManager.ValidatePlacement
+       │  MapController.BuildingGrid.CanPlace(origin, size)?
+       ▼
+Server approves / rejects placement
+
+Building.OnNetworkSpawn (server)
+       │  BuildingGrid.Register(NetworkObjectId, origin, GridFootprintCells)
+       ▼
+Cells marked occupied
+
+Building.OnNetworkDespawn (server)
+       │  BuildingGrid.Release(NetworkObjectId)
+       ▼
+Cells freed
+```
+
+Occupancy is *derived state* — not persisted. On `MapController.SpawnSavedBuildings` every restored Building's `OnNetworkSpawn` re-registers from `BuildingSaveData.Position` + `BuildingSO.GridFootprintCells`. See [[building-grid]] for the full design rationale.
+
 ## Dependencies
 
 ### Upstream
@@ -177,6 +212,7 @@ FurnitureManager.Place(instance) ──► serialize cell occupancy
 - `BuildingSaveData.PlacedFurnitures` (2026-05-13) — runtime-placed furniture roster (anything not in `_defaultFurnitureLayout`). Without this list, every player/NPC-placed chest / crafting station / etc. silently disappeared on save→load because `Building.TrySpawnDefaultFurniture` only re-instantiates default-layout slots. Restored before `StorageFurnitures` slot-content restore by `MapController.RestorePlacedFurnitureForBuilding`, so per-storage key lookup finds the fresh instances. See building_system SKILL `Placed-furniture roster` section for the full save/restore contract.
 - **Save-restore ordering invariant (2026-05-13):** `MapController.ApplyDynamicSaveDataToBuilding` MUST call `Building.RestoreFromSaveData` BEFORE the per-furniture restore steps (`RestorePlacedFurnitureForBuilding`, `RestoreStorageFurnitureContents`, `RestoreCashierContents`, ShopBuilding hooks). The state-flip inside `RestoreFromSaveData` triggers the manual post-Complete cascade (`TrySpawnDefaultFurniture` + NavMesh carve) when `_isStarted == false` — without that ordering, the cascade fires AFTER the content-restore steps have already walked a furniture-less building and silently no-op'd. See [[save-restore-state-flip-no-subscriber]].
 - All persist via the world save (`MapSaveData`) and survive hibernation.
+- **BuildingGrid occupancy is derived state, not persisted separately.** It is rebuilt from `BuildingSaveData.Position` + `BuildingSO.GridFootprintCells` on every map wake-up and scene load. See [[building-grid]] for the rationale.
 
 ## Known gotchas / eg cases
 
@@ -186,6 +222,7 @@ FurnitureManager.Place(instance) ──► serialize cell occupancy
 - **`BuildingId` is per-instance** — don't hardcode a shop prefab's ID; each spawn generates a new GUID.
 - **Permission gate on placement** — community-level permissions run through `BuildingPlacementManager`. Non-owners can't place in non-public rooms.
 - **Zone triggers fire on any collider** — characters enter/exit zones via `OnTriggerEnter/Exit`. Non-character triggers (like dropped items) must not pollute the `_charactersInside` set.
+- **Client-side ghost colour is optimistic** — the client's `BuildingGrid` is always empty (no `Register` calls fire on clients). The ghost will show green on cells the server considers occupied. Server-side `CanPlace` is the authoritative gate; the server-side rejection toast is the user-visible feedback. See [[building-grid#Network semantics]].
 
 ## Default furniture layout
 
@@ -235,6 +272,7 @@ for procedural authoring details.
 - [[building-placement-manager]] — community permission gate.
 
 ## Change log
+- 2026-05-17 — BuildingGrid (8-unit per-MapController cell grid) wired into placement flow. BuildingSO gains GridFootprintCells / BlueprintCategory / MinTier. Building gains GridFootprintCells convenience getter. Server-only state, derived from BuildingSaveData on wake-up. New concept page [[building-grid]] added. — claude
 - 2026-05-16 — BuildingSO blueprint introduced. Replaces inline BuildingRegistryEntry + duplicated prefab fields. PrefabId strings preserved verbatim (zero save migration). — claude
 - 2026-05-13 (later) — Fixed the second half of the save-load storage bug: **prefab-authored default furniture** (e.g. Lumberyard's crate at `_defaultFurnitureLayout[0]`) was also vanishing on load, not just runtime-placed. Same subscription-timing race that bit `BuildInstantly` (see [[buildinstantly-pre-start-lifecycle-race]]): `MapController.SpawnSavedBuildings` → `Spawn()` → `OnNetworkSpawn` auto-derives `_currentState.Value = UnderConstruction` for any prefab with non-empty `_constructionRequirements` and `_spawnAsComplete=false`. Then `ApplyDynamicSaveDataToBuilding → RestoreFromSaveData` writes `_currentState.Value = Complete`, **but Start() (where the `OnValueChanged += HandleStateChanged` subscription lives) hasn't run yet** — so the post-Complete cascade (`TrySpawnDefaultFurniture`, `ConfigureNavMeshObstacles`, `OnConstructionComplete`) silently no-ops. Default furniture never spawns; storage CONTENTS restore then finds zero live storages and silently skips them too. Fix: `Building.RestoreFromSaveData` now manually invokes `TrySpawnDefaultFurniture()` + `ConfigureNavMeshObstacles()` after the state-flip when `_isStarted == false`; idempotent via `_defaultFurnitureSpawned`. `MapController.ApplyDynamicSaveDataToBuilding` reordered so `RestoreFromSaveData` runs FIRST — owners/employees → state-flip-with-cascade → placed-furniture → storage contents → cashier → shop hooks. Save-restore can't use the coroutine-defer pattern BuildInstantly uses because the synchronous content-restore steps need furniture live in the same call. See [[save-restore-state-flip-no-subscriber]] in gotchas. — claude
 - 2026-05-13 — Player/NPC-placed furniture now persists across save/load. Added `BuildingSaveData.PlacedFurnitures : List<PlacedFurnitureSaveEntry>` capturing every Furniture under the building that isn't matched by `_defaultFurnitureLayout` (dedup via new `Building.IsDefaultLayoutFurniture(furniture)` helper — same ItemSO + LocalPosition within 0.05u). Restore wired in `MapController.RestorePlacedFurnitureForBuilding`, called from `ApplyDynamicSaveDataToBuilding` BEFORE `RestoreStorageFurnitureContents` so storage contents bind to the freshly-spawned instances. Server-only, gated to `Complete` state, mirrors `Building.SpawnDefaultFurnitureSlot` (Instantiate → `NetworkObject.Spawn()` → parent under building root → `FurnitureManager.RegisterSpawnedFurnitureUnchecked` on MainRoom). Both refresh paths (`SnapshotActiveBuildings`, `Hibernate`) copy the new field — same hazard that bit `ConstructionProgress` / `DeliveredMaterials` on 2026-05-07. Pre-fix symptom: storages placed in HarvestingBuilding / CraftingBuilding / FarmingBuilding silently vanished on every load. ShopBuilding appeared to work only because SellShelves are nested-NO prefab children absorbed into `_defaultFurnitureLayout` at Awake by `ConvertNestedNetworkFurnitureToLayout` — Shop's runtime player placements had the same bug. — claude
