@@ -147,7 +147,25 @@
       "Bash(grep -nB 1 -A 5 \"AssignSafeRolesForShift\" \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs\" \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/Assets/Scripts/World/Buildings/CommercialBuilding.cs\")",
       "Bash(grep -nB 2 -A 5 \"WorkerStartingShift\\\\b\" \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/Assets/Scripts/World/Buildings/CommercialBuilding.cs\")",
       "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add Assets/Scripts/World/Buildings/CommercialBuilding.cs)",
-      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add .agent/skills/building_system/SKILL.md)"
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add .agent/skills/building_system/SKILL.md)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" log --oneline -15)",
+      "Bash(grep -nB 1 -A 20 \"FindShopWithItem\" \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/Assets/Scripts/AI/GOAP/Actions/GoapAction_GoShopping.cs\")",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add Assets/Scripts/AI/GOAP/Actions/GoapAction_GoShopping.cs)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add Assets/Scripts/World/Buildings/ReputationWeightedPicker.cs Assets/Scripts/AI/GOAP/Actions/GoapAction_GoShopping.cs Assets/Scripts/World/Buildings/Logistics/LogisticsStockEvaluator.cs)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add wiki/systems/commercial-treasury.md .agent/skills/building_system/SKILL.md)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" rev-parse --abbrev-ref HEAD)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" status -sb)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" branch -a)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" log --oneline origin/multiplayyer..HEAD)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" log --oneline origin/main -3)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add Assets/Scripts/World/Buildings/ReputationWeightedPicker.cs.meta)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" log --oneline -2)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add Assets/Scripts/World/Buildings/CommercialBuilding.cs Assets/Scripts/Debug/DevMode/Inspect/SubTabs/BuildingOverviewSubTab.cs Assets/Scripts/Debug/DevMode/Inspect/SubTabs/BuildingConsoleManagementSubTab.cs Assets/Scripts/UI/Management/HiringTabView.cs)",
+      "Bash(grep -rnE \"ReputationMax|Reputation/100|Reputation:.*\\\\\\\\{.*\\\\\\\\}\\\\\\\\/\" \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/Assets/Scripts/\" --include='*.cs')",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add Assets/Scripts/World/Buildings/CommercialBuilding.cs Assets/Scripts/World/Buildings/ReputationWeightedPicker.cs Assets/Scripts/Debug/DevMode/Inspect/SubTabs/BuildingOverviewSubTab.cs Assets/Scripts/Debug/DevMode/Inspect/SubTabs/BuildingConsoleManagementSubTab.cs Assets/Scripts/UI/Management/HiringTabView.cs)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add wiki/systems/commercial-treasury.md .agent/skills/building_system/SKILL.md .agent/skills/debug-tools/SKILL.md)",
+      "Bash(grep -nB 1 -A 3 \"TryChangeReputation\\(-5\" \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs\")",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs wiki/systems/commercial-treasury.md)"
     ],
     "additionalDirectories": [
       "\\tmp"

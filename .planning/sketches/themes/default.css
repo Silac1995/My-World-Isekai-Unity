@@ -1,0 +1,57 @@
+/* MWI Unity-UI dark theme — mirrors the in-game UI_OwnerManagementPanel aesthetic.
+   Dark grey neutral background, light text, semibold labels, subtle borders.
+   Not a finished design system — placeholder so designers see the right vibe. */
+
+:root {
+  /* Surfaces */
+  --color-bg:           #1f2024;   /* outer page (around the panel) */
+  --color-panel:        #2a2c31;   /* panel chrome */
+  --color-tab-row:      #1a1b1e;   /* dark tab strip behind the active tab */
+  --color-tab-active:   #2a2c31;   /* matches body so active tab looks "attached" */
+  --color-tab-inactive: #1a1b1e;
+  --color-body:         #2a2c31;   /* tab body background */
+  --color-row:          #34373e;   /* storage row background */
+  --color-row-alt:      #2f3137;   /* zebra-stripe alt */
+  --color-row-hover:    #3c4049;
+  --color-border:       #43464d;
+  --color-divider:      #3a3c42;
+
+  /* Text */
+  --color-text:         #e8e8ea;
+  --color-text-muted:   #9a9da4;
+  --color-text-dim:     #6f7279;
+  --color-text-hint:    #c7a96a;   /* warm gold for the auto-fallback hint */
+  --color-accent:       #7ab8ff;   /* assignment / interactive */
+  --color-accent-dim:   #4d7eb3;
+  --color-success:      #8fcf6e;
+  --color-warn:         #f0b95c;
+  --color-danger:       #f06e6e;
+
+  /* Typography */
+  --font-sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Consolas', 'JetBrains Mono', monospace;
+  --text-xs:   11px;
+  --text-sm:   12px;
+  --text-base: 13px;
+  --text-md:   14px;
+  --text-lg:   16px;
+  --text-xl:   20px;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Shapes */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+
+  /* Sizing (the in-game tab body) */
+  --panel-w:    760px;   /* outer panel (chrome + body) */
+  --tab-body-w: 660px;   /* per the spec */
+  --tab-body-h: 500px;
+}

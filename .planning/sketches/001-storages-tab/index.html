@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sketch 001 — Storages Tab</title>
+  <link rel="stylesheet" href="../themes/default.css" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--color-bg);
+      color: var(--color-text);
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      min-height: 100vh;
+    }
+    body { padding-top: 56px; padding-bottom: 80px; }
+
+    /* ---------- Top variant tab bar ---------- */
+    #variant-nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9998;
+      background: #14151a;
+      border-bottom: 1px solid var(--color-border);
+      padding: 8px 16px; display: flex; gap: 8px; align-items: center;
+      font-family: var(--font-sans);
+    }
+    #variant-nav .label {
+      color: var(--color-text-muted); font-size: var(--text-sm);
+      margin-right: 12px;
+    }
+    .variant-tab {
+      background: #24262c; color: var(--color-text-muted);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 6px 14px; font-size: var(--text-sm);
+      cursor: pointer; transition: all 0.15s ease;
+      font-family: var(--font-sans);
+    }
+    .variant-tab:hover { background: #2d3038; color: var(--color-text); }
+    .variant-tab.active {
+      background: var(--color-accent-dim);
+      color: white; border-color: var(--color-accent);
+    }
+
+    /* ---------- Panel chrome ---------- */
+    .stage { display: flex; justify-content: center; padding: 32px 16px; }
+    .panel {
+      width: var(--panel-w);
+      background: var(--color-panel);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    .panel-titlebar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px;
+      background: #1a1b1e;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .panel-title { font-size: var(--text-lg); font-weight: 600; }
+    .panel-title .building-type {
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      margin-left: 8px; font-weight: normal;
+    }
+    .panel-close {
+      background: transparent; border: none; color: var(--color-text-muted);
+      font-size: 18px; cursor: pointer; padding: 4px 10px;
+      border-radius: var(--radius-sm);
+    }
+    .panel-close:hover { color: var(--color-danger); background: rgba(240,110,110,0.1); }
+
+    /* ---------- Tab row ---------- */
+    .tab-row {
+      display: flex;
+      background: var(--color-tab-row);
+      padding: 0 16px;
+      gap: 2px;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .tab {
+      padding: 10px 18px;
+      background: var(--color-tab-inactive);
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+      border-radius: var(--radius-md) var(--radius-md) 0 0;
+      cursor: pointer;
+      border: 1px solid transparent;
+      border-bottom: none;
+      margin-bottom: -1px;
+    }
+    .tab.active {
+      background: var(--color-tab-active);
+      color: var(--color-text);
+      border-color: var(--color-border);
+      font-weight: 600;
+    }
+
+    /* ---------- Tab body ---------- */
+    .tab-body {
+      width: var(--tab-body-w);
+      min-height: var(--tab-body-h);
+      margin: 0 auto;
+      padding: 16px 20px;
+      background: var(--color-body);
+      display: flex; flex-direction: column;
+      position: relative;
+    }
+    .tab-header {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: 12px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--color-divider);
+    }
+    .tab-header h2 {
+      margin: 0; font-size: var(--text-lg); font-weight: 600;
+    }
+    .tab-header .subtitle {
+      font-size: var(--text-sm); color: var(--color-text-muted);
+    }
+
+    /* ---------- Building context switcher (per variant body) ---------- */
+    .ctx-switch {
+      display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .ctx-btn {
+      background: #24262c; color: var(--color-text-muted);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      padding: 4px 10px; font-size: var(--text-xs);
+      cursor: pointer;
+    }
+    .ctx-btn.active {
+      background: var(--color-accent-dim); color: white;
+      border-color: var(--color-accent);
+    }
+
+    /* ---------- Storage rows (shared) ---------- */
+    .storage-list { display: flex; flex-direction: column; gap: 4px; }
+
+    .row {
+      display: grid;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: var(--color-row);
+      border: 1px solid transparent;
+      border-radius: var(--radius-md);
+      transition: background 0.1s ease;
+    }
+    .row:hover { background: var(--color-row-hover); }
+    .row:nth-child(even) { background: var(--color-row-alt); }
+    .row:nth-child(even):hover { background: var(--color-row-hover); }
+
+    .name {
+      font-weight: 600; font-size: var(--text-base);
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .name .kind {
+      font-weight: normal; font-size: var(--text-xs);
+      color: var(--color-text-muted);
+    }
+    .slots {
+      display: flex; align-items: center; gap: 6px;
+      font-family: var(--font-mono); font-size: var(--text-xs);
+      color: var(--color-text-muted);
+      white-space: nowrap;
+    }
+    .slot-bar {
+      width: 60px; height: 4px; background: #1a1b1e;
+      border-radius: 999px; overflow: hidden;
+    }
+    .slot-bar .fill {
+      height: 100%; background: var(--color-accent);
+      transition: width 0.2s ease;
+    }
+    .slot-bar .fill.full   { background: var(--color-warn); }
+    .slot-bar .fill.empty  { background: var(--color-text-dim); }
+
+    /* Section headers above the row list (column labels) */
+    .col-headers {
+      display: grid; gap: 12px; align-items: center;
+      padding: 4px 12px 6px 12px;
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--color-text-dim);
+      border-bottom: 1px solid var(--color-divider);
+      margin-bottom: 4px;
+    }
+
+    /* ---------- Form controls (Unity-flat) ---------- */
+    .check, .radio {
+      width: 16px; height: 16px; flex-shrink: 0;
+      border: 1px solid var(--color-border);
+      background: #1a1b1e;
+      cursor: pointer; position: relative;
+      transition: all 0.1s ease;
+    }
+    .check { border-radius: var(--radius-sm); }
+    .radio { border-radius: 50%; }
+    .check:hover, .radio:hover { border-color: var(--color-accent); }
+    .check.checked { background: var(--color-accent); border-color: var(--color-accent); }
+    .check.checked::after {
+      content: '✓'; position: absolute; top: -1px; left: 2px;
+      color: white; font-size: 12px; font-weight: bold;
+    }
+    .radio.checked { border-color: var(--color-accent); }
+    .radio.checked::after {
+      content: ''; position: absolute; top: 3px; left: 3px;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--color-accent);
+    }
+    .cell-wrap {
+      display: flex; justify-content: center; align-items: center;
+    }
+    .cell-wrap.disabled { opacity: 0.18; pointer-events: none; }
+
+    select.unity-select {
+      background: #1a1b1e; color: var(--color-text);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-sm);
+      padding: 4px 8px;
+      font-family: var(--font-sans); font-size: var(--text-sm);
+      cursor: pointer; min-width: 150px;
+    }
+    select.unity-select:hover { border-color: var(--color-accent); }
+    select.unity-select:focus { outline: none; border-color: var(--color-accent); }
+
+    /* ---------- Hint banner ---------- */
+    .hint {
+      margin-top: 12px; padding: 8px 12px;
+      background: rgba(199,169,106,0.08);
+      border-left: 3px solid var(--color-text-hint);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
+      color: var(--color-text-hint);
+    }
+    .hint b { color: var(--color-text); font-weight: 600; }
+
+    /* Empty state */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; flex: 1;
+      padding: 60px 20px; text-align: center;
+      color: var(--color-text-muted); font-size: var(--text-base);
+    }
+    .empty-state .icon {
+      font-size: 36px; margin-bottom: 12px; opacity: 0.5;
+    }
+    .empty-state .hint-text {
+      font-size: var(--text-sm); color: var(--color-text-dim);
+      max-width: 380px; line-height: 1.5;
+    }
+
+    /* ---------- Margin notes (right of stage) ---------- */
+    .margin-notes {
+      position: fixed;
+      top: 80px; right: 16px;
+      width: 280px; max-height: calc(100vh - 120px);
+      overflow-y: auto;
+      background: #1a1b1e;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      font-size: var(--text-sm);
+      z-index: 50;
+    }
+    .margin-notes h3 {
+      margin: 0 0 8px 0; font-size: var(--text-sm);
+      text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--color-warn);
+    }
+    .margin-notes h4 {
+      margin: 10px 0 4px 0; font-size: var(--text-xs);
+      color: var(--color-text);
+    }
+    .margin-notes p {
+      margin: 0 0 6px 0; font-size: var(--text-xs);
+      color: var(--color-text-muted); line-height: 1.5;
+    }
+    .margin-notes .pro  { color: var(--color-success); font-weight: 600; }
+    .margin-notes .con  { color: var(--color-danger);  font-weight: 600; }
+    .margin-notes .q    { color: var(--color-warn);    font-weight: 600; }
+
+    /* ---------- Variant switching ---------- */
+    .variant { display: none; }
+    .variant.active { display: block; }
+    .ctx { display: none; }
+    .ctx.active { display: block; }
+
+    /* ---------- Variant A — radios + checkboxes ---------- */
+    .vA .col-headers,
+    .vA .row {
+      grid-template-columns: minmax(180px, 1.4fr) 90px 70px 70px 70px;
+    }
+    .vA.shop .col-headers,
+    .vA.shop .row {
+      grid-template-columns: minmax(180px, 1.4fr) 90px 70px 70px 70px;
+    }
+    .vA.forge .col-headers,
+    .vA.forge .row {
+      grid-template-columns: minmax(180px, 1.6fr) 100px 80px 80px;
+    }
+
+    /* ---------- Variant B — dropdowns ---------- */
+    .vB .col-headers,
+    .vB .row {
+      grid-template-columns: minmax(180px, 1.4fr) 100px 1fr 90px;
+    }
+    .vB.forge .col-headers,
+    .vB.forge .row {
+      grid-template-columns: minmax(180px, 1.4fr) 100px 1fr;
+    }
+
+    /* ---------- Variant C — cell grid ---------- */
+    .vC .col-headers,
+    .vC .row {
+      grid-template-columns: minmax(180px, 1.4fr) 100px 80px 80px 80px;
+    }
+    .vC.forge .col-headers,
+    .vC.forge .row {
+      grid-template-columns: minmax(180px, 1.4fr) 100px 80px 80px;
+    }
+
+    /* ---------- Sketch toolbar ---------- */
+    #sketch-tools {
+      position: fixed; bottom: 12px; right: 12px; z-index: 9999;
+      font-family: system-ui; font-size: 12px;
+      background: rgba(0,0,0,0.75); color: white;
+      padding: 8px 12px; border-radius: 8px;
+      opacity: 0.4; transition: opacity 0.2s;
+      display: flex; gap: 8px; align-items: center;
+    }
+    #sketch-tools:hover { opacity: 1; }
+    #sketch-tools select {
+      background: #333; color: white; border: 1px solid #555;
+      padding: 2px 6px; border-radius: 4px; font-size: 11px;
+    }
+    #sketch-tools button {
+      background: #333; color: white; border: 1px solid #555;
+      padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;
+    }
+    #sketch-tools button:hover { background: #555; }
+  </style>
+</head>
+<body>
+
+<!-- ============== TOP VARIANT TAB BAR ============== -->
+<div id="variant-nav">
+  <span class="label">Sketch 001 — Storages tab role widget:</span>
+  <button class="variant-tab active" data-variant="a" onclick="showVariant(this, 'a')">A · Radios + Sell-Shelf checkbox</button>
+  <button class="variant-tab" data-variant="b" onclick="showVariant(this, 'b')">B · Dropdown per row</button>
+  <button class="variant-tab" data-variant="c" onclick="showVariant(this, 'c')">C · Cell grid</button>
+</div>
+
+<!-- ============== VARIANT A — Radios + Sell-Shelf checkbox ============== -->
+<div class="variant active" id="variant-a">
+  <div class="stage">
+    <div class="panel">
+      <div class="panel-titlebar">
+        <div class="panel-title" id="title-a">Anvil &amp; Forge <span class="building-type">— Forge</span></div>
+        <button class="panel-close" title="Close">✕</button>
+      </div>
+      <div class="tab-row">
+        <div class="tab">Hiring</div>
+        <div class="tab">Catalog</div>
+        <div class="tab active">Storages</div>
+        <div class="tab">Cashiers</div>
+      </div>
+      <div class="tab-body vA forge" id="body-a">
+        <div class="tab-header">
+          <h2>Storages</h2>
+          <div class="subtitle">Assign each storage a role for the LogisticsManager</div>
+        </div>
+
+        <div class="ctx-switch">
+          <button class="ctx-btn active" onclick="ctxA('forge')">Forge (non-Shop)</button>
+          <button class="ctx-btn" onclick="ctxA('shop')">Clothing Shop</button>
+          <button class="ctx-btn" onclick="ctxA('empty')">Empty (no storages)</button>
+        </div>
+
+        <!-- Forge context -->
+        <div class="ctx active" id="ctxA-forge">
+          <div class="col-headers">
+            <div>Storage</div>
+            <div>Slots</div>
+            <div style="text-align:center">Tool</div>
+            <div style="text-align:center">Inventory</div>
+          </div>
+          <div class="storage-list">
+            <div class="row">
+              <div class="name">Tool Bin (north)<span class="kind">Chest · 16 slots</span></div>
+              <div class="slots"><span>5/16</span><div class="slot-bar"><div class="fill" style="width:31%"></div></div></div>
+              <div class="cell-wrap"><span class="radio checked" data-group="tool-fA" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Ingot Shelf<span class="kind">Shelf · 16 slots</span></div>
+              <div class="slots"><span>12/16</span><div class="slot-bar"><div class="fill" style="width:75%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-fA" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Coal Barrel<span class="kind">Barrel · 16 slots</span></div>
+              <div class="slots"><span>3/16</span><div class="slot-bar"><div class="fill" style="width:19%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-fA" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Backroom Chest<span class="kind">Chest · 16 slots</span></div>
+              <div class="slots"><span>0/16</span><div class="slot-bar"><div class="fill empty" style="width:2%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-fA" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shop context -->
+        <div class="ctx" id="ctxA-shop">
+          <div class="col-headers">
+            <div>Storage</div>
+            <div>Slots</div>
+            <div style="text-align:center">Tool</div>
+            <div style="text-align:center">Inventory</div>
+            <div style="text-align:center">Sell-Shelf</div>
+          </div>
+          <div class="storage-list">
+            <div class="row">
+              <div class="name">Crate (north)<span class="kind">Chest · 16 slots</span></div>
+              <div class="slots"><span>5/16</span><div class="slot-bar"><div class="fill" style="width:31%"></div></div></div>
+              <div class="cell-wrap"><span class="radio checked" data-group="tool-sA" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Shelf_A<span class="kind">Shelf · 16 slots</span></div>
+              <div class="slots"><span>8/16</span><div class="slot-bar"><div class="fill" style="width:50%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-sA" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Shelf_B<span class="kind">Shelf · 16 slots</span></div>
+              <div class="slots"><span>14/16</span><div class="slot-bar"><div class="fill full" style="width:87%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-sA" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Wardrobe<span class="kind">Wardrobe · 12 slots</span></div>
+              <div class="slots"><span>7/12</span><div class="slot-bar"><div class="fill" style="width:58%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-sA" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Backroom Chest<span class="kind">Chest · 16 slots</span></div>
+              <div class="slots"><span>2/16</span><div class="slot-bar"><div class="fill" style="width:13%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-sA" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+            </div>
+          </div>
+          <div class="hint">
+            <b>Tool Storage:</b> auto-fallback to <i>Crate (north)</i> when no override is set
+            (the LogisticsManager picks the inspector-authored fallback during shift-start).
+          </div>
+        </div>
+
+        <!-- Empty context -->
+        <div class="ctx" id="ctxA-empty">
+          <div class="empty-state">
+            <div class="icon">📦</div>
+            <div>No storage furniture in this building yet.</div>
+            <div class="hint-text">Place a storage furniture (chest, shelf, barrel, wardrobe) inside the building to assign roles.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============== VARIANT B — Dropdown per row ============== -->
+<div class="variant" id="variant-b">
+  <div class="stage">
+    <div class="panel">
+      <div class="panel-titlebar">
+        <div class="panel-title" id="title-b">Anvil &amp; Forge <span class="building-type">— Forge</span></div>
+        <button class="panel-close" title="Close">✕</button>
+      </div>
+      <div class="tab-row">
+        <div class="tab">Hiring</div>
+        <div class="tab">Catalog</div>
+        <div class="tab active">Storages</div>
+        <div class="tab">Cashiers</div>
+      </div>
+      <div class="tab-body vB forge" id="body-b">
+        <div class="tab-header">
+          <h2>Storages</h2>
+          <div class="subtitle">One primary role per storage; sell-shelf flag stacks on top (shops only)</div>
+        </div>
+
+        <div class="ctx-switch">
+          <button class="ctx-btn active" onclick="ctxB('forge')">Forge (non-Shop)</button>
+          <button class="ctx-btn" onclick="ctxB('shop')">Clothing Shop</button>
+          <button class="ctx-btn" onclick="ctxB('empty')">Empty (no storages)</button>
+        </div>
+
+        <!-- Forge context -->
+        <div class="ctx active" id="ctxB-forge">
+          <div class="col-headers">
+            <div>Storage</div>
+            <div>Slots</div>
+            <div>Role</div>
+          </div>
+          <div class="storage-list">
+            <div class="row">
+              <div class="name">Tool Bin (north)<span class="kind">Chest · 16 slots</span></div>
+              <div class="slots"><span>5/16</span><div class="slot-bar"><div class="fill" style="width:31%"></div></div></div>
+              <div><select class="unity-select"><option>🔧 Tool Storage</option><option>📦 Inventory</option><option>— None</option></select></div>
+            </div>
+            <div class="row">
+              <div class="name">Ingot Shelf<span class="kind">Shelf · 16 slots</span></div>
+              <div class="slots"><span>12/16</span><div class="slot-bar"><div class="fill" style="width:75%"></div></div></div>
+              <div><select class="unity-select"><option>📦 Inventory</option><option>🔧 Tool Storage</option><option>— None</option></select></div>
+            </div>
+            <div class="row">
+              <div class="name">Coal Barrel<span class="kind">Barrel · 16 slots</span></div>
+              <div class="slots"><span>3/16</span><div class="slot-bar"><div class="fill" style="width:19%"></div></div></div>
+              <div><select class="unity-select"><option>📦 Inventory</option><option>🔧 Tool Storage</option><option>— None</option></select></div>
+            </div>
+            <div class="row">
+              <div class="name">Backroom Chest<span class="kind">Chest · 16 slots</span></div>
+              <div class="slots"><span>0/16</span><div class="slot-bar"><div class="fill empty" style="width:2%"></div></div></div>
+              <div><select class="unity-select"><option>— None</option><option>📦 Inventory</option><option>🔧 Tool Storage</option></select></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shop context -->
+        <div class="ctx" id="ctxB-shop">
+          <div class="col-headers">
+            <div>Storage</div>
+            <div>Slots</div>
+            <div>Role</div>
+            <div style="text-align:center">Sell-Shelf</div>
+          </div>
+          <div class="storage-list">
+            <div class="row">
+              <div class="name">Crate (north)<span class="kind">Chest · 16 slots</span></div>
+              <div class="slots"><span>5/16</span><div class="slot-bar"><div class="fill" style="width:31%"></div></div></div>
+              <div><select class="unity-select"><option>🔧 Tool Storage</option><option>📦 Inventory</option><option>— None</option></select></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Shelf_A<span class="kind">Shelf · 16 slots</span></div>
+              <div class="slots"><span>8/16</span><div class="slot-bar"><div class="fill" style="width:50%"></div></div></div>
+              <div><select class="unity-select"><option>— None</option><option>📦 Inventory</option><option>🔧 Tool Storage</option></select></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Shelf_B<span class="kind">Shelf · 16 slots</span></div>
+              <div class="slots"><span>14/16</span><div class="slot-bar"><div class="fill full" style="width:87%"></div></div></div>
+              <div><select class="unity-select"><option>— None</option><option>📦 Inventory</option><option>🔧 Tool Storage</option></select></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Wardrobe<span class="kind">Wardrobe · 12 slots</span></div>
+              <div class="slots"><span>7/12</span><div class="slot-bar"><div class="fill" style="width:58%"></div></div></div>
+              <div><select class="unity-select"><option>📦 Inventory</option><option>🔧 Tool Storage</option><option>— None</option></select></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Backroom Chest<span class="kind">Chest · 16 slots</span></div>
+              <div class="slots"><span>2/16</span><div class="slot-bar"><div class="fill" style="width:13%"></div></div></div>
+              <div><select class="unity-select"><option>📦 Inventory</option><option>🔧 Tool Storage</option><option>— None</option></select></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+            </div>
+          </div>
+          <div class="hint">
+            <b>Tool Storage:</b> auto-fallback to <i>Crate (north)</i> when no override is set.
+          </div>
+        </div>
+
+        <!-- Empty context -->
+        <div class="ctx" id="ctxB-empty">
+          <div class="empty-state">
+            <div class="icon">📦</div>
+            <div>No storage furniture in this building yet.</div>
+            <div class="hint-text">Place a storage furniture (chest, shelf, barrel, wardrobe) inside the building to assign roles.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============== VARIANT C — Cell grid ============== -->
+<div class="variant" id="variant-c">
+  <div class="stage">
+    <div class="panel">
+      <div class="panel-titlebar">
+        <div class="panel-title" id="title-c">Anvil &amp; Forge <span class="building-type">— Forge</span></div>
+        <button class="panel-close" title="Close">✕</button>
+      </div>
+      <div class="tab-row">
+        <div class="tab">Hiring</div>
+        <div class="tab">Catalog</div>
+        <div class="tab active">Storages</div>
+        <div class="tab">Cashiers</div>
+      </div>
+      <div class="tab-body vC forge" id="body-c">
+        <div class="tab-header">
+          <h2>Storages</h2>
+          <div class="subtitle">Storage × role grid — radios for singletons, checkboxes for multi</div>
+        </div>
+
+        <div class="ctx-switch">
+          <button class="ctx-btn active" onclick="ctxC('forge')">Forge (non-Shop)</button>
+          <button class="ctx-btn" onclick="ctxC('shop')">Clothing Shop</button>
+          <button class="ctx-btn" onclick="ctxC('empty')">Empty (no storages)</button>
+        </div>
+
+        <!-- Forge context -->
+        <div class="ctx active" id="ctxC-forge">
+          <div class="col-headers">
+            <div>Storage</div>
+            <div>Slots</div>
+            <div style="text-align:center" title="Single per building">🔧 Tool</div>
+            <div style="text-align:center" title="Many allowed">📦 Inventory</div>
+          </div>
+          <div class="storage-list">
+            <div class="row">
+              <div class="name">Tool Bin (north)<span class="kind">Chest · 16 slots</span></div>
+              <div class="slots"><span>5/16</span><div class="slot-bar"><div class="fill" style="width:31%"></div></div></div>
+              <div class="cell-wrap"><span class="radio checked" data-group="tool-fC" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Ingot Shelf<span class="kind">Shelf · 16 slots</span></div>
+              <div class="slots"><span>12/16</span><div class="slot-bar"><div class="fill" style="width:75%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-fC" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Coal Barrel<span class="kind">Barrel · 16 slots</span></div>
+              <div class="slots"><span>3/16</span><div class="slot-bar"><div class="fill" style="width:19%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-fC" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Backroom Chest<span class="kind">Chest · 16 slots</span></div>
+              <div class="slots"><span>0/16</span><div class="slot-bar"><div class="fill empty" style="width:2%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-fC" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shop context -->
+        <div class="ctx" id="ctxC-shop">
+          <div class="col-headers">
+            <div>Storage</div>
+            <div>Slots</div>
+            <div style="text-align:center" title="Single per building">🔧 Tool</div>
+            <div style="text-align:center" title="Many allowed">📦 Inventory</div>
+            <div style="text-align:center" title="Many allowed">🛒 Sell</div>
+          </div>
+          <div class="storage-list">
+            <div class="row">
+              <div class="name">Crate (north)<span class="kind">Chest · 16 slots</span></div>
+              <div class="slots"><span>5/16</span><div class="slot-bar"><div class="fill" style="width:31%"></div></div></div>
+              <div class="cell-wrap"><span class="radio checked" data-group="tool-sC" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Shelf_A<span class="kind">Shelf · 16 slots</span></div>
+              <div class="slots"><span>8/16</span><div class="slot-bar"><div class="fill" style="width:50%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-sC" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Shelf_B<span class="kind">Shelf · 16 slots</span></div>
+              <div class="slots"><span>14/16</span><div class="slot-bar"><div class="fill full" style="width:87%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-sC" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Wardrobe<span class="kind">Wardrobe · 12 slots</span></div>
+              <div class="slots"><span>7/12</span><div class="slot-bar"><div class="fill" style="width:58%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-sC" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+            </div>
+            <div class="row">
+              <div class="name">Backroom Chest<span class="kind">Chest · 16 slots</span></div>
+              <div class="slots"><span>2/16</span><div class="slot-bar"><div class="fill" style="width:13%"></div></div></div>
+              <div class="cell-wrap"><span class="radio" data-group="tool-sC" onclick="pickRadio(this)"></span></div>
+              <div class="cell-wrap"><span class="check checked" onclick="toggleCheck(this)"></span></div>
+              <div class="cell-wrap"><span class="check" onclick="toggleCheck(this)"></span></div>
+            </div>
+          </div>
+          <div class="hint">
+            <b>Tool Storage:</b> auto-fallback to <i>Crate (north)</i> when no override is set.
+          </div>
+        </div>
+
+        <!-- Empty context -->
+        <div class="ctx" id="ctxC-empty">
+          <div class="empty-state">
+            <div class="icon">📦</div>
+            <div>No storage furniture in this building yet.</div>
+            <div class="hint-text">Place a storage furniture (chest, shelf, barrel, wardrobe) inside the building to assign roles.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============== MARGIN NOTES (right rail) ============== -->
+<div class="margin-notes" id="notes">
+  <h3>Variant A · Radios + Sell checkbox</h3>
+  <p><span class="pro">Pro:</span> Tool/Inventory cardinality is visually obvious — radios = pick one, checkboxes = pick many.</p>
+  <p><span class="con">Con:</span> Inventory column hard-codes "multi". If Inventory is ever single, this needs swapping to radios — schema-coupled.</p>
+  <p><span class="q">Open Q1 answer:</span> Reads OK at 5 rows; gets crowded at 10+ with 3 columns of widgets right of slots.</p>
+  <p><span class="q">Open Q4 answer:</span> Slot count + bar; no item icons (keeps row height tight).</p>
+
+  <h3>Variant B · Dropdown per row</h3>
+  <p><span class="pro">Pro:</span> Single role per furniture is conceptually cleanest. Adding a new role = one more dropdown option, no extra column.</p>
+  <p><span class="con">Con:</span> Loses cell-grid's at-a-glance "who has what". Sell-Shelf still needs its own column (multi).</p>
+  <p><span class="q">Open Q2:</span> Hardest variant to surface inspector-authored fallback inline — would need an italic "(default)" dropdown option.</p>
+
+  <h3>Variant C · Cell grid</h3>
+  <p><span class="pro">Pro:</span> Pure tabular — most scannable at 10+ storages. Cardinality (single vs multi) encoded by widget shape (radio vs checkbox).</p>
+  <p><span class="pro">Pro:</span> Adding a role = one more column. Schema changes (Inventory single↔multi) = swap radio↔checkbox in one column.</p>
+  <p><span class="con">Con:</span> Most "spreadsheet-y". Icons in header help but designer polish matters.</p>
+  <p><span class="q">Recommendation:</span> Best fit for the LogisticsManager mental model + future-proof for new roles.</p>
+
+  <h3>Cross-variant decisions</h3>
+  <p><b>Q3 — Inline vs modal:</b> All three are inline — modal-per-furniture loses comparison. Stick with inline.</p>
+  <p><b>Q4 — Contents preview:</b> All three show slot count + bar only. Icons-in-slots can land later as a hover preview (no UI cost when collapsed).</p>
+  <p><b>Inspector fallback:</b> A and C can show it as a yellow hint banner under the list (currently shown on the Shop context). B would need an italic "(default)" entry in the dropdown.</p>
+</div>
+
+<!-- ============== SKETCH TOOLBAR ============== -->
+<div id="sketch-tools">
+  <span style="opacity:0.7">Theme:</span>
+  <select id="theme-switcher" onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'">
+    <option value="default">Default (Unity dark)</option>
+  </select>
+  <button onclick="toggleNotes()">Toggle notes</button>
+</div>
+
+<script>
+  // --- Variant switching ---
+  function showVariant(btn, id) {
+    document.querySelectorAll('.variant').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.variant-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('variant-' + id).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  // --- Context switching (Forge / Shop / Empty) ---
+  function switchCtx(variantId, ctxName, btn) {
+    const body = document.getElementById('body-' + variantId);
+    const title = document.getElementById('title-' + variantId);
+    // Toggle ctx-btn active state
+    btn.parentElement.querySelectorAll('.ctx-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // Toggle ctx visibility
+    body.querySelectorAll('.ctx').forEach(c => c.classList.remove('active'));
+    document.getElementById('ctx' + variantId.toUpperCase() + '-' + ctxName).classList.add('active');
+    // Swap body class for column layout
+    body.classList.remove('forge','shop','empty');
+    body.classList.add(ctxName);
+    // Swap title
+    if (ctxName === 'forge') title.innerHTML = 'Anvil &amp; Forge <span class="building-type">— Forge</span>';
+    else if (ctxName === 'shop') title.innerHTML = 'Velvet &amp; Co. <span class="building-type">— Clothing Shop</span>';
+    else title.innerHTML = 'New Building <span class="building-type">— Empty</span>';
+  }
+  function ctxA(name) { switchCtx('a', name, event.target); }
+  function ctxB(name) { switchCtx('b', name, event.target); }
+  function ctxC(name) { switchCtx('c', name, event.target); }
+
+  // --- Form controls ---
+  function toggleCheck(el) { el.classList.toggle('checked'); }
+  function pickRadio(el) {
+    const group = el.dataset.group;
+    document.querySelectorAll('.radio[data-group="' + group + '"]').forEach(r => r.classList.remove('checked'));
+    el.classList.add('checked');
+  }
+
+  // --- Notes toggle ---
+  function toggleNotes() {
+    const n = document.getElementById('notes');
+    n.style.display = n.style.display === 'none' ? '' : 'none';
+  }
+</script>
+
+</body>
+</html>
