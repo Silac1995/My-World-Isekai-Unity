@@ -138,7 +138,16 @@
       "Bash(cp \"/c/Program Files/Unity/Hub/Editor/6000.3.9f1/Editor/Data/PlaybackEngines/WindowsStandaloneSupport/Variations/win64_player_development_mono/UnityCrashHandler64.pdb\" \"/c/Users/Kevin/Unity/Unity Games/My World Isekai Unity Builds/New folder \\(5\\)/\")",
       "Bash(awk '/Used Assets and files from the Resources folder/{p=1} /^Total User Assets/{p=0} p' \"/c/Users/Kevin/AppData/Local/Unity/Editor/Editor.log\")",
       "Bash(awk '/Used Assets and files from the Resources/{lastpos=NR} END{print lastpos}' \"/c/Users/Kevin/AppData/Local/Unity/Editor/Editor.log\")",
-      "PowerShell(Get-Process | Where-Object { $_.Name -match \"Unity|MWI\" } | Select-Object Name, Id, CPU, WorkingSet64 | Format-Table -AutoSize)"
+      "PowerShell(Get-Process | Where-Object { $_.Name -match \"Unity|MWI\" } | Select-Object Name, Id, CPU, WorkingSet64 | Format-Table -AutoSize)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" log --oneline -10)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" status --short)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add Assets/Scripts/World/Buildings/CommercialBuilding.cs Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs Assets/Scripts/World/Buildings/Logistics/LogisticsStockEvaluator.cs Assets/Scripts/World/MapSystem/MapController.cs Assets/Scripts/World/MapSystem/MapRegistry.cs)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" log --oneline -6)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" show --stat e5b48cb8)",
+      "Bash(grep -nB 1 -A 5 \"AssignSafeRolesForShift\" \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/Assets/Scripts/World/Buildings/BuildingLogisticsManager.cs\" \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/Assets/Scripts/World/Buildings/CommercialBuilding.cs\")",
+      "Bash(grep -nB 2 -A 5 \"WorkerStartingShift\\\\b\" \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity/Assets/Scripts/World/Buildings/CommercialBuilding.cs\")",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add Assets/Scripts/World/Buildings/CommercialBuilding.cs)",
+      "Bash(git -C \"/c/Users/Kevin/Unity/Unity Projects/Git/MWI - Version Control/My-World-Isekai-Unity\" add .agent/skills/building_system/SKILL.md)"
     ],
     "additionalDirectories": [
       "\\tmp"

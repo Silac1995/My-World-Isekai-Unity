@@ -2561,7 +2561,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2042257917715560045, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 3585213714
+      value: 3976720944
       objectReference: {fileID: 0}
     - target: {fileID: 2110357095009584869, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Size.x
@@ -2701,7 +2701,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6518796099225268499, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 2533582564
+      value: 850462001
       objectReference: {fileID: 0}
     - target: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Name
@@ -2911,15 +2911,9 @@ MonoBehaviour:
   _isExposed: 0
   _subRooms: []
   _blueprint: {fileID: 11400000, guid: 76093a84e55f49f48ae7fd6134e073b3, type: 2}
-  buildingName: Forge
   _isPublicLocation: 0
-  _buildingType: 0
   _buildingZone: {fileID: 1543226207171321216}
   _deliveryZone: {fileID: 611044806541919163}
-  _constructionRequirements:
-  - Item: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
-    Amount: 2
-    IsReferenceOnly: 0
   _spawnAsComplete: 0
   _constructionVisualRoot: {fileID: 2467189856694181021}
   _completedVisualRoot: {fileID: 3318099154706345851}
@@ -2934,8 +2928,6 @@ MonoBehaviour:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
-  _defaultFurnitureLayout: []
-  _prefabId: B001-Crafting
   NetworkBuildingId:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
@@ -3092,6 +3084,7 @@ MonoBehaviour:
   _helpWantedFurniture: {fileID: 0}
   _managementFurniture: {fileID: 1339960780117032939}
   _initialHiringOpen: 1
+  _initialReputation: 50
   _inputStockTargets:
   - ItemToStock: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
     MinStock: 3
@@ -4928,7 +4921,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 9060584004775906345, guid: 1b70e0c4872313f4cad3ce1a3b5b403b, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 2682378185
+      value: 2905177813
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -5033,7 +5026,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8919011143180878016, guid: c5741fc63642989479b278096dc3acbf, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 19126317
+      value: 754708272
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
