@@ -3772,6 +3772,42 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
+    /// Dev-only: assign a <see cref="SafeRoleType"/> directly to a child
+    /// <see cref="SafeFurniture"/>, bypassing the owner auth check applied by
+    /// <see cref="TrySetSafeRoleServerRpc"/>. Still honours the
+    /// <see cref="SupportedSafeRoles"/> subtype filter so dev never writes a role
+    /// the building doesn't support. Replication: routes through the canonical
+    /// <see cref="DoSetSafeRole"/> helper — same fan-out path as both the
+    /// production owner UI and the NPC shift-punch auto-assign.
+    /// Sibling of <see cref="DevForceSetStorageRole"/>.
+    /// </summary>
+    public void DevForceSetSafeRole(SafeFurniture safe, SafeRoleType newRole)
+    {
+        if (!DevAssertHostAndDevMode("DevForceSetSafeRole")) return;
+        if (safe == null) return;
+
+        // Subtype filter — same as production.
+        bool roleSupported = false;
+        var supported = SupportedSafeRoles;
+        if (supported != null)
+        {
+            for (int i = 0; i < supported.Count; i++)
+            {
+                if (supported[i].Type == newRole) { roleSupported = true; break; }
+            }
+        }
+        if (!roleSupported)
+        {
+            Debug.LogWarning($"[CommercialBuilding] DevForceSetSafeRole: role {newRole} not in SupportedSafeRoles — ignored.");
+            return;
+        }
+
+        // Route through DoSetSafeRole so the dev path picks up the same idempotency
+        // guard + sync-component LogError + future invariants the production paths use.
+        DoSetSafeRole(safe, newRole);
+    }
+
+    /// <summary>
     /// Dev-only: set assignment wage directly, bypassing the owner / community-leader
     /// auth check applied by <see cref="TrySetAssignmentWage"/>. Same null-tolerance
     /// for fields as the production method (null means "leave unchanged"). Returns
