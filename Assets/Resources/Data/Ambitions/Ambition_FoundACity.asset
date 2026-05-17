@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9466d874c6f6e4544901af018e2dda30, type: 3}
+  m_Name: Ambition_FoundACity
+  m_EditorClassIdentifier: Assembly-CSharp::MWI.Ambition.Ambition_FoundACity
+  _displayName: Found a City
+  _description: Establish a community, charter it as a city, and grow it into a thriving
+    settlement.
+  _icon: {fileID: 0}
+  _overridesSchedule: 1
+  _quests:
+  - {fileID: 11400000, guid: 7f5a1931540077748a260b049a440415, type: 2}
+  - {fileID: 11400000, guid: 815e524cb001e3745948412755cf961b, type: 2}
+  - {fileID: 11400000, guid: 2ad0418c381ee1e4ebbe22227565fa55, type: 2}
+  - {fileID: 11400000, guid: c1877f70235fa9a4596d2999c40807c7, type: 2}
+  - {fileID: 11400000, guid: 0141361e4cedfb84d93928a388547697, type: 2}
+  - {fileID: 11400000, guid: 3311624f9ba58f247a868c80d7aed403, type: 2}
+  - {fileID: 11400000, guid: 0dd3ac129aff3864996e11db4c5cd805, type: 2}
+  - {fileID: 11400000, guid: 3318321a3a351a744826d212f419f3ec, type: 2}
+  _parameters: []
