@@ -3,7 +3,7 @@ type: system
 title: "Administrative Building"
 tags: [building, community, city-founding, commercial]
 created: 2026-05-17
-updated: 2026-05-17
+updated: 2026-05-18
 sources:
   - "[AdministrativeBuilding.cs](../../Assets/Scripts/World/Buildings/CommercialBuildings/AdministrativeBuilding.cs)"
   - "[Building.cs](../../Assets/Scripts/World/Buildings/Building.cs)"
@@ -172,6 +172,7 @@ Construction (cooperative — founder works the site):
 
 ## Change log
 - 2026-05-17 — Plan 4a skeleton shipped: BuildingType.Administrative enum, AdministrativeBuilding subclass with OwnerCommunity + SetOwnerCommunity + GetTreasuryBalance + OnFinalize override (citizenship grant), Building.OnFinalize virtual hook, Community.AdministrativeBuilding + IsChartered, BuildingPlacementManager 1-per-community gate + auto-SetOwnerCommunity wiring, AdministrativeBuilding.asset scaffold, Ambition_FoundACity.asset + 8 quest assets. — claude
+- 2026-05-18 — Plan 4b: InitializeJobs now staffs the AB with JobBuilder × 2 + JobHarvester + JobLogisticsManager. New unfulfillable-material harvest queue (`_unfulfillableMaterialHarvestQueue`, `EnqueueUnfulfillableMaterial`, `GetUnfulfillableHarvestQueue`, `DecrementUnfulfillableMaterial`) backs the JobLogisticsManager → JobHarvester handoff for materials the logistics chain couldn't source. JobLogisticsManager.ProcessActiveBuildOrders cascade ships (B2B → producer → virtual → unfulfillable-queue) along with four NEW JobBuilder GoapActions and the JobBuilder class itself. JobHarvester's CityHarvester runtime branch is stubbed (logs queue contents; physical harvest cascade deferred to a follow-up). — claude
 
 ## Sources
 - [AdministrativeBuilding.cs](../../Assets/Scripts/World/Buildings/CommercialBuildings/AdministrativeBuilding.cs)
