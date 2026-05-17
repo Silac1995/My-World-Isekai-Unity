@@ -23,25 +23,19 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
     }
 
     /// <summary>
-    /// Checks if this character meets requirements to found a new "Small Group" community.
-    /// If the character is already in a community, the new one becomes a sub-community.
-    /// Requirements: 'CanCreateCommunity' trait, at least 4 friends, and NOT already LEADING a community.
+    /// Founds a new community led by this character. The only gate is "not already
+    /// leading a community" — the trait + 4-friends prerequisites were lifted as part
+    /// of the city-founding redesign (Plan 1 of 5). Any character with the
+    /// Ambition_FoundACity active (Plan 3) or invoking the dev "Create Community"
+    /// button (out of scope here) reaches this method.
     /// </summary>
     public void CheckAndCreateCommunity()
     {
         if (_character == null) return;
 
-        // 1. Requirement: Trait
-        if (_character.CharacterTraits == null || !_character.CharacterTraits.CanCreateCommunity()) return;
-
-        // 2. Requirement: Not already leading a community (cannot lead two)
+        // Sole guard: cannot lead two communities at once.
         if (_currentCommunity != null && _currentCommunity.IsLeader(_character)) return;
 
-        // 3. Requirement: 4 Friends
-        int friendCount = _character.CharacterRelation != null ? _character.CharacterRelation.GetFriendCount() : 0;
-        if (friendCount < 4) return;
-
-        // Founding
         CreateCommunity();
     }
 
@@ -50,7 +44,7 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
     /// </summary>
     public void CreateCommunity()
     {
-        string newCommName = $"{_character.CharacterName}'s Small Group of Friends";
+        string newCommName = $"{_character.CharacterName}'s Settlement";
         Community parent = _currentCommunity; // Capture current community to make it a parent
         
         Community newComm = null;
