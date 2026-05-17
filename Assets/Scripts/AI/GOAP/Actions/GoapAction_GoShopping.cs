@@ -30,7 +30,17 @@ public class GoapAction_GoShopping : GoapAction
         if (_chosenShop != null && _chosenCashier != null)
             return _chosenCashier.IsAvailableForCustomer || _actionEnqueued;
 
-        var shop = FindShopWithItem(_desiredItem);
+        // Collect every qualifying shop, then pick one weighted by reputation
+        // (2026-05-17 — customer-NPC reputation effect). Picker formula:
+        //   weight = max(10, shop.Reputation)
+        // floors the lowest-rep shop at weight 10 vs a top-rep shop's weight 100,
+        // guaranteeing a 10:100 = 10% minimum relative chance for the worst shop.
+        // Customers don't apply the B2B hard floor (ReputationB2BMinimum = 20) —
+        // they're random shoppers, not procurement officers, so even a sketchy
+        // shop occasionally gets a visit.
+        var candidates = FindQualifyingShopsWithItem(_desiredItem);
+        if (candidates == null || candidates.Count == 0) return false;
+        var shop = PickShopByReputation(candidates);
         if (shop == null) return false;
 
         var entry = shop.GetCatalogEntry(_desiredItem);
@@ -132,29 +142,81 @@ public class GoapAction_GoShopping : GoapAction
         worker.CharacterMovement?.Stop();
     }
 
-    private static ShopBuilding FindShopWithItem(ItemSO item)
+    /// <summary>
+    /// Returns every <see cref="ShopBuilding"/> that (a) sells <paramref name="item"/>
+    /// in its catalog, (b) has at least one available <see cref="Cashier"/>, and
+    /// (c) has at least one matching <see cref="ItemInstance"/> physically on a
+    /// sell-shelf. Replaces the previous <c>FirstOrDefault</c> single-shop pick so
+    /// the caller can weight the final choice by reputation (see
+    /// <see cref="PickShopByReputation"/>). Returns an empty list when no shop
+    /// qualifies (caller treats as "no shop sells what I need").
+    /// </summary>
+    private static List<ShopBuilding> FindQualifyingShopsWithItem(ItemSO item)
     {
-        if (BuildingManager.Instance == null) return null;
-        return BuildingManager.Instance.allBuildings
-            .OfType<ShopBuilding>()
-            .FirstOrDefault(s =>
-            {
-                var entry = s.GetCatalogEntry(item);
-                if (!entry.HasValue) return false;
-                if (s.GetFirstAvailableCashier() == null) return false;
+        var result = new List<ShopBuilding>();
+        if (BuildingManager.Instance == null) return result;
 
-                // At least one matching instance must be on a sell-shelf.
-                for (int i = 0; i < s.SellShelves.Count; i++)
+        var all = BuildingManager.Instance.allBuildings;
+        for (int b = 0; b < all.Count; b++)
+        {
+            if (!(all[b] is ShopBuilding s)) continue;
+
+            var entry = s.GetCatalogEntry(item);
+            if (!entry.HasValue) continue;
+            if (s.GetFirstAvailableCashier() == null) continue;
+
+            bool hasStock = false;
+            var shelves = s.SellShelves;
+            for (int i = 0; i < shelves.Count && !hasStock; i++)
+            {
+                var shelf = shelves[i];
+                if (shelf == null) continue;
+                int cap = shelf.Capacity;
+                for (int sl = 0; sl < cap; sl++)
                 {
-                    var shelf = s.SellShelves[i];
-                    if (shelf == null) continue;
-                    for (int sl = 0; sl < shelf.Capacity; sl++)
+                    var slot = shelf.GetItemSlot(sl);
+                    if (slot != null && !slot.IsEmpty() && slot.ItemInstance.ItemSO == item)
                     {
-                        var slot = shelf.GetItemSlot(sl);
-                        if (slot != null && !slot.IsEmpty() && slot.ItemInstance.ItemSO == item) return true;
+                        hasStock = true;
+                        break;
                     }
                 }
-                return false;
-            });
+            }
+            if (!hasStock) continue;
+
+            result.Add(s);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Reputation-weighted random pick across <paramref name="candidates"/>.
+    /// Weight formula: <c>max(10, shop.Reputation)</c> — guarantees the
+    /// lowest-rep shop has a relative weight of 10/100 = 10% of a top-rep shop,
+    /// so no shop is ever permanently invisible to customers. Customer-NPC
+    /// effect (2026-05-17). Server-only — <see cref="UnityEngine.Random"/> uses
+    /// shared state, but customer-NPC GOAP planning runs server-side only.
+    /// </summary>
+    private static ShopBuilding PickShopByReputation(List<ShopBuilding> candidates)
+    {
+        if (candidates == null || candidates.Count == 0) return null;
+        if (candidates.Count == 1) return candidates[0];
+
+        int totalWeight = 0;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            totalWeight += UnityEngine.Mathf.Max(10, candidates[i].Reputation);
+        }
+        if (totalWeight <= 0) return candidates[0]; // defensive — shouldn't happen with the 10 floor.
+
+        int roll = UnityEngine.Random.Range(0, totalWeight);
+        int accum = 0;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            accum += UnityEngine.Mathf.Max(10, candidates[i].Reputation);
+            if (roll < accum) return candidates[i];
+        }
+        // Floating-point safety net (Random.Range is exclusive upper, so unreachable in practice).
+        return candidates[candidates.Count - 1];
     }
 }
