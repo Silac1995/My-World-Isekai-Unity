@@ -53,4 +53,14 @@ public class MagazineWeaponInstance : RangedWeaponInstance
         _currentAmmo = _magazineSize;
         _isReloading = false;
     }
+
+    /// <summary>
+    /// Aborts an in-progress reload without changing the magazine state.
+    /// Called by CharacterAction_Reload.OnInterrupt when a reload is cancelled
+    /// (knockback, death, swap-during-reload). Leaves CurrentAmmo at its pre-reload value.
+    /// </summary>
+    public void CancelReload()
+    {
+        _isReloading = false;
+    }
 }
