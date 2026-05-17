@@ -3,7 +3,7 @@ type: system
 title: "Commercial Treasury"
 tags: [building, furniture, currency, logistics, network, tier-2]
 created: 2026-05-09
-updated: 2026-05-17f
+updated: 2026-05-17g
 sources: []
 related:
   - "[[commercial-building]]"
@@ -311,7 +311,7 @@ shop.LogisticsManager.ProcessActiveBuyOrders
 
 Per-building consequence layer that closes the loop on **failed deliveries**. Authored 2026-05-16 — see [[commercial-building]] for the field shape.
 
-- **`CommercialBuilding._reputation : NetworkVariable<int>`** — replicated, 0–100, default 50 (`ReputationDefault`). Inspector seed `_initialReputation`. Mutated server-only via `TryChangeReputation(delta, reason)` (clamps + logs); event `OnReputationChanged(int oldVal, int newVal)` fans out on every peer. Constants `ReputationMin = 0`, `ReputationMax = 100`, `ReputationDefault = 50`, `ReputationB2BMinimum = 20`.
+- **`CommercialBuilding._reputation : NetworkVariable<int>`** — replicated, **unbounded above** *(2026-05-17g — no upper cap; exceptional buildings can grow arbitrarily high)*, floor at 0, default 50 (`ReputationDefault`). Inspector seed `_initialReputation` keeps a `[Range(0,100)]` for designer-authoring sanity but runtime values exceed it freely. Mutated server-only via `TryChangeReputation(delta, reason)` (floor-clamps + logs); event `OnReputationChanged(int oldVal, int newVal)` fans out on every peer. Constants `ReputationMin = 0`, `ReputationDefault = 50`, `ReputationB2BMinimum = 20`. (The old `ReputationMax = 100` constant was removed in `7aa705f6` — every reference to it is gone.)
 - **Persistence** — `BuildingSaveData.Reputation` (default 50 for back-compat). Captured per-building in `BuildingSaveData.FromBuilding` when the building is a `CommercialBuilding`. Restored via `MapController` → `CommercialBuilding.RestoreReputationFromSave` after the safe-content pass.
 - **Events shipped today:**
   - **−5 on order expiration with undelivered units (supplier).** Applies to BOTH B2B orders (Source is `ShopBuilding`, `IsPlaced=true`) AND producer-side orders. The supplier promised delivery and the supply chain failed to honour it. Same penalty per expired order regardless of who's at fault inside the chain.
@@ -319,7 +319,7 @@ Per-building consequence layer that closes the loop on **failed deliveries**. Au
   - **+1 on full BuyOrder completion (supplier).** Fires once, the moment `BuyOrder.RecordDelivery` flips `IsCompleted` true (inside `BuildingLogisticsManager.UpdateTransportOrderProgress`). Awards the supplier (`order.AssociatedBuyOrder.Source`).
 - **B2B preference gate (consumer):** `LogisticsStockEvaluator.TryB2BPurchaseFromShop` skips shops with `shop.Reputation < ReputationB2BMinimum` (20). Low-rep shops are invisible to the B2B preference scan until they recover through successful future deliveries; the buyer falls through to the producer path. Among the qualifying shops, the picker is reputation-weighted (see convention below).
 
-### Convention: NPC-buys-from-building → reputation-weighted decision *(2026-05-17d)*
+### Convention: NPC-buys-from-building → reputation-weighted decision *(2026-05-17d, formula rev 2026-05-17g)*
 
 **Every NPC decision to buy goods or use a service from a `CommercialBuilding` is reputation-weighted.** This is a project-wide convention enforced by routing all such picks through the single helper:
 
@@ -327,7 +327,12 @@ Per-building consequence layer that closes the loop on **failed deliveries**. Au
 T pickedBuilding = ReputationWeightedPicker.Pick<T>(qualifiers); // T : CommercialBuilding
 ```
 
-- **Formula:** `weight = max(ReputationWeightedPicker.WeightFloor, building.Reputation)` — `WeightFloor` is `10`, the rep ceiling is `100`. Lowest-rep building keeps a 10:100 = **10% minimum relative weight** vs a top-rep building. With more candidates in the pool, the lowest's raw probability dilutes naturally (10 / total-weight).
+- **Formula (pool-relative floor since 2026-05-17g, when the rep upper cap was removed):**
+  ```
+  floor  = max(AbsoluteFloor=10, maxRepInPool / RelativeFloorDivisor=10)
+  weight = max(floor, building.Reputation)
+  ```
+  Preserves a **10% minimum relative weight** for the lowest-rep candidate vs the highest-rep candidate **at any scale**. Pool `[100, 50, 0]` → floor `10` → weights `[100, 50, 10]` (= the original 2026-05-17d behaviour). Pool `[1000, 500, 0]` → floor `100` → weights `[1000, 500, 100]` (10% invariant survives the rep blowing past the old 100 cap). The `AbsoluteFloor=10` is a safety net for all-zero pools (everyone gets equal weight).
 - **Caller responsibility:** the qualifier filter (catalog match, stock, gates, subtype-specific hard floors like `ReputationB2BMinimum`). The picker only sorts already-qualifying candidates.
 - **Hard floor vs soft weight:** B2B procurement applies the hard floor `Reputation < ReputationB2BMinimum=20 → skip outright` (LogisticsManager NPC is rational procurement). Customer-NPC shopping does NOT — every qualifying shop competes by weight only (customers are random shoppers, not procurement officers).
 - **Server-only.** `UnityEngine.Random` is per-peer state; all NPC decision logic runs server-authoritatively.
@@ -403,6 +408,7 @@ Atomic financial reverse for the undelivered half of an expired B2B order. Autho
 
 ## Change log
 
+- 2026-05-17g — **Reputation unbounded above + picker switched to pool-relative floor.** Removed `CommercialBuilding.ReputationMax` constant entirely (every reference gone). `TryChangeReputation`, `RestoreReputationFromSave`, and the `OnNetworkSpawn` seed now floor-clamp at `ReputationMin` (0) only — no upper cap, exceptional buildings can grow arbitrarily high. `ReputationWeightedPicker.Pick` formula updated from absolute `max(10, rep)` to pool-relative `max(max(AbsoluteFloor=10, maxRepInPool/10), rep)` so the "lowest candidate keeps ≥10% relative weight vs the leader" invariant survives at any scale (without it, a rep-1000 outlier would have ~99% weight against an absolute-10 floor). Display sites dropped the `/100` suffix everywhere — now just `Reputation: N` with the same colour-coding (green ≥ B2B floor / amber 1–19 / red 0). Save/load back-compat is automatic (every value 0–100 falls inside the new unbounded range). Inspector `_initialReputation` keeps `[Range(0,100)]` as a designer-authoring sanity cap. Commit `7aa705f6`. — claude
 - 2026-05-17f — **Visible reputation read-out + dev-mode mutator.** Three surfaces: (a) DevMode Inspect → `BuildingOverviewSubTab` colour-coded `Reputation: N/100` line in the Commercial section. (b) DevMode [DEV] Console Management → `BuildingConsoleManagementSubTab` new "Reputation" section between Hiring and Owner with −10 / −1 / +1 / +10 nudge buttons routing through `CommercialBuilding.DevForceChangeReputation` (new dev mutator — host+dev-mode-gated, routes through `TryChangeReputation` so clamp + event + NetVar + audit log all fire as usual). (c) In-game Management Panel → `HiringTabView` new optional `_reputationLabel` SerializeField with live `OnReputationChanged` subscription (null-tolerant — designer drags TMP_Text whenever they want; older prefab variants still work). Backend-first surface pass per user request — no widget polish, no buy-panel tooltip. Commit `b500cbe3`. — claude
 - 2026-05-17e — **Project-wide convention: every NPC-buys-from-building decision is reputation-weighted.** Promoted the customer-NPC weighted-pick helper to a shared `ReputationWeightedPicker.Pick<T>(IList<T>) where T : CommercialBuilding`. `GoapAction_GoShopping` refactored to call the shared helper (deleted its private `PickShopByReputation`). `LogisticsStockEvaluator.TryB2BPurchaseFromShop` refactored from one-pass iterate-and-commit into a three-pass shape (collect qualifiers → weighted pick → atomic commit on picked shop), so B2B procurement now uses weighted pick across qualifiers instead of first-found. The `ReputationB2BMinimum=20` hard floor still excludes low-rep shops outright on the procurement side; the picker only sorts among qualifying ones. New convention paragraph in the Reputation section documents the two-pass / three-pass pattern future consumers must follow. Commit `9958b2d9`. — claude
 - 2026-05-17d — **Customer-NPC reputation-weighted shop pick + stale-doc cleanup.** `GoapAction_GoShopping.FindShopWithItem` (single `FirstOrDefault` shop pick) replaced with two-step `FindQualifyingShopsWithItem` (collects all qualifying shops) + `PickShopByReputation` (weighted random where `weight = max(10, shop.Reputation)`). The 10-floor guarantees a 10:100 = 10% minimum relative weight for the lowest-rep shop — no shop is permanently invisible to customers. No B2B-style hard floor on customers. Also removed the stale "Does not implement refund-on-expiration" line from Non-responsibilities (refund shipped in `70e29003`). Commit `324d579a`. — claude

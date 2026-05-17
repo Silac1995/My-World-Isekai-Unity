@@ -148,7 +148,7 @@ As of 2026-05-09 the view hosts a **2-sub-tab structure** (mirror of `CharacterI
 
 | Sub-tab | Class | Role |
 |---------|-------|------|
-| Overview | `BuildingOverviewSubTab` | Read-only — verbatim port of the prior 11-section dump (Identity / State / Owners / Commercial / Inventory / Wanted / Tracked / Needed / Logistics / Tasks / Rooms / Furniture / Interior). Reuses the existing `_content` TMP_Text the prefab serializes. Behavior unchanged from the pre-2026-05-09 view. **2026-05-17f**: Commercial section also shows the colour-coded `Reputation: N/100` line (green ≥ B2B floor, amber 1–19, red 0). |
+| Overview | `BuildingOverviewSubTab` | Read-only — verbatim port of the prior 11-section dump (Identity / State / Owners / Commercial / Inventory / Wanted / Tracked / Needed / Logistics / Tasks / Rooms / Furniture / Interior). Reuses the existing `_content` TMP_Text the prefab serializes. Behavior unchanged from the pre-2026-05-09 view. **2026-05-17f**: Commercial section also shows the colour-coded `Reputation: N` line (green ≥ B2B floor, amber 1–19, red 0). **2026-05-17g**: reputation is unbounded above — display dropped the `/100` suffix (the old `ReputationMax` constant was deleted; values can exceed 100 freely). |
 | [DEV] Console Management | `BuildingConsoleManagementSubTab` | **Mutator surface — host-only.** Builds widgets at runtime (programmatic UGUI). Exposes every owner-gated mutation on the building. |
 
 **Tab bar built at runtime — no prefab edits.** Unlike `CharacterInspectorView` (which has 10 sub-tabs and uses `DevInspectTabBuilder` to author the prefab), `BuildingInspectorView.Awake()` programmatically:
