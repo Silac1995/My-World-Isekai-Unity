@@ -1555,44 +1555,13 @@ public abstract class CommercialBuilding : Building
 
             Debug.Log($"<color=green>[Building]</color> {worker.CharacterName} punched in at {BuildingName}.");
 
-            // Shift-punch storage-role assignment pass (server-only). Every worker punching
-            // in re-runs the rule; idempotent — only writes when a storage's current role
-            // disagrees with the policy verdict. See
-            // BuildingLogisticsManager.AssignStorageRolesForShift for the rule
-            // (tool-storage priority → shelf priority on shops → inventory default).
-            // Wrapped in try/catch (rule #31) so a logistics-layer fault never blocks the
-            // wage / roster / quest path that follows.
-            try
-            {
-                if (LogisticsManager != null)
-                {
-                    LogisticsManager.AssignStorageRolesForShift();
-                }
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogException(e);
-                Debug.LogError($"[CommercialBuilding] {BuildingName}: AssignStorageRolesForShift threw during WorkerStartingShift(worker={worker.CharacterName}). Continuing.");
-            }
-
-            // Sibling pass for the unified B2B Treasury (2026-05-09): every Safe with
-            // Role == None gets flipped to Treasury so it begins contributing to the
-            // building's spendable funds. Same idempotency / server-only / try-catch
-            // discipline as the storage-roles call above.
-            try
-            {
-                if (LogisticsManager != null)
-                {
-                    LogisticsManager.AssignSafeRolesForShift();
-                }
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogException(e);
-                Debug.LogError($"[CommercialBuilding] {BuildingName}: AssignSafeRolesForShift threw during WorkerStartingShift(worker={worker.CharacterName}). Continuing.");
-            }
-
-            // Trigger the logistics logic if this is the manager.
+            // Role auto-assign passes (storages + safes) + LogisticsManager OnWorkerPunchIn
+            // are ALL gated on "this worker is the building's JobLogisticsManager NPC"
+            // (locked product decision 2026-05-17 — only the LogisticsManager rearranges
+            // roles; a vendor / farmer / etc. punching in must NOT silently flip the
+            // owner's manual role choices back to the auto-assign policy). The previous
+            // any-worker behaviour was a leftover from the pre-LogisticsManager era —
+            // see commercial-storage-roles.md "owner-override caveat" change log.
             if (worker.CharacterJob != null)
             {
                 var logisticsJob = worker.CharacterJob.ActiveJobs
@@ -1602,6 +1571,42 @@ public abstract class CommercialBuilding : Building
 
                 if (logisticsJob != null)
                 {
+                    // Shift-punch storage-role assignment pass (server-only). Idempotent —
+                    // only writes when a storage's current role disagrees with the policy
+                    // verdict. See BuildingLogisticsManager.AssignStorageRolesForShift for
+                    // the rule (tool-storage priority → shelf priority on shops → inventory
+                    // default). Wrapped in try/catch (rule #31) so a logistics-layer fault
+                    // never blocks the wage / roster / quest path that follows.
+                    try
+                    {
+                        if (LogisticsManager != null)
+                        {
+                            LogisticsManager.AssignStorageRolesForShift();
+                        }
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogException(e);
+                        Debug.LogError($"[CommercialBuilding] {BuildingName}: AssignStorageRolesForShift threw during WorkerStartingShift(worker={worker.CharacterName}). Continuing.");
+                    }
+
+                    // Sibling pass for the unified B2B Treasury (2026-05-09): every Safe with
+                    // Role == None gets flipped to Treasury so it begins contributing to the
+                    // building's spendable funds. Same idempotency / server-only / try-catch
+                    // discipline as the storage-roles call above.
+                    try
+                    {
+                        if (LogisticsManager != null)
+                        {
+                            LogisticsManager.AssignSafeRolesForShift();
+                        }
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.LogException(e);
+                        Debug.LogError($"[CommercialBuilding] {BuildingName}: AssignSafeRolesForShift threw during WorkerStartingShift(worker={worker.CharacterName}). Continuing.");
+                    }
+
                     logisticsJob.OnWorkerPunchIn();
                 }
             }
