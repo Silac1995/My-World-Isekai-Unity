@@ -3,7 +3,7 @@ type: system
 title: "Commercial Treasury"
 tags: [building, furniture, currency, logistics, network, tier-2]
 created: 2026-05-09
-updated: 2026-05-17e
+updated: 2026-05-17f
 sources: []
 related:
   - "[[commercial-building]]"
@@ -338,10 +338,14 @@ T pickedBuilding = ReputationWeightedPicker.Pick<T>(qualifiers); // T : Commerci
 
 **Future consumers should mirror the two-pass / three-pass shape** — collect qualifiers, pick weighted, then either enqueue an action (customer side) or atomic-commit (procurement side).
 
+- **Visible read-out + dev-mode mutator** *(2026-05-17f)* — three surfaces:
+  - **DevMode Inspect → BuildingOverviewSubTab.** Read-only colour-coded `Reputation: N/100` line in the Commercial section. Green ≥ B2B floor (20), amber 1–19, red 0. Suffix "(below B2B floor — procurement skips this shop)" when applicable.
+  - **DevMode [DEV] Console Management → BuildingConsoleManagementSubTab.** New "Reputation" section between Hiring and Owner with the same colour-coded value + four nudge buttons (−10 / −1 / +1 / +10) wired to `CommercialBuilding.DevForceChangeReputation(int delta)`. The dev mutator routes through `TryChangeReputation` so the standard clamp, `OnReputationChanged` event, replicated NetworkVariable, and audit log all fire as if a production rep event had happened.
+  - **In-game Management Panel → HiringTabView.** New optional `[SerializeField] TextMeshProUGUI _reputationLabel`. When wired, shows the same colour-coded value + the B2B-floor suffix. `Bind` subscribes to `OnReputationChanged`; `Dispose` unsubscribes. Null-tolerant — older HiringTab prefab variants still work without re-authoring.
 - **Not shipped (tracked as follow-ups):**
   - Reputation-driven shop sort by closest / cheapest (geometry / pricing tie-breakers on top of rep).
   - Further customer-NPC effects (queue priority, price tolerance).
-  - Reputation tooltip + display on the owner management panel.
+  - Reputation tooltip on the buy-panel shop entries.
   - Decay-over-time.
   - Hiring-pool effects (workers refusing low-rep workplaces).
 
@@ -399,6 +403,7 @@ Atomic financial reverse for the undelivered half of an expired B2B order. Autho
 
 ## Change log
 
+- 2026-05-17f — **Visible reputation read-out + dev-mode mutator.** Three surfaces: (a) DevMode Inspect → `BuildingOverviewSubTab` colour-coded `Reputation: N/100` line in the Commercial section. (b) DevMode [DEV] Console Management → `BuildingConsoleManagementSubTab` new "Reputation" section between Hiring and Owner with −10 / −1 / +1 / +10 nudge buttons routing through `CommercialBuilding.DevForceChangeReputation` (new dev mutator — host+dev-mode-gated, routes through `TryChangeReputation` so clamp + event + NetVar + audit log all fire as usual). (c) In-game Management Panel → `HiringTabView` new optional `_reputationLabel` SerializeField with live `OnReputationChanged` subscription (null-tolerant — designer drags TMP_Text whenever they want; older prefab variants still work). Backend-first surface pass per user request — no widget polish, no buy-panel tooltip. Commit `b500cbe3`. — claude
 - 2026-05-17e — **Project-wide convention: every NPC-buys-from-building decision is reputation-weighted.** Promoted the customer-NPC weighted-pick helper to a shared `ReputationWeightedPicker.Pick<T>(IList<T>) where T : CommercialBuilding`. `GoapAction_GoShopping` refactored to call the shared helper (deleted its private `PickShopByReputation`). `LogisticsStockEvaluator.TryB2BPurchaseFromShop` refactored from one-pass iterate-and-commit into a three-pass shape (collect qualifiers → weighted pick → atomic commit on picked shop), so B2B procurement now uses weighted pick across qualifiers instead of first-found. The `ReputationB2BMinimum=20` hard floor still excludes low-rep shops outright on the procurement side; the picker only sorts among qualifying ones. New convention paragraph in the Reputation section documents the two-pass / three-pass pattern future consumers must follow. Commit `9958b2d9`. — claude
 - 2026-05-17d — **Customer-NPC reputation-weighted shop pick + stale-doc cleanup.** `GoapAction_GoShopping.FindShopWithItem` (single `FirstOrDefault` shop pick) replaced with two-step `FindQualifyingShopsWithItem` (collects all qualifying shops) + `PickShopByReputation` (weighted random where `weight = max(10, shop.Reputation)`). The 10-floor guarantees a 10:100 = 10% minimum relative weight for the lowest-rep shop — no shop is permanently invisible to customers. No B2B-style hard floor on customers. Also removed the stale "Does not implement refund-on-expiration" line from Non-responsibilities (refund shipped in `70e29003`). Commit `324d579a`. — claude
 - 2026-05-17c — **Dev-mode mirror of the Safes section.** `BuildingConsoleManagementSubTab` ([DEV] Console Management) gets a new Safes section between Storage Roles and Catalog: per-safe row (role + per-currency balance) + a button per supported role + an aggregate-treasury header line. New `CommercialBuilding.DevForceSetSafeRole(SafeFurniture, SafeRoleType)` host-only mutator (`#if UNITY_EDITOR || DEVELOPMENT_BUILD`, `DevAssertHostAndDevMode`, routes through `DoSetSafeRole`). New `SafeRoleCatalog.Get(SafeRoleType)` symmetric descriptor lookup (mirror of `StorageRoleCatalog.Get`). Bypasses owner gate (dev mode is host-only) but enforces `SupportedSafeRoles` subtype filter. — claude
