@@ -3,7 +3,7 @@ type: system
 title: "Commercial Treasury"
 tags: [building, furniture, currency, logistics, network, tier-2]
 created: 2026-05-09
-updated: 2026-05-17b
+updated: 2026-05-17d
 sources: []
 related:
   - "[[commercial-building]]"
@@ -69,9 +69,8 @@ The user-locked product decisions (2026-05-09):
 
 **Non-responsibilities:**
 - **Does not** model currency-as-item (coin stacks). Currency is per-CurrencyId int; a future refactor (referenced in [[cashier]] docs as "currency-as-item lands") may unify safes with regular storages. Out of scope today.
-- **Does not** implement refund-on-expiration. If a B2B BuyOrder expires via `DecreaseRemainingDays` before the transporter completes delivery, the buyer's coins stay in the shop's till and items stay in shop inventory. Tracked as follow-up.
 - **Does not** support cross-map B2B. Same-map only — a future "trade-route" feature could lift this.
-- **Does not** prioritise shops (closest, cheapest, owner-allied). First-found wins. Pricing improvements deferred.
+- **Does not** prioritise B2B shop sources by closest / cheapest / owner-allied yet. First-found-among-qualifiers wins on the procurement side. (Customer-NPC side uses reputation-weighted random pick — see Reputation section.)
 
 ## Key classes / files
 
@@ -318,10 +317,12 @@ Per-building consequence layer that closes the loop on **failed deliveries**. Au
   - **−5 on order expiration with undelivered units (supplier).** Applies to BOTH B2B orders (Source is `ShopBuilding`, `IsPlaced=true`) AND producer-side orders. The supplier promised delivery and the supply chain failed to honour it. Same penalty per expired order regardless of who's at fault inside the chain.
   - **−5 on order expiration with undelivered units (transporter)** *(2026-05-17)*. Walks the supplier's `_orderBook.PlacedTransportOrders` for any `!IsCompleted` TO whose `AssociatedBuyOrder == expired`, then docks each `TransportOrder.HostTransporter` (captured at dispatch time in `LogisticsTransportDispatcher.DispatchTransportOrder`). Multiple TOs from the same carrier compound — failing several runs costs more rep than failing one.
   - **+1 on full BuyOrder completion (supplier).** Fires once, the moment `BuyOrder.RecordDelivery` flips `IsCompleted` true (inside `BuildingLogisticsManager.UpdateTransportOrderProgress`). Awards the supplier (`order.AssociatedBuyOrder.Source`).
-- **B2B preference gate (consumer):** `LogisticsStockEvaluator.TryB2BPurchaseFromShop` skips shops with `shop.Reputation < ReputationB2BMinimum` (20). Low-rep shops are invisible to the B2B preference scan until they recover through successful future deliveries; the buyer falls through to the producer path.
+- **B2B preference gate (consumer):** `LogisticsStockEvaluator.TryB2BPurchaseFromShop` skips shops with `shop.Reputation < ReputationB2BMinimum` (20). Low-rep shops are invisible to the B2B preference scan until they recover through successful future deliveries; the buyer falls through to the producer path. Among qualifying shops the picker is currently first-found.
+- **Customer-NPC weighted shop pick** *(2026-05-17b)*: `GoapAction_GoShopping.FindQualifyingShopsWithItem` collects all shops on the map that sell the desired item, have an available cashier, and have at least one matching `ItemInstance` on a sell-shelf; then `PickShopByReputation` does a weighted-random pick where `weight = max(10, shop.Reputation)`. The floor of 10 vs a top-rep weight of 100 guarantees a 10:100 = 10% minimum relative weight for the lowest-rep shop — no shop is ever permanently invisible to customers. No hard B2B-style floor (`ReputationB2BMinimum`) applies to customers — they're random shoppers, not procurement officers.
 - **Not shipped (tracked as follow-ups):**
-  - Reputation-driven shop sort (closest / cheapest / best-rep).
-  - Customer-NPC reputation effects (visit rate, queue priority, price tolerance).
+  - Reputation-weighted picker on the B2B procurement side (currently still first-found among qualifiers; mirror the customer picker if/when desired).
+  - Reputation-driven shop sort by closest / cheapest (geometry / pricing tie-breakers on top of rep).
+  - Further customer-NPC effects (queue priority, price tolerance).
   - Reputation tooltip + display on the owner management panel.
   - Decay-over-time.
   - Hiring-pool effects (workers refusing low-rep workplaces).
@@ -380,6 +381,7 @@ Atomic financial reverse for the undelivered half of an expired B2B order. Autho
 
 ## Change log
 
+- 2026-05-17d — **Customer-NPC reputation-weighted shop pick + stale-doc cleanup.** `GoapAction_GoShopping.FindShopWithItem` (single `FirstOrDefault` shop pick) replaced with two-step `FindQualifyingShopsWithItem` (collects all qualifying shops) + `PickShopByReputation` (weighted random where `weight = max(10, shop.Reputation)`). The 10-floor guarantees a 10:100 = 10% minimum relative weight for the lowest-rep shop — no shop is permanently invisible to customers. No B2B-style hard floor on customers. Also removed the stale "Does not implement refund-on-expiration" line from Non-responsibilities (refund shipped in `70e29003`). Commit `324d579a`. — claude
 - 2026-05-17c — **Dev-mode mirror of the Safes section.** `BuildingConsoleManagementSubTab` ([DEV] Console Management) gets a new Safes section between Storage Roles and Catalog: per-safe row (role + per-currency balance) + a button per supported role + an aggregate-treasury header line. New `CommercialBuilding.DevForceSetSafeRole(SafeFurniture, SafeRoleType)` host-only mutator (`#if UNITY_EDITOR || DEVELOPMENT_BUILD`, `DevAssertHostAndDevMode`, routes through `DoSetSafeRole`). New `SafeRoleCatalog.Get(SafeRoleType)` symmetric descriptor lookup (mirror of `StorageRoleCatalog.Get`). Bypasses owner gate (dev mode is host-only) but enforces `SupportedSafeRoles` subtype filter. — claude
 - 2026-05-17b — **Phase 1.7: owner-facing Safes section in the management panel.** New `CommercialBuilding.SupportedSafeRoles` virtual + `TrySetSafeRoleServerRpc` + canonical `DoSetSafeRole` helper + `TrySetSafeRoleServer` internal entry — mirror of the 2026-05-14b storage-role convergence pair. `BuildingLogisticsManager.AssignSafeRolesForShift` migrated to route through `TrySetSafeRoleServer` so the player UI path and the NPC shift-punch path share identical validation + side-effects. New `StorageRolesTabSafeRow` MonoBehaviour + `StorageRolesSafeRow.prefab` (mirrors `StorageRolesTabRow` / `StorageRolesRow.prefab`). `StorageRolesTabView` extended with a Safes section (header + rows + empty-state label) that subscribes to `OnTreasuryChanged` for repaint on every balance + role change. Row label shows per-currency balance with role prefix. Network safety: owner gate matches `TrySetStorageRoleServerRpc` exactly (`p.Receive.SenderClientId` → `ConnectedClients[…].PlayerObject.GetComponent<Character>()` → `caller == Owner` else reject), subtype filter against `SupportedSafeRoles`, late-joiner safe via existing per-safe `NetworkVariable<SafeRoleType>` + `NetworkList<BuildingTreasuryEntry>` (auto-delivered on subscription, no extra channel introduced). `StorageRolesTab.prefab` tree now has `StoragesHeader` + `SafesHeader` so the two sections read symmetrically. — claude
 - 2026-05-17 — Phase C3: transporter Building reputation hit on `TransportOrder` failure. New `TransportOrder.HostTransporter` field (nullable `CommercialBuilding`) tagged at dispatch in `LogisticsTransportDispatcher.DispatchTransportOrder`. `CheckExpiredBuyOrders` now docks every `HostTransporter` whose `AssociatedBuyOrder == expired && !IsCompleted` by −5, mirroring the supplier penalty. Closes the user's original "transporter also impacted" design intent. Commit `e5b48cb8`. — claude
