@@ -8,14 +8,30 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
     [SerializeField] private string _debugCommunityName = "New Community";
 
     private Community _currentCommunity;
+    private Community _citizenship;
 
     /// <summary>
     /// Saved community map ID from deserialization, resolved lazily at runtime.
     /// </summary>
     private string _pendingCommunityMapId;
 
+    /// <summary>
+    /// Saved citizenship map ID from deserialization, resolved lazily at runtime.
+    /// Mirrors the <c>_pendingCommunityMapId</c> pattern — the live Community
+    /// reference is rebound when MapRegistry has surfaced the matching CommunityData.
+    /// </summary>
+    private string _pendingCitizenshipMapId;
+
     public Character Character => _character;
     public Community CurrentCommunity => _currentCommunity;
+
+    /// <summary>
+    /// The community of which this character is a *citizen* (sticky — granted by
+    /// completing an <c>AdministrativeBuilding</c> in Plan 4). Distinct from
+    /// <see cref="CurrentCommunity"/> (which is the community the character is
+    /// currently a *member* of, transient).
+    /// </summary>
+    public Community Citizenship => _citizenship;
 
     private void Awake()
     {
@@ -86,6 +102,28 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
     public void SetCurrentCommunity(Community newCommunity)
     {
         _currentCommunity = newCommunity;
+    }
+
+    /// <summary>
+    /// Server-only. Grants citizenship to <paramref name="c"/>. If the character was
+    /// already a citizen of a different community, that previous citizenship is
+    /// implicitly renounced (no double-citizenship in v1).
+    /// Called by <c>AdministrativeBuilding.OnFinalize</c> on the founder, and by
+    /// <c>JoinRequestDesk</c> when a join request is accepted (both ship in Plan 4).
+    /// </summary>
+    public void SetCitizenship(Community c)
+    {
+        if (_citizenship == c) return;
+        _citizenship = c;
+    }
+
+    /// <summary>
+    /// Server-only. Clears citizenship. Used when a character formally leaves a city
+    /// (UI exit gesture in Plan 5) or when a community dissolves.
+    /// </summary>
+    public void RenounceCitizenship()
+    {
+        _citizenship = null;
     }
 
     public void JoinCommunity(Community communityToJoin)

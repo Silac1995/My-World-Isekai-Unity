@@ -51,13 +51,15 @@ public class Community
     public bool IsLeader(Character c) => c != null && leaders.Contains(c);
 
     /// <summary>
-    /// Members whose citizenship is this community.
-    /// Citizenship is granted by completing an AdministrativeBuilding (Plan 4).
-    /// In Plan 1 this returns all members as a placeholder until
-    /// <c>CharacterCommunity.Citizenship</c> ships.
-    /// TODO(Plan4): filter by m.CharacterCommunity.Citizenship == this
+    /// Members whose <see cref="CharacterCommunity.Citizenship"/> is this community.
+    /// Citizenship is granted by completing an AdministrativeBuilding (Plan 4) and
+    /// by JoinRequestDesk-accept (Plan 4). In Plan 1 this returns an empty enumerable
+    /// until a writer ships, but the filter is wired correctly.
     /// </summary>
-    public IEnumerable<Character> Citizens => members.Where(m => m != null);
+    public IEnumerable<Character> Citizens => members.Where(m =>
+        m != null
+        && m.CharacterCommunity != null
+        && m.CharacterCommunity.Citizenship == this);
 
     public Community(string name, Character founder)
     {
