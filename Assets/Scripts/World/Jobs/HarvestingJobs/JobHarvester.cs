@@ -59,12 +59,37 @@ public class JobHarvester : Job
         _jobType = jobType;
     }
 
+    // ── CityHarvester runtime branch (Plan 4b Task 7 — minimal stub) ────────
+    //
+    // When _workplace is an AdministrativeBuilding, the harvester ignores its
+    // HarvestingBuilding-driven planner entirely and instead reads
+    // AB.GetUnfulfillableHarvestQueue() to look for materials the logistics chain
+    // failed to source. The full implementation — Physics.OverlapSphere scan for a
+    // Harvestable yielding the queued item, CharacterHarvestAction queue, walk back
+    // to AB storage, deposit — is deferred to a follow-up (see Plan 4b wrap-up
+    // notes). For now we surface the workload and idle so the pipeline never
+    // softlocks: a chartered AB hires the harvester at runtime, JobLogisticsManager
+    // enqueues materials when no shop/crafter supplier exists, but the harvester
+    // doesn't drain the queue until the follow-up lands. Until then the city must
+    // either pre-stock the AB or rely on the founder's manual play.
+    private float _cityHarvesterIdleLogThrottle = -10f;
+
     /// <summary>
     /// Exécuté chaque tick quand le worker est au travail.
     /// Utilise le GOAP planner pour décider quoi faire.
     /// </summary>
     public override void Execute()
     {
+        // Plan 4b Task 7 — CityHarvester variant: minimal stub that idles when the
+        // workplace is an AB. The full harvest cascade is a follow-up; for now the
+        // pipeline ships with B2B + producer + virtual supplier paths fully
+        // functional, only the physical-harvest fallback deferred.
+        if (_workplace is AdministrativeBuilding ab)
+        {
+            ExecuteCityHarvesterStub(ab);
+            return;
+        }
+
         if (_workplace == null || !(_workplace is HarvestingBuilding harvesting)) return;
 
         // Si on a une action en cours, l'exécuter
@@ -284,7 +309,54 @@ public class JobHarvester : Job
 
     public override bool CanExecute()
     {
-        return base.CanExecute() && _workplace is HarvestingBuilding;
+        // CityHarvester variant: AdministrativeBuilding accepts a JobHarvester even
+        // though AB is not a HarvestingBuilding. The full Execute branch is stubbed
+        // (Plan 4b Task 7) but the slot must still be assignable so an AB can hire
+        // a harvester at all.
+        return base.CanExecute() && (_workplace is HarvestingBuilding || _workplace is AdministrativeBuilding);
+    }
+
+    /// <summary>
+    /// Plan 4b Task 7 — minimal stub for the CityHarvester variant. When workplace
+    /// is an <see cref="AdministrativeBuilding"/>, read the unfulfillable-material
+    /// queue and log (throttled) the pending work; do not yet drive a harvest plan.
+    /// Follow-up: implement the full Physics.OverlapSphere scan + CharacterHarvestAction
+    /// + walk-back-to-AB-storage cycle. Until then, the city construction pipeline
+    /// works for the B2B + producer + virtual supplier paths; the harvest fallback
+    /// path accumulates demand on the AB queue but does not execute on it.
+    /// </summary>
+    private void ExecuteCityHarvesterStub(AdministrativeBuilding ab)
+    {
+        // Cancel any in-flight harvest action carried over from a prior HarvestingBuilding
+        // workplace (defensive — shouldn't happen in v1, but safer to clear than re-tick).
+        if (_currentAction != null)
+        {
+            _currentAction.Exit(_worker);
+            _currentAction = null;
+            _currentPlan = null;
+        }
+
+        if (!NPCDebug.VerboseJobs) return;
+
+        var queue = ab.GetUnfulfillableHarvestQueue();
+        if (queue == null || queue.Count == 0) return;
+
+        float now = UnityEngine.Time.unscaledTime;
+        if (now - _cityHarvesterIdleLogThrottle < 5f) return;
+        _cityHarvesterIdleLogThrottle = now;
+
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < queue.Count; i++)
+        {
+            if (i > 0) sb.Append(", ");
+            sb.Append(queue[i].Item != null ? queue[i].Item.ItemName : "<null>");
+            sb.Append("×");
+            sb.Append(queue[i].Qty);
+        }
+        Debug.Log(
+            $"<color=#ff8866>[JobHarvester/CityStub]</color> {_worker?.CharacterName} at {ab.BuildingName}: " +
+            $"unfulfillable queue has {queue.Count} entries [{sb}]. Harvest-fallback execution is stubbed — " +
+            "Plan 4b Task 7 ships the cascade in a follow-up.");
     }
 
     /// <summary>
