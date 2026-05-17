@@ -3256,6 +3256,152 @@ public abstract class CommercialBuilding : Building
     private void HandleSafeRoleChanged(SafeRoleType _) => OnTreasuryChanged?.Invoke();
 
     // ============================================================================
+    // SAFE ROLE SYSTEM — owner-driven runtime reassignment for SafeFurniture.
+    // Sibling of the Storage Role System block below. Authored 2026-05-17 as
+    // Phase 1.7 (management-panel Safes section) — see wiki/systems/commercial-treasury.md.
+    //
+    // Mirrors the StorageRoleType taxonomy / DoSetStorageRole convergence pattern
+    // (2026-05-14b) — both the player UI ServerRpc and the NPC shift-punch
+    // auto-assign (BuildingLogisticsManager.AssignSafeRolesForShift) funnel through
+    // DoSetSafeRole so any future side-effect (cache invalidation, audit log,
+    // broadcast event) lands on both paths automatically.
+    // ============================================================================
+
+    /// <summary>
+    /// Subclass extension point: which <see cref="SafeRoleType"/> values are valid for
+    /// safes inside this building. The base returns <see cref="SafeRoleCatalog.Generic"/>
+    /// (None / Treasury). Future subtypes (Bank, Vault, …) can widen with a richer
+    /// catalog (e.g. PettyCash / Reserve tiers).
+    /// </summary>
+    public virtual System.Collections.Generic.IReadOnlyList<SafeRoleDescriptor> SupportedSafeRoles
+        => SafeRoleCatalog.Generic;
+
+    /// <summary>
+    /// Owner-only — called by the management UI's safe-role dropdown change handler.
+    /// Validates the caller is this building's owner, resolves the safe from its
+    /// NetworkObject reference, then routes through <see cref="DoSetSafeRole"/>.
+    /// Sibling of <see cref="TrySetStorageRoleServerRpc"/> — same auth chain, same
+    /// subtype filter, same divergence-proof convergence.
+    /// </summary>
+    [ServerRpc(RequireOwnership = false)]
+    public void TrySetSafeRoleServerRpc(NetworkObjectReference furnitureRef, SafeRoleType newRole, ServerRpcParams p = default)
+    {
+        // Caller-identity validation. Mirror of TrySetStorageRoleServerRpc.
+        Character caller = null;
+        if (NetworkManager.Singleton != null
+            && NetworkManager.Singleton.ConnectedClients.TryGetValue(p.Receive.SenderClientId, out var nc)
+            && nc?.PlayerObject != null)
+        {
+            caller = nc.PlayerObject.GetComponent<Character>();
+        }
+        if (caller == null || Owner == null || caller != Owner)
+        {
+            Debug.LogWarning($"[CommercialBuilding] {BuildingName}: TrySetSafeRoleServerRpc rejected — caller is not the owner.");
+            return;
+        }
+
+        // Subtype filter: roles outside SupportedSafeRoles are silently ignored.
+        bool roleSupported = false;
+        var supported = SupportedSafeRoles;
+        if (supported != null)
+        {
+            for (int i = 0; i < supported.Count; i++)
+            {
+                if (supported[i].Type == newRole) { roleSupported = true; break; }
+            }
+        }
+        if (!roleSupported)
+        {
+            Debug.LogWarning($"[CommercialBuilding] {BuildingName}: safe role {newRole} is not in SupportedSafeRoles — rejecting.");
+            return;
+        }
+
+        if (!furnitureRef.TryGet(out NetworkObject netObj) || netObj == null) return;
+        var safe = netObj.GetComponent<SafeFurniture>();
+        if (safe == null)
+        {
+            Debug.LogWarning($"[CommercialBuilding] {BuildingName}: TrySetSafeRoleServerRpc target is not a SafeFurniture.");
+            return;
+        }
+
+        DoSetSafeRole(safe, newRole);
+    }
+
+    /// <summary>
+    /// Canonical server-only safe-role mutator. ALL programmatic safe-role writes —
+    /// player UI (via <see cref="TrySetSafeRoleServerRpc"/>) and NPC shift-punch
+    /// auto-assignment (via <see cref="BuildingLogisticsManager.AssignSafeRolesForShift"/>)
+    /// — funnel through this method so they share identical validation, identical
+    /// replication, identical event fan-out. Server-side only.
+    /// <para>
+    /// Mirrors <see cref="DoSetStorageRole"/> shape: idempotency guard, sibling
+    /// <see cref="SafeFurnitureNetworkSync"/> resolution with LogError on miss
+    /// (structural prefab bug), write through <see cref="SafeFurnitureNetworkSync.SetRoleServer"/>.
+    /// Fan-out to every peer is handled by the per-safe NetworkVariable
+    /// <c>OnValueChanged</c> → <see cref="SafeFurniture.OnRoleChanged"/> →
+    /// <see cref="HandleSafeRoleChanged"/> → <see cref="OnTreasuryChanged"/>.
+    /// </para>
+    /// </summary>
+    private void DoSetSafeRole(SafeFurniture safe, SafeRoleType newRole)
+    {
+        if (safe == null) return;
+        if (!IsServer)
+        {
+            Debug.LogError($"[CommercialBuilding] {BuildingName}: DoSetSafeRole called on non-server peer — server authority violation. Route through TrySetSafeRoleServerRpc.");
+            return;
+        }
+
+        if (safe.Role == newRole) return;
+
+        var sync = safe.GetComponent<SafeFurnitureNetworkSync>();
+        if (sync == null)
+        {
+            Debug.LogError($"[CommercialBuilding] {BuildingName}: safe '{safe.FurnitureName}' has no SafeFurnitureNetworkSync sibling — role write DROPPED. Check the prefab — base SafeFurniture variants must inherit the sync component.");
+            return;
+        }
+
+        sync.SetRoleServer(newRole);
+        // OnTreasuryChanged is invoked via the per-safe NetworkVariable fan-out
+        // (SafeFurnitureNetworkSync.HandleRoleChanged → SafeFurniture.OnRoleChanged →
+        // CommercialBuilding.HandleSafeRoleChanged). Firing it here would only
+        // reach the host — the per-safe path reaches every peer.
+    }
+
+    /// <summary>
+    /// Server-only internal entry point for non-player callers (e.g.
+    /// <see cref="BuildingLogisticsManager.AssignSafeRolesForShift"/>). Performs the
+    /// same role validation as <see cref="TrySetSafeRoleServerRpc"/> (subtype filter
+    /// against <see cref="SupportedSafeRoles"/>) and routes through
+    /// <see cref="DoSetSafeRole"/>. Returns true if the write happened (state actually
+    /// changed), false otherwise — idempotent same-state calls return false with no
+    /// side-effects. Mirror of <see cref="TrySetStorageRoleServer"/>.
+    /// </summary>
+    internal bool TrySetSafeRoleServer(SafeFurniture safe, SafeRoleType newRole)
+    {
+        if (safe == null) return false;
+        if (!IsServer) return false;
+        if (safe.Role == newRole) return false;
+
+        bool roleSupported = false;
+        var supported = SupportedSafeRoles;
+        if (supported != null)
+        {
+            for (int i = 0; i < supported.Count; i++)
+            {
+                if (supported[i].Type == newRole) { roleSupported = true; break; }
+            }
+        }
+        if (!roleSupported)
+        {
+            Debug.LogWarning($"[CommercialBuilding] {BuildingName}: TrySetSafeRoleServer rejected role {newRole} — not in SupportedSafeRoles.");
+            return false;
+        }
+
+        DoSetSafeRole(safe, newRole);
+        return true;
+    }
+
+    // ============================================================================
     // STORAGE ROLE SYSTEM (unified — replaces ShopBuilding._sellShelves and the
     // designer-only ToolStorage / HelpWantedSign / ManagementFurniture singletons
     // for owner-driven runtime reassignment). Authored 2026-05-08 — see

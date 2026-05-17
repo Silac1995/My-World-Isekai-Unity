@@ -815,9 +815,17 @@ public class BuildingLogisticsManager : MonoBehaviour
     /// <see cref="SafeFurniture"/> primitive (2026-05-09). Walks every safe child
     /// of the building; any safe whose <see cref="SafeFurniture.Role"/> is
     /// <see cref="SafeRoleType.None"/> is flipped to
-    /// <see cref="SafeRoleType.Treasury"/> through the sibling
-    /// <see cref="SafeFurnitureNetworkSync.SetRoleServer"/>. Idempotent — safes
-    /// already at Treasury are skipped.
+    /// <see cref="SafeRoleType.Treasury"/>. Idempotent — safes already at Treasury
+    /// are skipped.
+    ///
+    /// <para>
+    /// Routes through <see cref="CommercialBuilding.TrySetSafeRoleServer"/> →
+    /// <c>DoSetSafeRole</c> for convergence with the player UI path (2026-05-17 —
+    /// Phase 1.7 Safes section). Both the player ServerRpc and this NPC pass share
+    /// the same validation, replication, and event fan-out — any future side-effect
+    /// (cache invalidation, audit log, broadcast) added to <c>DoSetSafeRole</c>
+    /// reaches both code paths automatically.
+    /// </para>
     ///
     /// <para>
     /// Called from <see cref="CommercialBuilding.WorkerStartingShift"/> after the
@@ -839,34 +847,20 @@ public class BuildingLogisticsManager : MonoBehaviour
         var safes = _building.Safes;
         if (safes == null || safes.Count == 0) return;
 
-        int flipped = 0;
         for (int i = 0; i < safes.Count; i++)
         {
             var safe = safes[i];
             if (safe == null) continue;
             if (safe.Role != SafeRoleType.None) continue;
 
-            var sync = safe.GetComponent<SafeFurnitureNetworkSync>();
-            if (sync == null)
-            {
-                if (NPCDebug.VerboseJobs)
-                    Debug.LogWarning($"[Logistics] {_building.BuildingName}: AssignSafeRolesForShift skipped safe[{i}] '{safe.name}' — missing SafeFurnitureNetworkSync sibling.");
-                continue;
-            }
-
-            sync.SetRoleServer(SafeRoleType.Treasury);
-            flipped++;
-            if (NPCDebug.VerboseJobs)
+            bool flipped = _building.TrySetSafeRoleServer(safe, SafeRoleType.Treasury);
+            if (flipped && NPCDebug.VerboseJobs)
             {
                 Debug.Log($"<color=#66ccff>[Logistics]</color> {_building.BuildingName}: safe[{i}] '{safe.name}' role None → Treasury (auto-assign on shift-punch).");
             }
         }
-
-        if (flipped > 0)
-        {
-            // The aggregate OnTreasuryChanged event already fires per safe's role flip via
-            // CommercialBuilding.HandleSafeRoleChanged; no extra notification needed.
-        }
+        // OnTreasuryChanged fires per safe via the per-safe NetworkVariable fan-out
+        // (CommercialBuilding.HandleSafeRoleChanged); no extra notification needed.
     }
 
     // =========================================================================
