@@ -46,6 +46,22 @@ public class CharacterRangedAttackAction : CharacterCombatAction
         if (_rangedStyle == null || _rangedStyle.ProjectilePrefab == null) return;
         if (_target == null || !_target.IsAlive()) return;
 
+        // --- AMMO CONSUME (server-authoritative) ---
+        // Only the server mutates ammo state. The RecomputeActiveWeaponSentinel call
+        // mirrors the new count to _activeAmmoNet so all clients repaint the HUD
+        // without a dedicated RPC (rule #19 / #19b).
+        var equipment = character.CharacterEquipment;
+        if (equipment != null && Unity.Netcode.NetworkManager.Singleton != null
+            && Unity.Netcode.NetworkManager.Singleton.IsServer)
+        {
+            var activeWeapon = equipment.CurrentWeapon;
+            if (activeWeapon is MagazineWeaponInstance mag)
+            {
+                mag.ConsumeAmmo();
+                equipment.RecomputeActiveWeaponSentinel();
+            }
+        }
+
         // Direction vers la cible
         Vector3 direction = (_target.transform.position - character.transform.position).normalized;
         direction.y = 0;

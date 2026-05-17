@@ -9,6 +9,31 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
 {
     private NetworkList<NetworkEquipmentSyncData> _networkEquipment;
 
+    // -----------------------------------------------------------------------
+    // Combat action bar — server-authoritative cursor into Inventory.GetWeaponInstances().
+    // -----------------------------------------------------------------------
+    private readonly NetworkVariable<int> _activeWeaponIndexNet =
+        new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    // _activeAmmoNet = -1 sentinel means the active weapon is NOT a magazine weapon
+    // (melee, charging-bow, or no weapon equipped).
+    private readonly NetworkVariable<int> _activeAmmoNet =
+        new NetworkVariable<int>(-1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private readonly NetworkVariable<bool> _isReloadingNet =
+        new NetworkVariable<bool>(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    public int ActiveWeaponIndex => _activeWeaponIndexNet.Value;
+    public int ActiveAmmo => _activeAmmoNet.Value;
+    public bool IsActiveReloading => _isReloadingNet.Value;
+
+    /// <summary>Fires on all peers whenever the active magazine's ammo count changes.
+    /// Value is -1 when the active weapon is not a magazine weapon.</summary>
+    public event Action<int> OnActiveAmmoChanged;
+
+    /// <summary>Fires on all peers when the active weapon's reload state changes.</summary>
+    public event Action<bool> OnActiveReloadingChanged;
+
     protected override void Awake()
     {
         base.Awake();
@@ -24,6 +49,15 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         base.OnNetworkSpawn();
         _networkEquipment.OnListChanged += OnEquipmentListChanged;
 
+        // Subscribe combat-bar NetworkVariable change callbacks.
+        _activeAmmoNet.OnValueChanged += (_, n) => OnActiveAmmoChanged?.Invoke(n);
+        _isReloadingNet.OnValueChanged += (_, n) => OnActiveReloadingChanged?.Invoke(n);
+
+        // Immediate-fire so late-joiners paint current state without waiting for
+        // a server-side mutation to arrive (rule #19b).
+        OnActiveAmmoChanged?.Invoke(_activeAmmoNet.Value);
+        OnActiveReloadingChanged?.Invoke(_isReloadingNet.Value);
+
         if (IsClient && !IsServer)
         {
             FullSyncFromNetwork();
@@ -34,6 +68,9 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     {
         base.OnNetworkDespawn();
         _networkEquipment.OnListChanged -= OnEquipmentListChanged;
+        // Note: anonymous lambdas wired in OnNetworkSpawn cannot be unsubscribed by reference.
+        // NGO disposes NetworkVariable delegates on Despawn — re-registration is safe on
+        // the next OnNetworkSpawn call.
     }
 
     private void UpdateNetworkSlot(ushort slotId, ItemInstance instance)
@@ -915,6 +952,89 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
     protected override void HandleCombatStateChanged(bool inCombat)
     {
         if (inCombat) DropItemFromHand();
+    }
+
+    // -----------------------------------------------------------------------
+    // Combat action bar — server-side helpers
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Re-evaluates which carried weapon is active and pushes ammo + reload state to
+    /// the NetworkVariables so all clients receive the update. Server-only.
+    /// Call after any equip change, weapon swap, reload completion, or ammo consume.
+    /// Made public — CharacterAction_Reload (Task 5) calls this from outside.
+    /// </summary>
+    public void RecomputeActiveWeaponSentinel()
+    {
+        if (!IsServer) return;
+
+        var inventory = GetInventory();
+        if (inventory == null)
+        {
+            _activeWeaponIndexNet.Value = 0;
+            _activeAmmoNet.Value = -1;
+            _isReloadingNet.Value = false;
+            return;
+        }
+
+        IReadOnlyList<WeaponInstance> weapons = inventory.GetWeaponInstances();
+        if (weapons == null || weapons.Count == 0)
+        {
+            _activeWeaponIndexNet.Value = 0;
+            _activeAmmoNet.Value = -1;
+            _isReloadingNet.Value = false;
+            return;
+        }
+
+        int idx = Mathf.Clamp(_activeWeaponIndexNet.Value, 0, weapons.Count - 1);
+        if (idx != _activeWeaponIndexNet.Value)
+            _activeWeaponIndexNet.Value = idx;
+
+        WeaponInstance active = weapons[idx];
+        if (active is MagazineWeaponInstance mag)
+        {
+            _activeAmmoNet.Value = mag.CurrentAmmo;
+            _isReloadingNet.Value = mag.IsReloading;
+        }
+        else
+        {
+            _activeAmmoNet.Value = -1;
+            _isReloadingNet.Value = false;
+        }
+    }
+
+    /// <summary>
+    /// Advances ActiveWeaponIndex to the next carried weapon and re-equips it.
+    /// Server-only. Called by CharacterAction_SwapWeapon.OnApplyEffect (Task 6).
+    /// Do NOT invoke from client input directly — route through the action so the
+    /// swap respects initiative pacing + anti-spam delay (spec §2 / §4 data flow).
+    /// </summary>
+    public void SwapToNextWeapon()
+    {
+        if (!IsServer) return;
+
+        var inventory = GetInventory();
+        if (inventory == null) return;
+
+        IReadOnlyList<WeaponInstance> weapons = inventory.GetWeaponInstances();
+        if (weapons == null || weapons.Count < 2) return;
+
+        int newIdx = (_activeWeaponIndexNet.Value + 1) % weapons.Count;
+        WeaponInstance newActive = weapons[newIdx];
+
+        // Reuse the public equip flow: Equip() routes through EquipWeapon() internally
+        // and calls UpdateWeaponVisual() + UpdateNetworkSlot() for visual sync.
+        // UnequipWeapon() drops the current weapon to the world — we don't want that
+        // during a swap (the weapon stays in the bag). We instead call EquipWeapon
+        // directly but it is private, so we update _weapon + call UpdateWeaponVisual.
+        // NOTE: This intentionally bypasses the drop-to-world behaviour of UnequipWeapon
+        // because on a swap the weapon must remain in the bag slot, not be dropped.
+        _weapon = newActive;
+        UpdateWeaponVisual();
+        UpdateNetworkSlot(0, newActive);
+
+        _activeWeaponIndexNet.Value = newIdx;
+        RecomputeActiveWeaponSentinel();
     }
 
     // --- ICharacterSaveData IMPLEMENTATION ---

@@ -221,8 +221,13 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
         var equipment = _character?.CharacterEquipment;
         if (equipment == null) return false;
 
-        // Task 4 adds ActiveWeaponIndex + multi-weapon list; until then CurrentWeapon is the single slot.
-        if (!(equipment.CurrentWeapon is MagazineWeaponInstance mag)) return false;
+        var weapons = equipment.GetInventory()?.GetWeaponInstances();
+        if (weapons == null || weapons.Count == 0) return false;
+
+        int activeIdx = equipment.ActiveWeaponIndex;
+        if (activeIdx < 0 || activeIdx >= weapons.Count) return false;
+
+        if (weapons[activeIdx] is not MagazineWeaponInstance mag) return false;
         if (mag.IsReloading) return false;
         if (mag.CurrentAmmo >= mag.MagazineSize) return false;
 
@@ -239,6 +244,9 @@ public class CharacterCombat : CharacterSystem, ICharacterSaveData<CombatSaveDat
     {
         var equipment = _character?.CharacterEquipment;
         if (equipment == null) return false;
+
+        var weapons = equipment.GetInventory()?.GetWeaponInstances();
+        if (weapons == null || weapons.Count < 2) return false;
 
         // Reject if a swap is already running (the action class enforces server-side too).
         if (_character.CharacterActions?.CurrentAction is CharacterAction_SwapWeapon) return false;
