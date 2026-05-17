@@ -59,20 +59,46 @@ public class JobHarvester : Job
         _jobType = jobType;
     }
 
-    // ── CityHarvester runtime branch (Plan 4b Task 7 — minimal stub) ────────
+    // ── CityHarvester runtime branch (Plan 4b Task 7) ────────────────────────
     //
-    // When _workplace is an AdministrativeBuilding, the harvester ignores its
-    // HarvestingBuilding-driven planner entirely and instead reads
-    // AB.GetUnfulfillableHarvestQueue() to look for materials the logistics chain
-    // failed to source. The full implementation — Physics.OverlapSphere scan for a
-    // Harvestable yielding the queued item, CharacterHarvestAction queue, walk back
-    // to AB storage, deposit — is deferred to a follow-up (see Plan 4b wrap-up
-    // notes). For now we surface the workload and idle so the pipeline never
-    // softlocks: a chartered AB hires the harvester at runtime, JobLogisticsManager
-    // enqueues materials when no shop/crafter supplier exists, but the harvester
-    // doesn't drain the queue until the follow-up lands. Until then the city must
-    // either pre-stock the AB or rely on the founder's manual play.
-    private float _cityHarvesterIdleLogThrottle = -10f;
+    // When _workplace is an AdministrativeBuilding, the harvester runs a manual
+    // state machine instead of the HarvestingBuilding-driven GOAP planner. It reads
+    // AB.GetUnfulfillableHarvestQueue() for materials the logistics chain failed to
+    // source, scans for a nearby Harvestable yielding the wanted item, runs the
+    // harvest → pickup → walk-to-AB-storage → deposit cycle, and decrements the
+    // queue. The existing GOAP actions can't be reused here because they take
+    // HarvestingBuilding in their constructor; the state machine wraps the same
+    // CharacterAction primitives (CharacterHarvestAction, CharacterPickUpItem,
+    // CharacterStoreInFurnitureAction) directly.
+    private enum CityHarvesterState
+    {
+        Idle,
+        FindTarget,        // pick a Harvestable from a nearby Physics scan
+        MoveToTarget,      // walk into the Harvestable's InteractionZone
+        Harvesting,        // CharacterHarvestAction in flight
+        PickupDroppedItem, // post-harvest, queue CharacterPickUpItem on a nearby WorldItem
+        MoveToABStorage,   // walk into the AB's StorageFurniture interaction zone
+        DepositItem,       // CharacterStoreInFurnitureAction in flight
+    }
+
+    private CityHarvesterState _cityState = CityHarvesterState.Idle;
+    private Harvestable _cityTarget;
+    private ItemSO _cityWantedItem;
+    private StorageFurniture _cityDepositStorage;
+    private bool _cityActionStarted;
+    private float _cityCooldownUntil = -1f;
+    private float _cityLastScanFailLogTime = -10f;
+
+    // Reused PhysX overlap buffer (single per-instance; PhysX queries are main-thread
+    // serial). 64 covers typical wilderness clutter inside a 30u scan radius.
+    private const int CityHarvesterOverlapBufferSize = 64;
+    private readonly Collider[] _cityOverlapBuffer = new Collider[CityHarvesterOverlapBufferSize];
+
+    /// <summary>Wilderness search radius around the worker for Harvestable scanning.</summary>
+    private const float CityHarvestScanRadius = 30f;
+
+    /// <summary>Brief cooldown after a "no target found" tick so we don't spam PhysX queries at 0.3s × hundreds of ticks/sec.</summary>
+    private const float CityHarvestScanCooldownSeconds = 2f;
 
     /// <summary>
     /// Exécuté chaque tick quand le worker est au travail.
@@ -80,13 +106,12 @@ public class JobHarvester : Job
     /// </summary>
     public override void Execute()
     {
-        // Plan 4b Task 7 — CityHarvester variant: minimal stub that idles when the
-        // workplace is an AB. The full harvest cascade is a follow-up; for now the
-        // pipeline ships with B2B + producer + virtual supplier paths fully
-        // functional, only the physical-harvest fallback deferred.
+        // Plan 4b Task 7 — CityHarvester variant runs its own state machine when the
+        // workplace is an AB. Pipeline contract: B2B + producer + virtual + physical-
+        // harvest are all live; this branch drives the physical-harvest fallback.
         if (_workplace is AdministrativeBuilding ab)
         {
-            ExecuteCityHarvesterStub(ab);
+            ExecuteCityHarvesterTick(ab);
             return;
         }
 
@@ -317,18 +342,15 @@ public class JobHarvester : Job
     }
 
     /// <summary>
-    /// Plan 4b Task 7 — minimal stub for the CityHarvester variant. When workplace
-    /// is an <see cref="AdministrativeBuilding"/>, read the unfulfillable-material
-    /// queue and log (throttled) the pending work; do not yet drive a harvest plan.
-    /// Follow-up: implement the full Physics.OverlapSphere scan + CharacterHarvestAction
-    /// + walk-back-to-AB-storage cycle. Until then, the city construction pipeline
-    /// works for the B2B + producer + virtual supplier paths; the harvest fallback
-    /// path accumulates demand on the AB queue but does not execute on it.
+    /// Plan 4b Task 7 — CityHarvester state machine. Drives the
+    /// harvest → pickup → deposit cycle for materials the AB's logistics chain
+    /// couldn't source through normal channels (B2B / producer / virtual).
     /// </summary>
-    private void ExecuteCityHarvesterStub(AdministrativeBuilding ab)
+    private void ExecuteCityHarvesterTick(AdministrativeBuilding ab)
     {
-        // Cancel any in-flight harvest action carried over from a prior HarvestingBuilding
-        // workplace (defensive — shouldn't happen in v1, but safer to clear than re-tick).
+        if (_worker == null) return;
+
+        // Defensive: clear any HarvestingBuilding-era GOAP state on first AB tick.
         if (_currentAction != null)
         {
             _currentAction.Exit(_worker);
@@ -336,27 +358,392 @@ public class JobHarvester : Job
             _currentPlan = null;
         }
 
-        if (!NPCDebug.VerboseJobs) return;
+        switch (_cityState)
+        {
+            case CityHarvesterState.Idle:
+                if (UnityEngine.Time.unscaledTime < _cityCooldownUntil) return;
+                _cityWantedItem = PickWantedItem(ab);
+                if (_cityWantedItem == null)
+                {
+                    // Queue empty — stay idle.
+                    return;
+                }
+                _cityState = CityHarvesterState.FindTarget;
+                break;
 
+            case CityHarvesterState.FindTarget:
+                if (_cityWantedItem == null)
+                {
+                    ResetCityState();
+                    return;
+                }
+                _cityTarget = FindHarvestableYielding(_worker, _cityWantedItem);
+                if (_cityTarget == null)
+                {
+                    // Nothing visible. Cool down and re-check on the next eligible tick.
+                    LogScanFailThrottled(_cityWantedItem, ab);
+                    _cityCooldownUntil = UnityEngine.Time.unscaledTime + CityHarvestScanCooldownSeconds;
+                    ResetCityState();
+                    return;
+                }
+                _cityState = CityHarvesterState.MoveToTarget;
+                break;
+
+            case CityHarvesterState.MoveToTarget:
+                if (_cityTarget == null || !_cityTarget.CanHarvest())
+                {
+                    ResetCityState();
+                    return;
+                }
+                if (CityIsAtTarget(_worker, _cityTarget))
+                {
+                    _worker.CharacterMovement?.ResetPath();
+                    _cityState = CityHarvesterState.Harvesting;
+                    _cityActionStarted = false;
+                    break;
+                }
+                // Re-fire SetDestination on path loss (rule #36 anti-freeze pattern).
+                var movement = _worker.CharacterMovement;
+                if (movement != null && !movement.HasPath)
+                {
+                    Vector3 dest = _cityTarget.transform.position;
+                    if (_cityTarget.InteractionZone != null)
+                    {
+                        dest = _cityTarget.InteractionZone.bounds.ClosestPoint(_worker.transform.position);
+                    }
+                    movement.SetDestination(dest);
+                }
+                break;
+
+            case CityHarvesterState.Harvesting:
+                if (_cityTarget == null || !_cityTarget.CanHarvest())
+                {
+                    ResetCityState();
+                    return;
+                }
+                if (!_cityActionStarted)
+                {
+                    var harvestAction = new CharacterHarvestAction(_worker, _cityTarget);
+                    if (_worker.CharacterActions.ExecuteAction(harvestAction))
+                    {
+                        _cityActionStarted = true;
+                        // Cache the harvestable's spawn-anchor (worker position+forward) so
+                        // we can scan for the dropped WorldItem after the animation.
+                        harvestAction.OnActionFinished += () =>
+                        {
+                            _cityState = CityHarvesterState.PickupDroppedItem;
+                            _cityActionStarted = false;
+                            if (NPCDebug.VerboseJobs)
+                            {
+                                Debug.Log($"<color=cyan>[JobHarvester/City]</color> {_worker.CharacterName} harvested '{_cityTarget?.gameObject.name}' for {_cityWantedItem.ItemName}.");
+                            }
+                        };
+                    }
+                    else
+                    {
+                        // Action rejected — clear and retry.
+                        if (_worker.CharacterActions.CurrentAction != null)
+                            _worker.CharacterActions.ClearCurrentAction();
+                        ResetCityState();
+                    }
+                }
+                break;
+
+            case CityHarvesterState.PickupDroppedItem:
+                // CharacterHarvestAction spawns the WorldItem at the worker's position +
+                // forward * 0.5 (see CharacterActions.ApplyHarvestOnServer). Scan a small
+                // radius around the worker for a matching loose item.
+                if (!_cityActionStarted)
+                {
+                    WorldItem dropped = FindNearbyDroppedItem(_worker, _cityWantedItem);
+                    if (dropped == null)
+                    {
+                        // Nothing matching nearby (rare race — another worker grabbed it,
+                        // or the harvestable yielded something else). Skip to deposit if
+                        // we already happen to be carrying the wanted item; otherwise reset.
+                        var carried = GetCarriedItem(_worker);
+                        if (carried != null && carried.ItemSO == _cityWantedItem)
+                        {
+                            _cityState = CityHarvesterState.MoveToABStorage;
+                            _cityDepositStorage = null;
+                            return;
+                        }
+                        ResetCityState();
+                        return;
+                    }
+
+                    var instance = dropped.ItemInstance;
+                    if (instance == null)
+                    {
+                        ResetCityState();
+                        return;
+                    }
+                    var pickupAction = new CharacterPickUpItem(_worker, instance, dropped.gameObject);
+                    if (_worker.CharacterActions.ExecuteAction(pickupAction))
+                    {
+                        _cityActionStarted = true;
+                        pickupAction.OnActionFinished += () =>
+                        {
+                            _cityState = CityHarvesterState.MoveToABStorage;
+                            _cityDepositStorage = null;
+                            _cityActionStarted = false;
+                        };
+                    }
+                    else
+                    {
+                        if (_worker.CharacterActions.CurrentAction != null)
+                            _worker.CharacterActions.ClearCurrentAction();
+                        ResetCityState();
+                    }
+                }
+                break;
+
+            case CityHarvesterState.MoveToABStorage:
+                // Find a StorageFurniture in the AB that has free space for the carried item.
+                var carriedNow = GetCarriedItem(_worker);
+                if (carriedNow == null)
+                {
+                    ResetCityState();
+                    return;
+                }
+                if (_cityDepositStorage == null)
+                {
+                    _cityDepositStorage = ab.FindStorageFurnitureForItem(carriedNow);
+                    if (_cityDepositStorage == null)
+                    {
+                        // No storage furniture has space. Drop in the building zone and let
+                        // the LogisticsManager sort it out via GoapAction_GatherStorageItems.
+                        ab.AddToInventory(carriedNow); // logical add (deposit-by-fiat)
+                        ab.DecrementUnfulfillableMaterial(_cityWantedItem, 1);
+                        // Remove from worker's inventory or hands.
+                        DropFromWorker(_worker, carriedNow);
+                        ResetCityState();
+                        return;
+                    }
+                }
+                if (CityIsAtStorage(_worker, _cityDepositStorage))
+                {
+                    _worker.CharacterMovement?.ResetPath();
+                    _cityState = CityHarvesterState.DepositItem;
+                    _cityActionStarted = false;
+                    break;
+                }
+                var moveMgmt = _worker.CharacterMovement;
+                if (moveMgmt != null && !moveMgmt.HasPath)
+                {
+                    moveMgmt.SetDestination(_cityDepositStorage.GetInteractionPosition(_worker.transform.position));
+                }
+                break;
+
+            case CityHarvesterState.DepositItem:
+                if (!_cityActionStarted)
+                {
+                    var carriedForDeposit = GetCarriedItem(_worker);
+                    if (carriedForDeposit == null || _cityDepositStorage == null)
+                    {
+                        ResetCityState();
+                        return;
+                    }
+                    // Re-validate storage has space (another worker may have filled it
+                    // while we walked).
+                    if (_cityDepositStorage.IsLocked || !_cityDepositStorage.HasFreeSpaceForItem(carriedForDeposit))
+                    {
+                        // Try to repick on next tick.
+                        _cityDepositStorage = null;
+                        _cityState = CityHarvesterState.MoveToABStorage;
+                        return;
+                    }
+                    var storeAction = new CharacterStoreInFurnitureAction(_worker, carriedForDeposit, _cityDepositStorage);
+                    if (_worker.CharacterActions.ExecuteAction(storeAction))
+                    {
+                        _cityActionStarted = true;
+                        var wantedSnapshot = _cityWantedItem;
+                        storeAction.OnActionFinished += () =>
+                        {
+                            ab.AddToInventory(carriedForDeposit);
+                            ab.DecrementUnfulfillableMaterial(wantedSnapshot, 1);
+                            if (NPCDebug.VerboseJobs)
+                            {
+                                Debug.Log($"<color=green>[JobHarvester/City]</color> {_worker.CharacterName} deposited {carriedForDeposit.ItemSO.ItemName} into {_cityDepositStorage.FurnitureName} for AB '{ab.BuildingName}'.");
+                            }
+                            ResetCityState();
+                        };
+                    }
+                    else
+                    {
+                        if (_worker.CharacterActions.CurrentAction != null)
+                            _worker.CharacterActions.ClearCurrentAction();
+                        ResetCityState();
+                    }
+                }
+                break;
+        }
+    }
+
+    private void ResetCityState()
+    {
+        _cityState = CityHarvesterState.Idle;
+        _cityTarget = null;
+        _cityWantedItem = null;
+        _cityDepositStorage = null;
+        _cityActionStarted = false;
+    }
+
+    /// <summary>Picks the first non-empty queue entry's item. FIFO; simple for v1.</summary>
+    private static ItemSO PickWantedItem(AdministrativeBuilding ab)
+    {
         var queue = ab.GetUnfulfillableHarvestQueue();
-        if (queue == null || queue.Count == 0) return;
-
-        float now = UnityEngine.Time.unscaledTime;
-        if (now - _cityHarvesterIdleLogThrottle < 5f) return;
-        _cityHarvesterIdleLogThrottle = now;
-
-        var sb = new System.Text.StringBuilder();
+        if (queue == null || queue.Count == 0) return null;
         for (int i = 0; i < queue.Count; i++)
         {
-            if (i > 0) sb.Append(", ");
-            sb.Append(queue[i].Item != null ? queue[i].Item.ItemName : "<null>");
-            sb.Append("×");
-            sb.Append(queue[i].Qty);
+            var entry = queue[i];
+            if (entry != null && entry.Item != null && entry.Qty > 0) return entry.Item;
         }
-        Debug.Log(
-            $"<color=#ff8866>[JobHarvester/CityStub]</color> {_worker?.CharacterName} at {ab.BuildingName}: " +
-            $"unfulfillable queue has {queue.Count} entries [{sb}]. Harvest-fallback execution is stubbed — " +
-            "Plan 4b Task 7 ships the cascade in a follow-up.");
+        return null;
+    }
+
+    /// <summary>
+    /// Physics.OverlapSphereNonAlloc scan around the worker for a <see cref="Harvestable"/>
+    /// that yields <paramref name="wanted"/>. Skips depleted / blacklisted targets and
+    /// returns the closest match. Allocation-free (uses the per-instance overlap buffer).
+    /// </summary>
+    private Harvestable FindHarvestableYielding(Character worker, ItemSO wanted)
+    {
+        if (worker == null || wanted == null) return null;
+
+        int hits = Physics.OverlapSphereNonAlloc(
+            worker.transform.position,
+            CityHarvestScanRadius,
+            _cityOverlapBuffer,
+            Physics.AllLayers,
+            QueryTriggerInteraction.Collide);
+
+        Harvestable best = null;
+        float bestDistSqr = float.MaxValue;
+        for (int i = 0; i < hits; i++)
+        {
+            var col = _cityOverlapBuffer[i];
+            if (col == null) continue;
+            var h = col.GetComponentInParent<Harvestable>();
+            if (h == null) continue;
+            if (!h.CanHarvest()) continue;
+            if (worker.PathingMemory != null && worker.PathingMemory.IsBlacklisted(h.gameObject.GetInstanceID())) continue;
+            if (!h.HasYieldOutput(wanted)) continue;
+
+            float dSqr = (h.transform.position - worker.transform.position).sqrMagnitude;
+            if (dSqr < bestDistSqr)
+            {
+                best = h;
+                bestDistSqr = dSqr;
+            }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Scans a tight radius around the worker for a <see cref="WorldItem"/> matching
+    /// <paramref name="wanted"/>. The harvest spawn anchor is `worker.position + forward * 0.5`
+    /// per <see cref="CharacterActions.ApplyHarvestOnServer"/>, so a 2 m radius is plenty.
+    /// </summary>
+    private WorldItem FindNearbyDroppedItem(Character worker, ItemSO wanted)
+    {
+        if (worker == null || wanted == null) return null;
+
+        int hits = Physics.OverlapSphereNonAlloc(
+            worker.transform.position,
+            2f,
+            _cityOverlapBuffer,
+            Physics.AllLayers,
+            QueryTriggerInteraction.Collide);
+
+        WorldItem nearest = null;
+        float nearestDistSqr = float.MaxValue;
+        for (int i = 0; i < hits; i++)
+        {
+            var col = _cityOverlapBuffer[i];
+            if (col == null) continue;
+            var wi = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
+            if (wi == null || wi.IsBeingCarried) continue;
+            if (wi.ItemInstance == null || wi.ItemInstance.ItemSO != wanted) continue;
+
+            float dSqr = (wi.transform.position - worker.transform.position).sqrMagnitude;
+            if (dSqr < nearestDistSqr)
+            {
+                nearest = wi;
+                nearestDistSqr = dSqr;
+            }
+        }
+        return nearest;
+    }
+
+    private static bool CityIsAtTarget(Character worker, Harvestable target)
+    {
+        if (worker == null || target == null) return false;
+        if (target.InteractionZone != null)
+        {
+            if (target.InteractionZone.bounds.Contains(worker.transform.position)) return true;
+            float dist = Vector3.Distance(
+                worker.transform.position,
+                target.InteractionZone.bounds.ClosestPoint(worker.transform.position));
+            return dist <= 2.5f; // matches CharacterHarvestAction.CanExecute fallback
+        }
+        return Vector3.Distance(worker.transform.position, target.transform.position) <= 3f;
+    }
+
+    private static bool CityIsAtStorage(Character worker, StorageFurniture storage)
+    {
+        if (worker == null || storage == null) return false;
+        var interactable = storage.GetComponent<InteractableObject>();
+        if (interactable != null && interactable.InteractionZone != null)
+        {
+            if (interactable.IsCharacterInInteractionZone(worker)) return true;
+            // Softlock guard — path exhausted within 2f flat-XZ.
+            var movement = worker.CharacterMovement;
+            bool pathExhausted = movement != null
+                && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f);
+            if (pathExhausted)
+            {
+                Vector3 ip = storage.GetInteractionPosition(worker.transform.position);
+                Vector3 wp = worker.transform.position;
+                Vector3 a = new Vector3(wp.x, 0f, wp.z);
+                Vector3 b = new Vector3(ip.x, 0f, ip.z);
+                return Vector3.Distance(a, b) <= 2f;
+            }
+            return false;
+        }
+        return Vector3.Distance(worker.transform.position, storage.GetInteractionPosition(worker.transform.position)) <= 1.5f;
+    }
+
+    private static ItemInstance GetCarriedItem(Character worker)
+    {
+        if (worker == null) return null;
+        var inventory = worker.CharacterEquipment?.GetInventory();
+        if (inventory != null && inventory.ItemSlots.Exists(s => !s.IsEmpty()))
+        {
+            return inventory.ItemSlots.FindLast(s => !s.IsEmpty()).ItemInstance;
+        }
+        return worker.CharacterVisual?.BodyPartsController?.HandsController?.CarriedItem;
+    }
+
+    private static void DropFromWorker(Character worker, ItemInstance item)
+    {
+        if (worker == null || item == null) return;
+        var inventory = worker.CharacterEquipment?.GetInventory();
+        if (inventory != null && inventory.HasAnyItemSO(new List<ItemSO> { item.ItemSO }))
+        {
+            inventory.RemoveItem(item, worker);
+            return;
+        }
+        worker.CharacterVisual?.BodyPartsController?.HandsController?.DropCarriedItem();
+    }
+
+    private void LogScanFailThrottled(ItemSO wanted, AdministrativeBuilding ab)
+    {
+        if (!NPCDebug.VerboseJobs) return;
+        float now = UnityEngine.Time.unscaledTime;
+        if (now - _cityLastScanFailLogTime < 5f) return;
+        _cityLastScanFailLogTime = now;
+        Debug.Log($"<color=#ff8866>[JobHarvester/City]</color> {_worker?.CharacterName} at {ab.BuildingName}: no Harvestable yielding {wanted.ItemName} within {CityHarvestScanRadius}u.");
     }
 
     /// <summary>
