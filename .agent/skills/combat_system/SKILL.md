@@ -263,3 +263,50 @@ Translucent gold border + ambient particles on zone perimeter.
 - **Out of Breath not applying**:
   - Verify `_outOfBreathEffect` is assigned on the `CharacterStatusManager` component.
   - It's a permanent-duration effect removed when `Stamina.CurrentAmount >= Stamina.MaxValue`.
+
+---
+
+## Combat action bar (2026-05-17 — combat HUD additions)
+
+The combat HUD shipped a multi-cluster action bar replacing the single-button `UI_CombatActionMenu`. Three clusters: weapon · abilities · utility. Active-weapon-only verbs (no melee-while-ranged secondary attack — that gameplay capability is being removed in a separate follow-up; ranged-weapon-can-melee is forbidden).
+
+### New CharacterActions (both NPC-callable per rule #22)
+
+- `CharacterAction_Reload(character, MagazineWeaponInstance)` — continuous server-side action. Duration = `MagazineRangedCombatStyleSO.ReloadTime` (defensive 2s fallback). `OnStart` validates + calls `mag.StartReload()`. `OnTick` accumulates elapsed time at 10 Hz; returns `true` when elapsed ≥ duration → `OnTick` completion calls `mag.FinishReload()`. `OnCancel` calls `mag.CancelReload()` (resets `_isReloading=false` without changing ammo). All three lifecycle hooks call `CharacterEquipment.RecomputeActiveWeaponSentinel()` to push state to clients.
+
+- `CharacterAction_SwapWeapon(character)` — continuous server-side action, hardcoded 0.5s. `OnStart` validates `GetWeaponInstances().Count >= 2`. `OnTick` accumulates time; completion calls `CharacterEquipment.SwapToNextWeapon()`. `OnCancel` is no-op (no partial state to clean up).
+
+Queue helpers on `CharacterCombat`:
+- `TryQueueReload()` — validates active weapon is `MagazineWeaponInstance`, not already reloading, ammo < max. Returns true if queued.
+- `TryQueueSwapWeapon()` — validates carried weapons ≥ 2 and no swap in flight.
+- `TryQueueUseItem(consumable, target)` — validates ConsumableSO.IsUsableInCombat. Currently routes through existing `CharacterUseConsumableAction` (fires immediately, doesn't queue — future polish to make queue-aware per spec §12).
+
+### CharacterEquipment surface
+
+- `ActiveWeaponIndex` — server-authoritative cursor into `Inventory.GetWeaponInstances()`. Server writes via `_activeWeaponIndexNet` NetworkVariable.
+- `SwapToNextWeapon()` — server-only. Advances cursor modulo carried count. Inlines the equip body (`_weapon = newActive; UpdateWeaponVisual(); UpdateNetworkSlot(...)`) rather than calling `EquipWeapon`/`UnequipWeapon` because Unequip drops the weapon to world as a `WorldItem`.
+- `RecomputeActiveWeaponSentinel()` — server-only. Re-evaluates active weapon shape, pushes `_activeAmmoNet` (`-1` sentinel = not a magazine) + `_isReloadingNet`. Called from every state-change site: equip change, ammo consume, reload start/finish/cancel, swap completion.
+- Events: `OnActiveAmmoChanged(int)`, `OnActiveReloadingChanged(bool)` (fired in `OnNetworkSpawn` immediate-fire for late-joiner repaint per rule #19b).
+
+### Ammo consume
+
+Pistol ammo was **not** being consumed at all on Attack before this change — wired in `CharacterRangedAttackAction.SpawnProjectile`, server-gated.
+
+### Hotkey map (PlayerController, rule #33)
+
+- `Space` (in battle) — queues attack via `SetActionIntent` for initiative-paced firing. Cancels queued action on second press.
+- `Space` (out of battle) — preserves existing direct `Attack(null)` behavior at `PlayerController.cs:295`.
+- `R` — `TryQueueReload`.
+- `Y` — `TryQueueSwapWeapon`.
+- `1`-`6` — `CharacterAbilities.TryUseSlot(i, PlannedTarget)` → routes to existing `CharacterCombat.UseAbility(slotIndex, target)` at line 390. Suppressed when `PlayerUI.IsCombatItemsWindowOpen` (window owns 1-9 numeric input).
+- `E` (in battle) — `PlayerUI.ToggleCombatItemsWindow`. PRIORITY 0 short-circuit at top of `HandleEKeyDown`; out-of-battle E preserves existing 5-priority dispatcher (placement → consumable → interactable → consume → hold-menu).
+
+### Bag-dependency gotcha
+
+`SwapToNextWeapon` + `TryQueueSwapWeapon` rely on `Inventory.GetWeaponInstances()` which sources from `Inventory.ItemSlots` (only available when a bag is equipped — `CharacterEquipment.HaveInventory()` gate). Characters with weapons held in-hand only (no bag) cannot swap — the helpers silently no-op. Pre-existing inventory limitation; document but don't fix here.
+
+### Related docs
+
+- Plan: [docs/superpowers/plans/2026-05-17-combat-action-bar.md](../../../docs/superpowers/plans/2026-05-17-combat-action-bar.md)
+- Spec: [docs/superpowers/specs/2026-05-17-combat-action-bar-design.md](../../../docs/superpowers/specs/2026-05-17-combat-action-bar-design.md)
+- Prefab checklist: [docs/superpowers/plans/2026-05-17-combat-action-bar-prefab-authoring.md](../../../docs/superpowers/plans/2026-05-17-combat-action-bar-prefab-authoring.md)

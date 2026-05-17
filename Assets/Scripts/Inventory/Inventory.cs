@@ -264,4 +264,35 @@ public class Inventory
         if (index >= 0 && index < _itemSlots.Count) return _itemSlots[index];
         return null;
     }
+
+    /// <summary>
+    /// Filters ItemSlots for consumable instances. Used by combat Items sub-window
+    /// and any future "use consumable" gameplay flow.
+    /// </summary>
+    public IEnumerable<ConsumableInstance> GetConsumables()
+    {
+        foreach (var slot in _itemSlots)
+        {
+            if (slot == null || slot.IsEmpty()) continue;
+            if (slot.ItemInstance is ConsumableInstance ci) yield return ci;
+        }
+    }
+
+    /// <summary>
+    /// Filters ItemSlots for weapon instances in the canonical inventory order.
+    /// Used by CharacterEquipment.SwapToNextWeapon for cycle order + the combat
+    /// action bar Swap button preview. Mirrors the inline filter at
+    /// CharacterEquipment.UpdateWeaponVisualOnBag (~line 500-509).
+    /// </summary>
+    public IReadOnlyList<WeaponInstance> GetWeaponInstances()
+    {
+        var result = new List<WeaponInstance>();
+        foreach (var slot in _itemSlots)
+        {
+            if (slot == null || slot.IsEmpty()) continue;
+            if (slot is WeaponSlot && slot.ItemInstance is WeaponInstance wi)
+                result.Add(wi);
+        }
+        return result;
+    }
 }

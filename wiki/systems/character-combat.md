@@ -3,7 +3,7 @@ type: system
 title: "Character Combat (component)"
 tags: [character, combat, tier-2, stub]
 created: 2026-04-19
-updated: 2026-04-19
+updated: 2026-05-17
 sources: []
 related: ["[[combat]]", "[[character]]", "[[kevin]]"]
 status: stable
@@ -28,6 +28,7 @@ Full documentation lives in [[combat]] and its children [[combat-damage]] / [[co
 
 ## Change log
 - 2026-04-19 — Stub. — Claude / [[kevin]]
+- 2026-05-17 — Combat action bar additions: new `OnInitiativeChanged` (float pct 0..1) + `OnActionIntentCleared` events. New helper methods `TryQueueReload()` / `TryQueueSwapWeapon()` / `TryQueueUseItem(consumable, target)` that validate state and route through `CharacterActions.ExecuteAction`. `OnActionIntentCleared` fires from `ClearActionIntent`, `LeaveBattle`, and `ForceExitCombatMode` (every path that nulls `PlannedAction`). See [[combat]] change log + [[2026-05-17-combat-action-bar]] plan. — claude
 
 ## Sources
 - [[combat]].

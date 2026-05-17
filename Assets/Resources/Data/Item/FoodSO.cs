@@ -13,6 +13,8 @@ public class FoodSO : ConsumableSO
     public float HungerRestored => _hungerRestored;
     public FoodCategory FoodCategory => _foodCategory;
 
+    public new bool IsUsableInCombat => false;
+
     public override System.Type InstanceType => typeof(FoodInstance);
     public override ItemInstance CreateInstance() => new FoodInstance(this);
 }

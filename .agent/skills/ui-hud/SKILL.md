@@ -246,3 +246,42 @@ The canonical example is [UI_SafeCurrencyRow.cs](../../Assets/Scripts/UI/Furnitu
 7. Console clean — no errors, no orange `[PlayerUI]` warnings.
 8. Multiplayer late-joiner: host opens the panel + mutates state → client joins late, opens the same panel → sees the mutated state (rule #19b MANDATORY).
 9. Two players opening the same panel simultaneously → both succeed; concurrent transactions race-resolve to one success + one `insufficient-*` toast.
+
+---
+
+## Combat action bar prefab structure (2026-05-17)
+
+Combat HUD shipped a multi-cluster action bar + Items sub-window + chrome leaves. The Items sub-window is the canonical example of a `UI_WindowBase` Prefab Variant whose anchor point follows a sibling element (the Items button on the action bar) — pattern reusable for any "popover from a HUD button."
+
+### File layout
+
+- `Assets/UI/Player HUD/UI_CombatItemsWindow.prefab` — Variant of `UI_WindowBase.prefab` (rule #39). Backing script `UI_CombatItemsWindow : UI_WindowBase`. Anchored above-right of the Items button (~y=74 from bottom-right).
+- `Assets/UI/Player HUD/UI_CombatItemRow.prefab` — leaf row prefab (no close button → NOT a UI_WindowBase variant). Instantiated by `UI_CombatItemsWindow` under its `ScrollView/Viewport/Content`.
+- `Assets/UI/Player HUD/Combat/UI_CombatAbilitySlot.prefab` — leaf, ×6 instances inside `UI_CombatActionMenu`'s abilities cluster.
+- `Assets/UI/Player HUD/Combat/UI_CombatInitiativeBar.prefab` — leaf, single instance inside `UI_CombatActionMenu._menuContainer`.
+- `Assets/UI/Player HUD/Combat/UI_CombatQueuedLabel.prefab` — leaf, single instance above the initiative bar.
+
+### Leaf-inside-HUD pattern (new — distinct from "leaf-inside-window")
+
+The action bar (`UI_CombatActionMenu`) is itself NOT a UI_WindowBase variant — it's a leaf HUD element (no close button; shown/hidden by `IsInBattle` state). But it has its own leaf children (init bar, queued label, ability slots) that live inside `_menuContainer` and are initialized via the parent's `Initialize(character)` call. This is the canonical "HUD-with-sub-leaves" structure:
+
+- Top-level HUD element: `UI_CombatActionMenu` — owns the `_menuContainer` toggled by lifecycle state (`IsInBattle`).
+- Sub-leaves: `UI_CombatInitiativeBar`, `UI_CombatQueuedLabel`, `UI_CombatAbilitySlot[6]` — authored as children of `_menuContainer`, wired as `SerializeField` references on the parent.
+- Initialization: parent's `Initialize(character)` calls `subElement.Initialize(character)` on each.
+
+This pattern is appropriate when the children share lifecycle with the parent (all show/hide together) and don't need their own close affordance. **Litmus**: if you'd never want the queued label visible without the action bar visible, it's a leaf child, not a sibling window.
+
+### PlayerUI surface
+
+- `[SerializeField] private UI_CombatItemsWindow _combatItemsWindow;` (added 2026-05-17 alongside `_combatActionMenu`)
+- `OpenCombatItemsWindow(Character)` / `CloseCombatItemsWindow()` / `IsCombatItemsWindowOpen` / `ToggleCombatItemsWindow(Character)`
+- Null-guard warning per rule #39 — surfaces when the SerializeField isn't wired in the scene.
+
+### Hotkey ownership
+
+UI button onClick handlers and PlayerController hotkeys call the **same** `CharacterCombat` / `CharacterAbilities` / `PlayerUI` methods. No parallel input paths. The 1-9 row-select hotkeys live inside `UI_CombatItemsWindow.Update` (window-scoped only) — PlayerController suppresses its global 1-6 ability binding when `PlayerUI.IsCombatItemsWindowOpen`.
+
+### Related docs
+
+- Plan: [docs/superpowers/plans/2026-05-17-combat-action-bar.md](../../../docs/superpowers/plans/2026-05-17-combat-action-bar.md)
+- Prefab checklist (active TODO): [docs/superpowers/plans/2026-05-17-combat-action-bar-prefab-authoring.md](../../../docs/superpowers/plans/2026-05-17-combat-action-bar-prefab-authoring.md)

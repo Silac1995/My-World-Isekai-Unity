@@ -3,7 +3,7 @@ type: system
 title: "Combat"
 tags: [combat, gameplay, multiplayer, tier-1]
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-05-17
 sources: []
 related:
   - "[[character]]"
@@ -239,6 +239,17 @@ BattleManager.Update()
 
 ## Change log
 - 2026-04-18 — Initial documentation pass (wiki bootstrap). Based on current SKILL.md + code read on `docs/llm-wiki-bootstrap`. — Claude / [[kevin]]
+
+## Change log addendum (2026-05-17 — combat action bar)
+
+- Player action bar: multi-cluster UI (weapon · abilities · utility) replacing the single-button `UI_CombatActionMenu`. Active-weapon-only verbs (Option B layout, Option A chrome).
+- Items sub-window: `UI_CombatItemsWindow` (`UI_WindowBase` variant per rule #39), anchored above-right of Items button, hosts consumable use during combat.
+- Chrome: player-only `UI_CombatInitiativeBar` + `UI_CombatQueuedLabel` parented inside `_menuContainer`.
+- New CharacterActions: `CharacterAction_Reload` (continuous, ReloadTime-based, OnCancel resets via `MagazineWeaponInstance.CancelReload`) + `CharacterAction_SwapWeapon` (continuous, 0.5s, calls `CharacterEquipment.SwapToNextWeapon`). Both NPC-callable (rule #22).
+- New CharacterEquipment surface: `ActiveWeaponIndex` cursor + `SwapToNextWeapon()` + `RecomputeActiveWeaponSentinel()`. Network sync via new `NetworkVariable<int> _activeAmmoNet` + `NetworkVariable<bool> _isReloadingNet` (rule #19b late-joiner correctness via OnNetworkSpawn immediate-fire).
+- Ammo consume on Attack wired in `CharacterRangedAttackAction.SpawnProjectile` (was not consuming previously — magazines were effectively infinite).
+- Hotkey map (PlayerController, rule #33): Space (attack queue), R (reload), Y (swap), 1-6 (abilities), E (toggle items window — preempts the 5-priority E dispatcher when IsInBattle).
+- See [[combat-action-bar-design]] spec + [[2026-05-17-combat-action-bar]] plan + [[2026-05-17-combat-action-bar-prefab-authoring]] prefab checklist.
 
 ## Sources
 - [.agent/skills/combat_system/SKILL.md](../../.agent/skills/combat_system/SKILL.md) — procedural how-to (primary operational source).

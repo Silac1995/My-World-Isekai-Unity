@@ -1,6 +1,6 @@
 ---
 name: combat-gameplay-architect
-description: "Expert in combat systems — CharacterCombat initiative/actions, BattleManager team orchestration, CombatEngagementCoordinator spatial grouping, melee/ranged/ability/spell actions, damage formulas, combat AI, knockback, and status effects. Use when implementing, debugging, or designing anything related to battles, damage, abilities, or combat flow."
+description: "Expert in combat systems — CharacterCombat initiative/actions, BattleManager team orchestration, CombatEngagementCoordinator spatial grouping, melee/ranged/ability/spell actions, damage formulas, combat AI, knockback, status effects, the 2026-05-17 combat action bar additions (CharacterAction_Reload + CharacterAction_SwapWeapon continuous actions, CharacterEquipment ActiveWeaponIndex cursor + SwapToNextWeapon + RecomputeActiveWeaponSentinel + _activeAmmoNet / _isReloadingNet NetworkVariables for late-joiner correctness rule #19b, ammo-consume-on-Attack seam wired in CharacterRangedAttackAction.SpawnProjectile, CharacterCombat.OnInitiativeChanged / OnActionIntentCleared events + TryQueueReload / TryQueueSwapWeapon / TryQueueUseItem helpers, CharacterAbilities.TryUseSlot wrapper routing to CharacterCombat.UseAbility, and the bag-dependency gotcha where Inventory.GetWeaponInstances silently returns null without a bag equipped). Use when implementing, debugging, or designing anything related to battles, damage, abilities, combat flow, weapon swap, reload, or the combat action bar backend."
 model: opus
 color: red
 memory: project
