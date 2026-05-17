@@ -212,7 +212,16 @@ namespace MWI.WorldSystem
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             if (Physics.Raycast(ray, out RaycastHit hit, 100f, _groundLayer))
             {
-                _ghostInstance.transform.position = hit.point;
+                // Snap the ghost to the cell centre of the host MapController's BuildingGrid.
+                // Falls back to the raw hit point when no map is found (placement will then be
+                // rejected by IsInsideRegion / map-discovery anyway).
+                Vector3 snapped = hit.point;
+                MapController hostMap = MapController.GetMapAtPosition(hit.point);
+                if (hostMap != null && hostMap.BuildingGrid != null)
+                {
+                    snapped = hostMap.BuildingGrid.SnapToGridCenter(hit.point);
+                }
+                _ghostInstance.transform.position = snapped;
 
                 bool insideRegion = IsInsideRegion(hit.point);
                 bool hasPermission = HasCommunityPlacementPermission(hit.point);
@@ -322,6 +331,25 @@ namespace MWI.WorldSystem
 
             // 4. Community zone permission check
             if (!HasCommunityPlacementPermission(position)) return false;
+
+            // 5. BuildingGrid occupancy check.
+            //    - On the server (authoritative): rejects overlap with any other building's footprint.
+            //    - On the client (ghost preview): the client's BuildingGrid is empty (no register
+            //      calls fire client-side), so this gate is always TRUE client-side. That means
+            //      the visual stays green on what the server might reject — acceptable v1
+            //      compromise; the server toast handles the actual rejection.
+            MapController hostMap = MapController.GetMapAtPosition(position);
+            if (hostMap != null && hostMap.BuildingGrid != null)
+            {
+                Vector2Int originCell = hostMap.BuildingGrid.GetCellCoord(position);
+                Vector2Int footprint = _ghostBuildingComponent != null
+                    ? _ghostBuildingComponent.GridFootprintCells
+                    : new Vector2Int(1, 1);
+                if (!hostMap.BuildingGrid.CanPlace(originCell, footprint)) return false;
+            }
+            // Note: when hostMap is null we DON'T reject here — the existing map-discovery
+            // logic in RegisterBuildingWithMap will either expand a nearby map or spawn a new
+            // wild map. Both paths land the building inside SOME map's grid post-spawn.
 
             // MapController adapts to the placement — no fit / separation rejection:
             //   * If the click is inside an existing map -> the building joins it.
