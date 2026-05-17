@@ -249,7 +249,12 @@ public class CharacterCommunity : CharacterSystem, ICharacterSaveData<CommunityS
         CreateCommunity(customName);
     }
 
-    private void CreateCommunity(string name)
+    /// <summary>
+    /// Server-only. Founds a community with an explicit name (used by
+    /// <c>Task_CreateCommunity</c> when the Ambition author overrides the default
+    /// "{founder.Name}'s Settlement" via <c>Task_CreateCommunity.CommunityName</c>).
+    /// </summary>
+    public void CreateCommunity(string name)
     {
         Community newComm = null;
         if (CommunityManager.Instance != null)
