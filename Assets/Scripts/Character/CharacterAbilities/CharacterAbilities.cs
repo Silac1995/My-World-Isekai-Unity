@@ -576,6 +576,23 @@ public class CharacterAbilities : CharacterSystem, ICharacterSaveData<AbilitiesS
     // Non-generic bridge (explicit interface impl)
     string ICharacterSaveData.SerializeToJson() => CharacterSaveDataHelper.SerializeToJson(this);
     void ICharacterSaveData.DeserializeFromJson(string json) => CharacterSaveDataHelper.DeserializeFromJson(this, json);
+
+    #region Execution
+
+    /// <summary>
+    /// Hotkey 1-6 + UI ability slot click entry point. Validates slot index + non-null,
+    /// then delegates to CharacterCombat.UseAbility which owns the actual
+    /// Owner-predict → ServerRpc → ClientRpc broadcast flow.
+    /// </summary>
+    public bool TryUseSlot(int slotIndex, Character target)
+    {
+        if (slotIndex < 0 || slotIndex >= ACTIVE_SLOT_COUNT) return false;
+        if (_activeSlots[slotIndex] == null) return false;
+        if (_character?.CharacterCombat == null) return false;
+        return _character.CharacterCombat.UseAbility(slotIndex, target);
+    }
+
+    #endregion
 }
 
 /// <summary>
