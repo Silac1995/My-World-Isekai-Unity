@@ -359,6 +359,20 @@ namespace MWI.WorldSystem
             //     CLAMPS to the Region's bounds (handled in MapRegistry.CreateMapAtPosition).
             // Small / tight Regions just produce smaller maps. Nothing rejects here.
 
+            // 6. 1-per-community gate for Administrative buildings.
+            //    The AB charters a community; only one is allowed per community.
+            //    Reads the blueprint's BuildingType — null-safe.
+            if (_ghostBuildingComponent != null && _ghostBuildingComponent.Blueprint != null
+                && _ghostBuildingComponent.Blueprint.BuildingType == BuildingType.Administrative)
+            {
+                if (_character != null && _character.CharacterCommunity != null
+                    && _character.CharacterCommunity.CurrentCommunity != null
+                    && _character.CharacterCommunity.CurrentCommunity.IsChartered)
+                {
+                    return false;
+                }
+            }
+
             return true;
         }
 
@@ -611,6 +625,29 @@ namespace MWI.WorldSystem
                         var saveData = BuildingSaveData.FromBuilding(building, map.transform.position);
                         community.ConstructedBuildings.Add(saveData);
                         Debug.Log($"<color=green>[BuildingPlacementManager]</color> Building '{building.BuildingName}' registered with map '{map.MapId}'. Total buildings: {community.ConstructedBuildings.Count}");
+                    }
+
+                    // AdministrativeBuilding-specific: bind the founder's community to this AB
+                    // so the OnFinalize citizenship grant + auto-owner binding can resolve.
+                    if (building is AdministrativeBuilding ab)
+                    {
+                        // Resolve the founder's runtime Community via CharacterCommunity.
+                        // PlacedByCharacterId is the founder's CharacterId; we look up their
+                        // CharacterCommunity.CurrentCommunity to find the host community.
+                        string placerId = building.PlacedByCharacterId.Value.ToString();
+                        if (!string.IsNullOrEmpty(placerId))
+                        {
+                            var placer = Character.FindByUUID(placerId);
+                            if (placer != null && placer.CharacterCommunity != null
+                                && placer.CharacterCommunity.CurrentCommunity != null)
+                            {
+                                ab.SetOwnerCommunity(placer.CharacterCommunity.CurrentCommunity);
+                            }
+                            else
+                            {
+                                Debug.LogWarning($"<color=orange>[BuildingPlacementManager]</color> AB '{building.BuildingName}' placed but founder '{placerId}' has no CurrentCommunity — OwnerCommunity will be unset. Founder citizenship grant on Finalize will no-op.");
+                            }
+                        }
                     }
                 }
                 else
