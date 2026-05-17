@@ -34,4 +34,3 @@ AI systems (like `BTCond_DetectedEnemy` or `NPCController`) query `GetAggressivi
 - **Aggressivity [0.0 - 1.0]**: Defines the threshold for violence. Gated strongly (must be `>= 0.7` to randomly attack strangers). Influences attack chance against known enemies.
 - **Sociability [0.0 - 1.0]**: Defines extroversion. Influences base interaction setup chances and affects the dialogue tone (favorable vs hostile). Neutral is `0.5f`.
 - **Loyalty [0.0 - 1.0]**: Defines willingness to aid non-friends (acquaintances or same-party members) when they are in danger.
-- **CanCreateCommunity (bool)**: Specialized flag dictating leadership initiative in forming new communities.

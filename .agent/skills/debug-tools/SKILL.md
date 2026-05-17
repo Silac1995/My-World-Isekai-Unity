@@ -78,7 +78,7 @@ Sub-tab content is displayed in a TMP_Text component inside a ScrollRect. Only t
 |-------|-------|---------|
 | 0 | `IdentitySubTab` | Name / Gender / Age / Race / Archetype / CharacterId / OriginWorld + state flags (BusyReason, alive/unconscious/building/player, party membership, abandoned flag + former leader id) |
 | 1 | `StatsSubTab` | CharacterCombatLevel (Level / XP / unassigned points / history count) + all 18 CharacterStats fields |
-| 2 | `SkillsTraitsSubTab` | Behavioural profile **name** (SO asset) + numeric traits (Aggressivity / Sociability / Loyalty / CanCreateCommunity). Personality: Name + Description + Compatible / Incompatible lists (colour-coded). CharacterSkills.Skills list |
+| 2 | `SkillsTraitsSubTab` | Behavioural profile **name** (SO asset) + numeric traits (Aggressivity / Sociability / Loyalty). Personality: Name + Description + Compatible / Incompatible lists (colour-coded). CharacterSkills.Skills list |
 | 3 | `NeedsSubTab` | CharacterNeeds.AllNeeds with urgency, active status, and color coding |
 | 4 | `AISubTab` | `CharacterAIDebugFormatter.FormatAll(c)` — one-liner delegation |
 | 5 | `CombatSubTab` | CharacterCombat (IsInBattle / IsCombatMode / PlannedTarget / CurrentBattleManager / KnownStyles) + CharacterStatusManager.ActiveEffects |

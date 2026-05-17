@@ -49,13 +49,3 @@ if (Random.value < responseChance)
     RespondToInteraction();
 }
 ```
-
-## Pattern: Hard Gate (Abilities)
-Booleans operate as pure binary capabilities rather than statistical shifts.
-
-```csharp
-if (character.CharacterTraits.CanCreateCommunity())
-{
-    GenerateFoundingCommunityGoapGoal();
-}
-```
