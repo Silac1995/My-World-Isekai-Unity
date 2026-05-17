@@ -30,17 +30,14 @@ public class GoapAction_GoShopping : GoapAction
         if (_chosenShop != null && _chosenCashier != null)
             return _chosenCashier.IsAvailableForCustomer || _actionEnqueued;
 
-        // Collect every qualifying shop, then pick one weighted by reputation
-        // (2026-05-17 — customer-NPC reputation effect). Picker formula:
-        //   weight = max(10, shop.Reputation)
-        // floors the lowest-rep shop at weight 10 vs a top-rep shop's weight 100,
-        // guaranteeing a 10:100 = 10% minimum relative chance for the worst shop.
+        // Project convention: every NPC purchase decision uses ReputationWeightedPicker
+        // (see wiki/systems/commercial-treasury.md §Reputation — convention paragraph).
         // Customers don't apply the B2B hard floor (ReputationB2BMinimum = 20) —
         // they're random shoppers, not procurement officers, so even a sketchy
-        // shop occasionally gets a visit.
+        // shop occasionally gets a visit (still rep-weighted).
         var candidates = FindQualifyingShopsWithItem(_desiredItem);
         if (candidates == null || candidates.Count == 0) return false;
-        var shop = PickShopByReputation(candidates);
+        var shop = ReputationWeightedPicker.Pick(candidates);
         if (shop == null) return false;
 
         var entry = shop.GetCatalogEntry(_desiredItem);
@@ -189,34 +186,4 @@ public class GoapAction_GoShopping : GoapAction
         return result;
     }
 
-    /// <summary>
-    /// Reputation-weighted random pick across <paramref name="candidates"/>.
-    /// Weight formula: <c>max(10, shop.Reputation)</c> — guarantees the
-    /// lowest-rep shop has a relative weight of 10/100 = 10% of a top-rep shop,
-    /// so no shop is ever permanently invisible to customers. Customer-NPC
-    /// effect (2026-05-17). Server-only — <see cref="UnityEngine.Random"/> uses
-    /// shared state, but customer-NPC GOAP planning runs server-side only.
-    /// </summary>
-    private static ShopBuilding PickShopByReputation(List<ShopBuilding> candidates)
-    {
-        if (candidates == null || candidates.Count == 0) return null;
-        if (candidates.Count == 1) return candidates[0];
-
-        int totalWeight = 0;
-        for (int i = 0; i < candidates.Count; i++)
-        {
-            totalWeight += UnityEngine.Mathf.Max(10, candidates[i].Reputation);
-        }
-        if (totalWeight <= 0) return candidates[0]; // defensive — shouldn't happen with the 10 floor.
-
-        int roll = UnityEngine.Random.Range(0, totalWeight);
-        int accum = 0;
-        for (int i = 0; i < candidates.Count; i++)
-        {
-            accum += UnityEngine.Mathf.Max(10, candidates[i].Reputation);
-            if (roll < accum) return candidates[i];
-        }
-        // Floating-point safety net (Random.Range is exclusive upper, so unreachable in practice).
-        return candidates[candidates.Count - 1];
-    }
 }

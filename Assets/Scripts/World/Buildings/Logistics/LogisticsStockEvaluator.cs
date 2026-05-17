@@ -358,6 +358,13 @@ public class LogisticsStockEvaluator
 
         try
         {
+            // === Pass 1: collect qualifying shops ===
+            // Project convention (2026-05-17d): every NPC-buys-from-building decision
+            // is reputation-weighted via ReputationWeightedPicker. The B2B procurement
+            // path mirrors the customer-NPC pattern in GoapAction_GoShopping —
+            // qualify first (sells / stock / rep ≥ B2B floor / buyer can afford /
+            // cashier present), then pick one weighted by max(10, rep).
+            var qualifiers = new List<ShopBuilding>();
             foreach (var b in BuildingManager.Instance.allBuildings)
             {
                 if (b == null || b == _building) continue;
@@ -368,10 +375,12 @@ public class LogisticsStockEvaluator
                 string shopMapId = shopMapController != null ? shopMapController.MapId : string.Empty;
                 if (!string.Equals(shopMapId, buyerMapId)) continue;
 
-                // Reputation gate (2026-05-16). Shops below ReputationB2BMinimum are
-                // skipped — they've failed enough recent deliveries that the supply chain
-                // refuses to source from them. Recovers naturally as the shop completes
-                // future orders (+1 per successful delivery; see commercial-treasury.md).
+                // Reputation hard floor (2026-05-16). Shops below ReputationB2BMinimum
+                // are invisible to procurement — they've failed enough recent deliveries
+                // that the supply chain refuses to source from them. Recovers naturally
+                // as the shop completes future orders (+1 per successful delivery; see
+                // commercial-treasury.md). Customers (GoapAction_GoShopping) don't apply
+                // this hard floor — they only weight, never exclude.
                 if (shop.Reputation < CommercialBuilding.ReputationB2BMinimum)
                 {
                     if (logFlow)
@@ -400,10 +409,9 @@ public class LogisticsStockEvaluator
                     continue;
                 }
 
-                // Pick a cashier to receive the till credit. Prefer the first cashier
-                // that exists at all; future polish: round-robin / least-balance / etc.
-                var cashier = (shop.Cashiers != null && shop.Cashiers.Count > 0) ? shop.Cashiers[0] : null;
-                if (cashier == null)
+                // Cashier must exist (will receive the till credit).
+                var cashierProbe = (shop.Cashiers != null && shop.Cashiers.Count > 0) ? shop.Cashiers[0] : null;
+                if (cashierProbe == null)
                 {
                     if (logFlow)
                     {
@@ -412,56 +420,67 @@ public class LogisticsStockEvaluator
                     continue;
                 }
 
-                // ATOMIC COMMIT.
-                if (!_building.TryDebitTreasury(currency, totalCost,
-                        $"B2B_Purchase_{itemSO.ItemName}_x{quantityToOrder}_from_{shop.BuildingName}"))
-                {
-                    // Shouldn't happen — CanAffordFromTreasury guarded the entry.
-                    Debug.LogError($"[LogisticsStockEvaluator] {_building.BuildingName}: B2B treasury debit failed AFTER CanAffordFromTreasury returned true (item={itemSO.ItemName}, total={totalCost}). Treasury state may be inconsistent.");
-                    continue;
-                }
-                cashier.CreditTill(currency, totalCost,
-                    $"B2B_PurchaseFrom_{_building.BuildingName}_{itemSO.ItemName}_x{quantityToOrder}");
-
-                // Move items from sell-shelves into shop.Inventory so the existing
-                // transport-dispatcher reservation path (which scans _building.Inventory)
-                // can pick them up. Items stay tracked as the shop's logical stock until
-                // a TransportOrder pulls them.
-                int movedCount = MoveSellShelfItemsToShopInventory(shop, itemSO, quantityToOrder);
-                if (movedCount < quantityToOrder)
-                {
-                    // Shouldn't happen — CountItemOnSellShelves verified availability at
-                    // top of this iteration. If we land here a race elided some items
-                    // (another B2B / human buy at the exact same tick) and we need to
-                    // refund what we couldn't fulfil.
-                    int shortfall = quantityToOrder - movedCount;
-                    int refund = shortfall * unitPrice;
-                    Debug.LogWarning($"[LogisticsStockEvaluator] {_building.BuildingName}: B2B race detected — committed for {quantityToOrder} but only {movedCount} items moved. Refunding {refund}g.");
-                    cashier.DebitTill(currency, refund, $"B2B_Refund_{_building.BuildingName}_partial");
-                    _building.CreditTreasury(currency, refund, $"B2B_Refund_partial_from_{shop.BuildingName}");
-                    if (movedCount <= 0) continue; // nothing to ship — try next shop
-                    quantityToOrder = movedCount; // shrink the order to what we actually have
-                    totalCost = quantityToOrder * unitPrice;
-                }
-
-                // Create + register the BuyOrder. IsPlaced=true skips the buyer-side
-                // GoapAction_PlaceOrder GOAP walk (background commit, no NPC dance).
-                var buyOrder = new BuyOrder(itemSO, quantityToOrder, shop, _building, 3, _building.Owner, null);
-                buyOrder.IsPlaced = true;
-
-                _orderBook.AddPlacedBuyOrder(buyOrder); // buyer side tracking
-                if (shop.LogisticsManager != null)
-                {
-                    shop.LogisticsManager.OrderBook.AddActiveOrder(buyOrder); // shop side (dispatch source)
-                }
-                else
-                {
-                    Debug.LogWarning($"[LogisticsStockEvaluator] {_building.BuildingName}: B2B shop '{shop.BuildingName}' has no LogisticsManager — its dispatcher will not run. Order added to buyer side only; transporter may not ship.");
-                }
-
-                Debug.Log($"<color=#aaffaa>[B2B]</color> {_building.BuildingName} ← {shop.BuildingName}: bought {quantityToOrder}× {itemSO.ItemName} for {totalCost}g (unit={unitPrice}g). IsPlaced=true, awaiting transport.");
-                return true;
+                qualifiers.Add(shop);
             }
+
+            if (qualifiers.Count == 0) return false;
+
+            // === Pass 2: reputation-weighted pick ===
+            // Per the project convention. Single-qualifier fast-path inside the helper.
+            var pickedShop = ReputationWeightedPicker.Pick(qualifiers);
+            if (pickedShop == null) return false;
+
+            // === Pass 3: atomic commit on the picked shop ===
+            // Re-derive the per-shop values (we threw them away after Pass 1 to avoid
+            // a tuple-list allocation; recompute is O(1) cashier/catalog lookups).
+            var pickedEntry  = pickedShop.GetCatalogEntry(itemSO);
+            var pickedCashier = pickedShop.Cashiers[0];
+            int pickedUnit = ShopBuilding.ResolvePrice(pickedEntry.Value);
+            int pickedTotal = pickedUnit * quantityToOrder;
+
+            if (!_building.TryDebitTreasury(currency, pickedTotal,
+                    $"B2B_Purchase_{itemSO.ItemName}_x{quantityToOrder}_from_{pickedShop.BuildingName}"))
+            {
+                // Shouldn't happen — CanAffordFromTreasury guarded Pass 1.
+                Debug.LogError($"[LogisticsStockEvaluator] {_building.BuildingName}: B2B treasury debit failed AFTER CanAffordFromTreasury returned true (item={itemSO.ItemName}, total={pickedTotal}). Treasury state may be inconsistent.");
+                return false;
+            }
+            pickedCashier.CreditTill(currency, pickedTotal,
+                $"B2B_PurchaseFrom_{_building.BuildingName}_{itemSO.ItemName}_x{quantityToOrder}");
+
+            int movedCount = MoveSellShelfItemsToShopInventory(pickedShop, itemSO, quantityToOrder);
+            if (movedCount < quantityToOrder)
+            {
+                int shortfall = quantityToOrder - movedCount;
+                int refund = shortfall * pickedUnit;
+                Debug.LogWarning($"[LogisticsStockEvaluator] {_building.BuildingName}: B2B race detected — committed for {quantityToOrder} but only {movedCount} items moved. Refunding {refund}g.");
+                pickedCashier.DebitTill(currency, refund, $"B2B_Refund_{_building.BuildingName}_partial");
+                _building.CreditTreasury(currency, refund, $"B2B_Refund_partial_from_{pickedShop.BuildingName}");
+                if (movedCount <= 0)
+                {
+                    // Total race — picked shop lost all its qualifying stock between Pass 1
+                    // and Pass 3. Producer-path fallback runs on the next RequestStock tick.
+                    return false;
+                }
+                quantityToOrder = movedCount;
+                pickedTotal = quantityToOrder * pickedUnit;
+            }
+
+            var buyOrder = new BuyOrder(itemSO, quantityToOrder, pickedShop, _building, 3, _building.Owner, null);
+            buyOrder.IsPlaced = true;
+
+            _orderBook.AddPlacedBuyOrder(buyOrder);
+            if (pickedShop.LogisticsManager != null)
+            {
+                pickedShop.LogisticsManager.OrderBook.AddActiveOrder(buyOrder);
+            }
+            else
+            {
+                Debug.LogWarning($"[LogisticsStockEvaluator] {_building.BuildingName}: B2B shop '{pickedShop.BuildingName}' has no LogisticsManager — its dispatcher will not run. Order added to buyer side only; transporter may not ship.");
+            }
+
+            Debug.Log($"<color=#aaffaa>[B2B]</color> {_building.BuildingName} ← {pickedShop.BuildingName}: bought {quantityToOrder}× {itemSO.ItemName} for {pickedTotal}g (unit={pickedUnit}g, rep={pickedShop.Reputation}, qualifiers={qualifiers.Count}). IsPlaced=true, awaiting transport.");
+            return true;
         }
         catch (System.Exception e)
         {
