@@ -130,10 +130,14 @@ namespace MWI.UI.Management
         {
             // Defense-in-depth owner gate — does not authoritatively reject (call sites do that),
             // just guards against future callers forgetting the gate. Fail-silent.
+            // Multi-owner aware: route through Room.IsOwner(Character) — compares against the
+            // full replicated _ownerIds NetworkList, not just the singular Owner getter's
+            // first entry. Without this a secondary owner (added via CommercialBuilding.AddOwner
+            // or the dev console) hit a warning + early-return here.
             var localPlayer = ResolveLocalPlayerCharacter();
-            if (localPlayer == null || building.Owner != localPlayer)
+            if (localPlayer == null || !building.IsOwner(localPlayer))
             {
-                Debug.LogWarning("[UI_OwnerManagementPanel] Show rejected — local character is not the owner.");
+                Debug.LogWarning("[UI_OwnerManagementPanel] Show rejected — local character is not an owner.");
                 return;
             }
 
