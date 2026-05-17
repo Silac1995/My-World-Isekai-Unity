@@ -44,6 +44,33 @@ This spec covers the visual surface (bar layout, sub-window, chrome) **and** the
 - **Hotkey map** — Space (active attack), R (reload), Y (swap), 1–6 (abilities), E (items). All wired in `PlayerController.Update()` per rule #33.
 - Multiplayer correctness: Host↔Client + Host/Client↔NPC validated. Late-joiner repro for ammo + swap state (mandatory per rule #19b).
 
+### Concrete API additions required (in scope)
+
+The spec depends on APIs that don't exist today. Collecting them here so the planner has a single inventory:
+
+| Surface | New member | Why |
+|---|---|---|
+| `Inventory.cs` | `IEnumerable<ConsumableInstance> GetConsumables()` | Items window data source. Filters `ItemSlots` for `ItemInstance is ConsumableInstance`. (There is **no `CharacterInventory` class**; inventory lives on `CharacterEquipment.GetInventory()` returning `Inventory`.) |
+| `Inventory.cs` | `IReadOnlyList<WeaponInstance> GetWeaponInstances()` | Swap source. Filters `ItemSlots` for `slot is WeaponSlot && !slot.IsEmpty()`. The existing `UpdateWeaponVisualOnBag` at `CharacterEquipment.cs:495` already does this filter inline — refactor into a reusable helper. |
+| `CharacterEquipment.cs` | `int ActiveWeaponIndex { get; }` + `void SwapToNextWeapon()` (server-only) | Tracks which entry of `GetWeaponInstances()` is currently equipped. `SwapToNextWeapon` advances index modulo count, calls existing equip/unequip pair to actually swap. **No new "secondary slot" concept** — reuses the existing inventory + equip API entirely (see §4.1 "Carried weapons data model"). |
+| `CharacterEquipment.cs` | `NetworkVariable<int> _activeAmmoNet` + `NetworkVariable<bool> _isReloadingNet` | Replicates the active magazine weapon's per-shot state. `-1` ammo sentinel = not a magazine. See §5. |
+| `CharacterAbilities.cs` | `bool TryUseSlot(int slotIndex, Character target)` | Combat hotkeys 1-6 + UI ability slot click. Wraps `_activeSlots[i].TryTrigger(target)` with bounds + null check. |
+| `CharacterCombat.cs` | `event Action<float> OnInitiativeChanged` (pct 0–1) | Drives `UI_CombatInitiativeBar`. Fired inside the existing `UpdateInitiativeTick` after the change. |
+| `CharacterCombat.cs` | `event Action OnActionIntentCleared` | Drives `UI_CombatQueuedLabel.Hide()`. Fired inside the existing `ClearActionIntent` after the assignment. |
+| `CharacterCombat.cs` | `bool TryQueueReload()` | Player UI + hotkey entry. Validates `WeaponInstance is MagazineWeaponInstance && !IsReloading && CurrentAmmo < MagazineSize`, queues `CharacterAction_Reload` via `CharacterActions.ExecuteAction`. |
+| `CharacterCombat.cs` | `bool TryQueueSwapWeapon()` | Validates `GetWeaponInstances().Count >= 2 && no swap-action in flight`, queues `CharacterAction_SwapWeapon`. |
+| `CharacterCombat.cs` | `bool TryQueueUseItem(ConsumableInstance, Character target)` | Validates target (self vs throw), queues item use via existing or new consumable action. |
+| `MagazineWeaponInstance.cs` | `void CancelReload()` | Resets `_isReloading = false` without setting ammo. Called by `CharacterAction_Reload.OnInterrupt`. |
+| `ConsumableSO.cs` | `[SerializeField] bool _isUsableInCombat = true;` + property | Items window filter. |
+| `FoodSO.cs` | override `IsUsableInCombat => false` (or set the SerializeField on existing assets) | Food is bench-only. |
+| `CharacterAction_Reload.cs` | new file | Continuous action; see §4 file table. |
+| `CharacterAction_SwapWeapon.cs` | new file | Continuous action; see §4 file table. |
+
+**Verification deferred to planning (not blockers, but worth confirming):**
+- Whether `CharacterAction_UseItem` (or similar) already exists for non-combat consumable use; if yes, `TryQueueUseItem` reuses it; if no, add. The existing E-dispatcher uses `CharacterUseConsumableAction` (`PlayerController.cs:379`) — likely the right reuse.
+- Whether `CharacterEquipment` equip-change replicates to clients today. If not, audit + fix as part of this work — otherwise Swap will work for the swapping player but remote players won't see the weapon change.
+- Whether `CharacterStats.Initiative` is replicated. Under Option A chrome (player-only init bar) this only matters for the owner's local UI, which reads from the local server-or-owner copy.
+
 ### Out of scope (deferred)
 
 - **"Melee while ranged equipped" gameplay capability.** Removed by user directive 2026-05-17. Ranged-weapon-can-melee-attack is being eliminated from `WeaponSO` and combat logic in a **separate follow-up** (see §13). UI never shows a secondary attack button.
@@ -95,7 +122,7 @@ Pattern:
 | `Assets/Scripts/UI/Combat/UI_CombatAbilitySlot.cs` | new | Per-slot leaf prefab (×6). Renders ability icon + hotkey + cooldown overlay + resource readout. `Initialize(int slotIndex, Character)`. |
 | `Assets/Scripts/UI/Combat/UI_CombatInitiativeBar.cs` | new | Leaf prefab. Subscribes to `Character.CharacterStats.OnInitiativeChanged` (add if missing) — driven by existing `_initiative01` field. |
 | `Assets/Scripts/UI/Combat/UI_CombatQueuedLabel.cs` | new | Leaf prefab. Subscribes to `Character.CharacterCombat.OnActionIntentDecided`. Renders `"▶ Queued: <icon> <name> → <target>"`. Hides when `PlannedAction == null`. |
-| `Assets/Scripts/UI/Combat/UI_CombatItemsWindow.cs` | new | `UI_WindowBase` subclass. Opens via `PlayerUI.OpenCombatItemsWindow(Character)`. Builds row list from `CharacterInventory.GetConsumables()` (verify accessor exists). Auto-closes on use / combat end / out-of-zone / ESC / second-click toggle. |
+| `Assets/Scripts/UI/Combat/UI_CombatItemsWindow.cs` | new | `UI_WindowBase` subclass. Opens via `PlayerUI.OpenCombatItemsWindow(Character)`. Builds row list from `character.CharacterEquipment.GetInventory().GetConsumables()` (new helper — see §2). Auto-closes on use / combat end / ESC / second-click toggle. |
 | `Assets/Scripts/UI/Combat/UI_CombatItemRow.cs` | new | Leaf row prefab. Renders icon + name + qty + effect + hotkey badge. `Initialize(ConsumableInstance, Character, int hotkeyNumber)`. Click → `OnUseClicked`. |
 | `Assets/Scripts/UI/PlayerUI.cs` | edit | Add `[SerializeField] private UI_CombatItemsWindow _combatItemsWindow;` + `OpenCombatItemsWindow(Character)` + `CloseCombatItemsWindow()`. Null-guard warning per rule #39. |
 | `Assets/UI/Player HUD/UI_CombatItemsWindow.prefab` | new | Prefab Variant of `UI_WindowBase.prefab`. Wired into `PlayerUI._combatItemsWindow`. |
@@ -105,11 +132,34 @@ Pattern:
 | `Assets/UI/Player HUD/Combat/UI_CombatQueuedLabel.prefab` | new | Leaf, single instance inside the action bar. |
 | `Assets/Scripts/Character/CharacterActions/CharacterAction_Reload.cs` | new | Continuous action (extends `CharacterAction_Continuous`). Duration = `MagazineRangedCombatStyleSO.ReloadTime`. OnStart → `magInstance.StartReload()`. OnComplete → `magInstance.FinishReload()`. Cancellable; cancel → leaves `_isReloading` true (caller must reset, or add `CancelReload` method). No owner gate. |
 | `Assets/Scripts/Character/CharacterActions/CharacterAction_SwapWeapon.cs` | new | Continuous action, ~0.5s. OnComplete → server-side `CharacterEquipment.SwapToNextWeapon()` (new method, see below). No owner gate. |
-| `Assets/Scripts/Character/CharacterEquipment/CharacterEquipment.cs` | edit | Add (or verify) `IReadOnlyList<WeaponInstance> GetCarriedWeapons()`. Add `SwapToNextWeapon()` server-only method. Add `NetworkVariable<int> _activeAmmoNet` + `NetworkVariable<bool> _isReloadingNet` for the active magazine weapon — mirrored back into `MagazineWeaponInstance` on the active equip slot when changed. |
+| `Assets/Scripts/Character/CharacterEquipment/CharacterEquipment.cs` | edit | Adds `ActiveWeaponIndex` + `SwapToNextWeapon()` server-only method. Adds the two NetworkVariables for ammo + reload sync. Delegates "list of weapons" to `Inventory.GetWeaponInstances()`. See §2 Concrete-API table + §4.1 Carried-weapons data model. |
+| `Assets/Scripts/Item/Inventory.cs` (or wherever `Inventory` lives) | edit | Adds `GetConsumables()` + `GetWeaponInstances()` helpers (refactored from the inline filter at `CharacterEquipment.cs:500-509`). Used by `UI_CombatItemsWindow` + the Swap cluster. |
 | `Assets/Resources/Data/Item/ConsumableSO.cs` | edit | Add `[SerializeField] private bool _isUsableInCombat = true;` + `public bool IsUsableInCombat => _isUsableInCombat;`. |
 | `Assets/Resources/Data/Item/FoodSO.cs` | edit | Override `IsUsableInCombat => false` (FoodSO already extends from the consumable chain — verify inheritance path). |
 | `Assets/Scripts/Character/CharacterControllers/PlayerController.cs` | edit | Add in-battle hotkey block: Space / R / Y / 1–6 / E read inside `Update()` gated by `IsOwner && _character.CharacterCombat.IsInBattle`. Routes to existing combat action queueing surface. |
 | `Assets/Scripts/Character/CharacterCombat/CharacterCombat.cs` | edit | Add `event Action<float> OnInitiativeChanged` if not present (drives `UI_CombatInitiativeBar`). Add helper `TryQueueReload()` (validates active weapon is magazine type + not already reloading, queues `CharacterAction_Reload`). Add helper `TryQueueSwapWeapon()`. Add helper `TryQueueUseItem(ConsumableInstance, Character target)`. |
+
+### 4.1 Carried-weapons data model
+
+Today's `CharacterEquipment` + `Inventory` does not have a "secondary weapon slot" or an explicit "active vs holstered" split. Weapons live as `WeaponInstance`s inside `Inventory.ItemSlots` (filtered for `WeaponSlot && !IsEmpty()` — see `CharacterEquipment.cs:500-509` for the existing inline filter). The "active" weapon is the one currently held in hand and reflected by `CombatStyleExpertise`; everything else in a `WeaponSlot` is "carried but not active" (visible on the bag visual via `UpdateWeaponVisualOnBag`).
+
+**Design choice (no new slot system):** Swap reuses the existing equip path entirely. Concretely:
+
+```
+SwapToNextWeapon (server)
+  → carriedList = inventory.GetWeaponInstances()   // ordered list of WeaponInstances
+  → if (carriedList.Count < 2) return
+  → activeIdx = (ActiveWeaponIndex + 1) % carriedList.Count
+  → unequip current active   (existing CharacterEquipment.UnequipWeapon path)
+  → equip carriedList[activeIdx]   (existing CharacterEquipment.EquipWeapon path)
+  → ActiveWeaponIndex = activeIdx
+  → re-evaluate _activeAmmoNet sentinel (§5)
+  → fires existing OnEquipChanged event (verify replicates — §2 verification note)
+```
+
+Cycle order = `Inventory.ItemSlots` order (the same order `UpdateWeaponVisualOnBag` already uses). No new "primary/secondary" semantics — if a player carries three weapons, Swap cycles through all three (matches decision #6: tap Y cycles, radial picker deferred to v2).
+
+**`ActiveWeaponIndex` is server-authoritative.** It can be derived on the client from "which `WeaponInstance` matches the currently-held one" but adding the explicit index avoids reconstruction work on every UI refresh and gives the swap action a stable rotation cursor across save/load.
 
 ### Cluster ordering (left → right)
 
@@ -177,7 +227,7 @@ Visual separators (1px vertical line) divide the three clusters. `Reload` slot o
 [Player clicks Items button or presses E]
   → PlayerController routes to PlayerUI.Instance.OpenCombatItemsWindow(character)
   → UI_CombatItemsWindow.Initialize(character)
-     → reads character.CharacterInventory.GetConsumables() (verify path)
+     → reads character.CharacterEquipment.GetInventory().GetConsumables()   // new helper, §2
      → builds rows: enabled if cs.Data is ConsumableSO so && so.IsUsableInCombat, disabled otherwise
      → first 9 enabled rows get hotkey badges 1–9
 
@@ -276,6 +326,13 @@ Both are leaf sub-elements parented inside `UI_CombatActionMenu._menuContainer`.
 
 All combat hotkeys read inside `PlayerController.Update()` gated by `IsOwner && _character.CharacterCombat.IsInBattle`. Block lives in a new helper method `HandleCombatHotkeys()` called inside `Update`.
 
+**Coexistence with the existing `PlayerController` E + Space dispatchers:**
+
+- **E** today routes through `HandleEKeyDown` (`PlayerController.cs:335`) — a 5-priority chain (placement-active item → consumable in hand → interactable intent → consumable execute → fall-through to hold-menu). The new in-battle E binding **preempts** this dispatcher: at the very top of `HandleEKeyDown`, add `if (_character.CharacterCombat.IsInBattle) { PlayerUI.Instance.ToggleCombatItemsWindow(_character); _eMenuOpened = true; return; }`. Out of battle, the existing 5-priority chain is unchanged. The "consumable in hand → eat" branch is intentionally unreachable in combat — combat consumable use routes exclusively through the Items window (which queues `TryQueueUseItem` for initiative-paced firing instead of the immediate `CharacterUseConsumableAction` the field-eat path uses).
+- **Space** today is gated on `!_character.CharacterCombat.IsInBattle` (`PlayerController.cs:295`) — out-of-battle Space directly calls `CharacterCombat.Attack(null)`. The new in-battle binding adds the inverse branch (an `else` against the same gate): in-battle Space queues an attack via `SetActionIntent` instead of firing immediately. **Existing out-of-battle Space behavior is preserved** — this design adds the missing in-battle case.
+- **1-6 + Y + R** are new; no existing conflict.
+- Inside the Items window: `PlayerController` skips its global 1-6 binding when `PlayerUI.Instance.IsCombatItemsWindowOpen` is true. The window owns 1-9 hotkeys for row selection while open.
+
 | Key | Action | Route |
 |---|---|---|
 | `Space` | Attack (active weapon's verb) | `_character.CharacterCombat.SetActionIntent(() => Attack(PlannedTarget), PlannedTarget ?? bm.GetBestTargetFor(_character))` — mirror existing `OnAttackClicked` |
@@ -356,14 +413,21 @@ All `Debug.Log` calls in hot paths (Update-frequency, BT-tick-frequency) gated b
 
 ## 12. Open questions / risks
 
-- **`CharacterAbilities.UseSlot(int, Character)` method name.** `CharacterAbilities.cs` exposes slots and `OnActiveSlotChanged` event. Verify the method that actually triggers a slot's ability. If it's `_activeSlots[n].TryTrigger()` directly, wrap it in a `Character`-level convenience. Names final once code lands.
-- **`CharacterInventory.GetConsumables()` accessor.** No `CharacterInventory` script found by name (per earlier grep). Items likely live on `CharacterEquipment` or a separate component. Locate the canonical "carried consumables" list before authoring `UI_CombatItemsWindow.Initialize`. Likely a 5-minute discovery; flag if it turns into something bigger.
-- **`UseItem` already a CharacterAction?** Out-of-combat item use (eating food, drinking potion) presumably already routes through a `CharacterAction_UseItem` or similar. If yes, this spec reuses it. If no, this spec adds it.
-- **`CharacterStats.OnInitiativeChanged` event.** Need to verify this exists. If not, add it next to `OnInitiativeFull`. Required by `UI_CombatInitiativeBar`.
-- **`MagazineWeaponInstance.CancelReload()` method.** Doesn't exist today. Add for interrupt handling.
-- **Equip-change replication.** `CharacterEquipment` equip-change events — confirm clients are notified when the host swaps weapons (visual + style). If only host-state, audit and fix as part of this work — otherwise Swap will work for the swapping player but remote players won't see the weapon change.
-- **Ranged-melee gameplay cleanup (post-UI).** User flagged 2026-05-17 that `WeaponSO` (or related) has melee damage on ranged weapons. Tracked as a separate follow-up after this spec ships. UI design is consistent with the post-cleanup state regardless.
-- **Auto-queue Reload on empty Attack (decision #4) — failure mode.** If the player has no spare ammo (future inventory ammo system), the auto-queue should not fire. Today there's no spare-ammo system (`MagazineWeaponInstance.FinishReload` always refills to `MagazineSize`); when one ships, the auto-queue logic adapts.
+### Blocking-for-planning (resolve before plan-phase)
+
+- **Equip-change replication audit.** `CharacterEquipment` exposes `EquipWeapon` / `UnequipWeapon` (private surfaces called from inventory-side flows). Need to confirm clients are notified when the host swaps weapons (active `CombatStyleExpertise` + visual weapon visible on the swapping character to remote viewers). If equip-change is host-local-state-only today, the plan must include surgical NetworkVariables on `CharacterEquipment.ActiveWeaponIndex` (or equivalent) — otherwise Swap works for the swapping player but the remote view of a host swapping mid-battle is stale. **Scope estimate**: ~1-2 hours to audit + decide; small or no-op fix if already replicated.
+
+- **`CharacterUseConsumableAction` shape.** Used today at `PlayerController.cs:379` for the out-of-battle E-eat path. Verify whether it's already initiative-aware / queueable, or whether it executes immediately. For combat use we need the queue-then-fire shape (matches Attack / Ability). Two paths: (a) reuse the existing action with an `enqueue: true` flag, or (b) add a thin `CharacterAction_UseCombatItem` wrapping the existing fire-now logic. Decision deferred to planning.
+
+### Deferrable (resolve during implementation or after v1)
+
+- **Auto-queue Reload on empty Attack (decision #4) — failure mode for future spare-ammo system.** Today `MagazineWeaponInstance.FinishReload` always refills to `MagazineSize` (effectively infinite spare ammo). When a real spare-ammo / pouch system ships, the auto-queue logic must check spare availability before firing. Out of scope here; tracked as "auto-queue Reload assumes refill-to-max".
+
+- **Ranged-melee gameplay cleanup (post-UI).** User flagged 2026-05-17. Tracked in §13 as out-of-band follow-up. UI design is consistent with the post-cleanup state regardless.
+
+- **Items window animation on combat end.** Today the window snaps shut via `OnBattleLeft`. A short fade would feel softer but is pure polish — defer.
+
+- **Future ally action queueing surface.** Option C chrome (party panel) was rejected; if it returns later, the queued-label component generalizes to per-row state. No spec change needed today.
 
 ## 13. Out-of-band follow-up (user directive 2026-05-17)
 
