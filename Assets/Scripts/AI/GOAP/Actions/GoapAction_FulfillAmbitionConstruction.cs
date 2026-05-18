@@ -124,25 +124,45 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
         bool inZone = actorPos.x >= zoneBounds.min.x && actorPos.x <= zoneBounds.max.x
                    && actorPos.z >= zoneBounds.min.z && actorPos.z <= zoneBounds.max.z;
 
-        // Step 1: carrying a relevant item → walk to zone + drop. Project zone center
-        // down to the actor's Y because BuildingZone box colliders are tall (extents.y
-        // commonly ~7.5u, putting the geometric center 7.9u above the floor) — handing
-        // that Y to CharacterMovement.SetDestination triggers a NavMesh.SamplePosition
-        // miss ("off NavMesh/Far" warning) because the 5m sample tolerance can't reach
-        // the ground-level NavMesh from a 7.9u-elevated target. Same pitfall every
-        // future driver hitting BuildingZone.bounds.center must avoid — keep the X/Z,
-        // borrow the actor's Y so the navmesh probe lands on a walkable surface.
+        // Step 1: carrying a relevant item → walk to zone + drop. Two pitfalls handled
+        // here (each cost a playtest iteration to surface):
+        //
+        // 1. Y projection. BuildingZone BoxColliders are tall (extents.y ~7.5u) which
+        //    puts bounds.center.y ~7.9u above the floor. Handing that to SetDestination
+        //    triggers a NavMesh.SamplePosition miss ("off NavMesh/Far") because the 5m
+        //    sample tolerance can't reach ground-level NavMesh from a 7.9u-high probe.
+        //    Keep X/Z from the zone, borrow the actor's Y so the probe lands walkable.
+        //
+        // 2. Drop-at-boundary loop. The actor enters the zone and `inZone` flips true
+        //    the instant any boundary is crossed. If we drop immediately, the actor is
+        //    at the zone edge — CharacterDropItem.ExecutePhysicalDrop spawns the
+        //    WorldItem at `actor.position + Vector3.up*1.5f + random(±0.3)`, which can
+        //    land *outside* the zone collider entirely. Step 5's zone-overlap consume
+        //    check doesn't see it, but Step 2's pickup scan does → pick-drop loop
+        //    forever just outside the boundary. Fix: only drop when comfortably inside
+        //    the zone (XZ distance to center ≤ DropDistanceFromCenter), so the ±0.3u
+        //    random push from ExecutePhysicalDrop can't escape the collider.
         if (_scratchMissing.Count > 0)
         {
             var carried = FindCarriedRelevantItem(worker, _scratchMissing);
             if (carried != null)
             {
-                if (inZone)
+                Vector3 dropDest = new Vector3(zoneBounds.center.x, actorPos.y, zoneBounds.center.z);
+
+                // Drop-zone tightness: the smaller of (1.5u, zone half-extent - 1u) so the
+                // drop sits well clear of any boundary even for small zones. The 1u clearance
+                // soaks up the ±0.3 spawn offset + the agent's stoppingDistance slack.
+                float halfMin = Mathf.Min(zoneBounds.extents.x, zoneBounds.extents.z);
+                float dropDistanceFromCenter = Mathf.Max(0.5f, Mathf.Min(1.5f, halfMin - 1f));
+                float dxz = Vector2.Distance(
+                    new Vector2(actorPos.x, actorPos.z),
+                    new Vector2(zoneBounds.center.x, zoneBounds.center.z));
+
+                if (inZone && dxz <= dropDistanceFromCenter)
                 {
                     TryQueueAction(worker, new CharacterDropItem(worker, carried));
                     return;
                 }
-                Vector3 dropDest = new Vector3(zoneBounds.center.x, actorPos.y, zoneBounds.center.z);
                 WalkTo(worker, dropDest);
                 return;
             }
