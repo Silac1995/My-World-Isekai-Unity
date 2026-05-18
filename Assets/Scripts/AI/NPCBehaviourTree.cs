@@ -12,8 +12,10 @@ using MWI.AI;
 /// 4. AGGRESSION (enemy detected)
 /// 5. NEEDS (hunger, social, clothing...)
 /// 6. SCHEDULE (work, sleep...)
-/// 7. SOCIAL (spontaneous socialization)
-/// 8. WANDER (fallback)
+/// 6.5 AMBITION (city-founding etc — preempts GOAP since the commitment is concrete)
+/// 7. GOAP (Life Goals / Proactive)
+/// 8. SOCIAL (spontaneous socialization)
+/// 9. WANDER (fallback)
 /// </summary>
 public class NPCBehaviourTree : CharacterSystem
 {
@@ -32,6 +34,7 @@ public class NPCBehaviourTree : CharacterSystem
     private BTCond_DetectedEnemy _enemyNode;
     private BTCond_HasScheduledActivity _scheduleNode;
     private BTCond_WantsToSocialize _socialNode;
+    private BTAction_PursueAmbition _ambitionNode;
     private BTAction_ExecuteGoapPlan _goapNode;
     private BTAction_Wander _wanderNode;
 
@@ -103,6 +106,7 @@ public class NPCBehaviourTree : CharacterSystem
         _enemyNode = new BTCond_DetectedEnemy();
         _scheduleNode = new BTCond_HasScheduledActivity();
         _socialNode = new BTCond_WantsToSocialize();
+        _ambitionNode = new BTAction_PursueAmbition();
         _goapNode = new BTAction_ExecuteGoapPlan();
         _wanderNode = new BTAction_Wander();
         _punchOutNode = new BTCond_NeedsToPunchOut();
@@ -127,7 +131,8 @@ public class NPCBehaviourTree : CharacterSystem
             _partyFollowNode,   // 4.5 Party follow (member follows party leader)
             _punchOutNode,      // 5. Forced end of shift (Must punch out before going home)
             _scheduleNode,      // 5. Schedule (Work/Sleep > Personal Goals)
-            _goapNode,          // 6. GOAP (Life Goals / Proactive)
+            _ambitionNode,      // 6. Ambition pursuit (city-founding, etc — preempts GOAP)
+            _goapNode,          // 7. GOAP (Life Goals / Proactive)
             _socialNode,        // 8. Social
             _wanderNode         // 9. Wander (fallback)
         );
@@ -241,6 +246,7 @@ public class NPCBehaviourTree : CharacterSystem
         else if (_partyFollowNode != null && _partyFollowNode.IsRunning) _currentNodeName = "PartyFollow";
         else if (_punchOutNode != null && _punchOutNode.IsRunning) _currentNodeName = "PunchOut";
         else if (_scheduleNode != null && _scheduleNode.IsRunning) _currentNodeName = "Schedule";
+        else if (_ambitionNode != null && _ambitionNode.IsRunning) _currentNodeName = "Ambition";
         else if (_socialNode != null && _socialNode.IsRunning) _currentNodeName = "Social";
         else if (_goapNode != null && _goapNode.IsRunning) _currentNodeName = "GOAP";
         else if (_wanderNode != null && _wanderNode.IsRunning) _currentNodeName = "Wander";
