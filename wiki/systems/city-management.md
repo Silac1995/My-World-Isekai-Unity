@@ -216,7 +216,24 @@ Per rule #19 validated scenarios:
 
 ## Open questions / TODO
 
-- **Plan 4c follow-up — Task 8 polish**: author AB.prefab preplaced furniture (CityManagementFurniture, JoinRequestDesk, SafeFurniture, 2× StorageFurniture) + UI_CityManagementPanel.prefab variant + UI_JoinRequestRow.prefab + UI_CivicBlueprintRow.prefab + scene-wire `PlayerUI._cityManagementWindow`.
+- **AB.prefab authoring (manual — 5-minute Editor task for Kevin)**: Roslyn-authoring a fully-functional Building.prefab is fragile (many private SerializeFields on Building/CommercialBuilding that lose state on script swap). Use this manual recipe instead:
+    1. In Unity Project view, right-click `Assets/Prefabs/Building/Commercial/Shop/Shop.prefab` → Duplicate.
+    2. Rename the copy `AdministrativeBuilding.prefab` and move to `Assets/Prefabs/Building/Commercial/AdministrativeBuilding/`.
+    3. Open it → Inspector: remove `ShopBuilding` component → Add Component → `AdministrativeBuilding`.
+    4. Re-assign the inherited fields that didn't transfer:
+       - `_blueprint` → `Assets/Resources/Data/Buildings/AdministrativeBuilding.asset`
+       - `_buildingZone` → the existing `BuildingZone` child collider
+       - `_completedVisualRoot` / `_constructionVisualRoot` → existing children (carried over from Shop layout)
+       - `_ownerIds` → leave NetworkList default
+    5. Delete the Shop-specific children (Cashier, sell shelves) — these don't belong on an AB.
+    6. Add 4 child GameObjects with the new furniture scripts:
+       - `CityManagement` GameObject + `CityManagementFurniture` component + child collider.
+       - `JoinRequestDesk` GameObject + `JoinRequestDesk` component + child collider + child interaction point Transform.
+       - `Safe` GameObject + existing `SafeFurniture` component (or drag in the existing safe furniture prefab).
+       - `Storage1` + `Storage2` GameObjects each with `StorageFurniture` component (or use existing prefabs).
+    7. Open `Assets/Resources/Data/Buildings/AdministrativeBuilding.asset` → set `_buildingPrefab` to the new `AdministrativeBuilding.prefab`.
+    8. Save the prefab + asset. The full end-to-end city-founding loop now works.
+- **Plan 4c follow-up — UI polish**: visual styling (fonts, panel theming, button colors) on UI_CityManagementPanel.prefab and the two row prefabs. The scaffold renders functionally; visual polish is a designer pass.
 - **PlayerController cursor mode**: `BeginCityPlacementMode(BuildingSO)` + cursor raycast + BuildingGrid snap + green/red cell highlight + ESC cancel + click-to-confirm.
 - **BuildOrder persistence** across server restarts.
 - **`Community.Level` dedicated NetVar** (vs save-round-trip + per-action ClientRpc v1 stopgap).
