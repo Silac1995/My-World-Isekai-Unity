@@ -94,6 +94,7 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
         BuildStatusHeader(_bound);
         BuildCreateCommunitySection(_bound);
         BuildAssignAmbitionSection(_bound);
+        BuildCommunityReadoutSection(_bound);
         // Feature sections land here in subsequent commits.
     }
 
@@ -240,6 +241,40 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
                 RebuildAll();
             }, row.transform);
         }
+    }
+
+    // ─── Feature 3: Read-only community panel ─────────────────────────────
+
+    /// <summary>
+    /// Renders the live state of the target's <c>CurrentCommunity</c> — name,
+    /// level, IsChartered, member/leader counts, AB reference + AB treasury
+    /// balance in CurrencyId.Default. Treasury read goes through
+    /// <see cref="CommercialBuilding.GetTreasuryBalance"/> (sums every Treasury-role
+    /// safe). No mutators here; this section is purely diagnostic.
+    /// </summary>
+    private void BuildCommunityReadoutSection(Character c)
+    {
+        if (c == null || c.CharacterCommunity == null) return;
+        var community = c.CharacterCommunity.CurrentCommunity;
+        if (community == null) return;
+
+        MakeHeader("Community");
+
+        int memberCount  = community.members  != null ? community.members.Count  : 0;
+        int leaderCount  = community.leaders  != null ? community.leaders.Count  : 0;
+        var ab           = community.AdministrativeBuilding;
+        int treasury     = ab != null ? ab.GetTreasuryBalance(MWI.Economy.CurrencyId.Default) : 0;
+        string charteredColor = community.IsChartered ? "#64FF64" : "#FF6464";
+        string abLabel = ab != null
+            ? $"{ab.BuildingName} <color=grey>(id={ab.BuildingId}, construction={(ab.IsUnderConstruction ? "in progress" : "complete")})</color>"
+            : "<color=grey>none — community not yet chartered</color>";
+
+        MakeLabel($"<color=#FFD27A>Name:</color> {community.communityName}");
+        MakeLabel($"<color=#FFD27A>Level:</color> {community.level}");
+        MakeLabel($"<color=#FFD27A>IsChartered:</color> <color={charteredColor}>{community.IsChartered}</color>");
+        MakeLabel($"<color=#FFD27A>Members:</color> {memberCount}    <color=#FFD27A>Leaders:</color> {leaderCount} (primary: {community.PrimaryLeader?.CharacterName ?? "—"})");
+        MakeLabel($"<color=#FFD27A>AdministrativeBuilding:</color> {abLabel}");
+        MakeLabel($"<color=#FFD27A>Treasury (Default):</color> <color=#FFD27A>{treasury}</color> coin");
     }
 
     // ─── Widget helpers (programmatic UGUI, dev-only) ────────────────────
