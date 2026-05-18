@@ -149,13 +149,17 @@ Daily migration:
        → drifter walks to AB
        → drifter interacts with AB's JoinRequestDesk
 
-Join-request submission:
-   JoinRequestDesk.OnInteract(drifter)
+Join-request submission (spontaneous one-shot — no occupation since 2026-05-18):
+   JoinRequestDesk.OnInteract(interactor)
        → AB.SubmitJoinRequestServerRpc(applicantNetId)
            Server: validates not-already-member + not-already-citizen
                 → PendingJoinRequests.Add(JoinRequest{applicantNetId, day})
                 → NetworkList replicates to leader's UI subscribers
-       → base.OnInteract queues CharacterAction_OccupyFurniture (drifter sits and waits)
+       → local-player Toast on the interactor's HUD ("Join request submitted to {BuildingName}")
+              gates: IsPlayer() && IsOwner — filters NPCs + host-NPC trap (rule #19b);
+              channel: ToastGeneralChannel SerializeField on the desk prefab.
+       → return true; actor stays free — no CharacterAction queued, no seat lock,
+              BT can immediately progress to its next step.
 
 Leader processes:
    Leader clicks Accept or Decline on a UI_JoinRequestRow
@@ -164,7 +168,7 @@ Leader processes:
                 → AddMember + JoinCommunity + SetCitizenship + ClearCurrentAction
                 → PendingJoinRequests.Remove (NetworkList replicates removal)
        OR AB.DeclineJoinRequestServerRpc(applicantNetId)
-           Server: leader gate → just removes + releases the seat lock.
+           Server: leader gate → just removes the queue entry (no seat lock to release).
 ```
 
 ## Dependencies

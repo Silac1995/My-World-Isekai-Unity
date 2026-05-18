@@ -68,11 +68,36 @@ namespace MWI.UI.CityManagement
 
         private void OnPlaceClicked(BuildingSO blueprint)
         {
-            // Follow-up: hand off to PlayerController.BeginCityPlacementMode(blueprint).
-            // For v1 we log the intent — designers/Kevin can drive placement directly via
-            // AdministrativeBuilding.PlaceCityBlueprintServerRpc(blueprint.PrefabId, cell, ...)
-            // through the debug console.
-            Debug.Log($"<color=cyan>[UI_PlaceBuildingTab]</color> Place clicked for '{blueprint.BuildingName}'. Cursor-mode hand-off TODO (Plan 4c follow-up).");
+            if (blueprint == null || _ab == null) return;
+
+            // Find the local player's BuildingPlacementManager. Same lookup pattern as
+            // UI_CharacterMapTrackerOverlay.FindLocalPlayerMapTracker.
+            var localClient = Unity.Netcode.NetworkManager.Singleton != null
+                ? Unity.Netcode.NetworkManager.Singleton.LocalClient
+                : null;
+            var playerObj = localClient != null ? localClient.PlayerObject : null;
+            if (playerObj == null)
+            {
+                Debug.LogWarning("<color=orange>[UI_PlaceBuildingTab]</color> Cannot enter civic placement mode — no LocalClient.PlayerObject.");
+                return;
+            }
+
+            var bpm = playerObj.GetComponentInChildren<BuildingPlacementManager>(includeInactive: false);
+            if (bpm == null)
+            {
+                Debug.LogWarning("<color=orange>[UI_PlaceBuildingTab]</color> Cannot enter civic placement mode — local player has no BuildingPlacementManager subsystem.");
+                return;
+            }
+
+            // Close the city management window so the player can see the map. The window
+            // re-opens via tap-E on the CityManagementFurniture after placement completes
+            // (or is cancelled).
+            PlayerUI.Instance?.CloseCityManagementWindow();
+
+            bpm.StartCivicPlacement(blueprint, _ab);
+
+            if (NPCDebug.VerboseJobs)
+                Debug.Log($"<color=cyan>[UI_PlaceBuildingTab]</color> Civic placement mode entered for '{blueprint.BuildingName}' (AB={_ab.BuildingName}).");
         }
 
         private void ClearRows()

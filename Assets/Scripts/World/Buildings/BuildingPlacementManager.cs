@@ -31,7 +31,15 @@ namespace MWI.WorldSystem
         private bool _permissionToastShown; // Prevents spamming toast every frame
         private bool _outOfRegionToastShown; // Same spam-guard for the out-of-region toast
 
+        // ── Civic placement mode (Plan 4c follow-up) ──────────────────────
+        // When true, LMB-confirm routes through AdministrativeBuilding.PlaceCityBlueprintServerRpc
+        // (admin-console placement) instead of the normal owner-driven RequestPlacementServerRpc.
+        private bool _isCivicMode;
+        private BuildingSO _civicBlueprint;
+        private AdministrativeBuilding _civicAB;
+
         public bool IsPlacementActive => _isPlacementActive;
+        public bool IsCivicMode => _isCivicMode;
 
         // ────────────────────── Initialization ──────────────────────
 
@@ -56,6 +64,58 @@ namespace MWI.WorldSystem
         }
 
         // ────────────────────── Placement Lifecycle ──────────────────────
+
+        /// <summary>
+        /// Plan 4c follow-up — enters civic placement mode driven by the city-management
+        /// UI's PlaceBuildingTab. Mirrors <see cref="StartPlacement"/> but:
+        /// 1. The blueprint is supplied directly (caller already resolved it from a
+        ///    <see cref="MWI.WorldSystem.CommunityTierRequirementsSO"/>).
+        /// 2. LMB-confirm routes through <see cref="AdministrativeBuilding.PlaceCityBlueprintServerRpc"/>
+        ///    so the server applies the Civic-category + tier-unlock + grid-CanPlace gates.
+        /// 3. The acting Character is the leader (the local player) — same MaxPlacementRange
+        ///    + ghost flow as normal placement.
+        /// </summary>
+        public void StartCivicPlacement(BuildingSO blueprint, AdministrativeBuilding ab)
+        {
+            if (blueprint == null || ab == null)
+            {
+                Debug.LogWarning("[BuildingPlacementManager] StartCivicPlacement called with null blueprint or AB.");
+                return;
+            }
+
+            ClearGhost();
+            EnsureSettings();
+
+            if (blueprint.BuildingPrefab == null)
+            {
+                Debug.LogError($"[BuildingPlacementManager] Civic blueprint '{blueprint.BuildingName}' has no BuildingPrefab.");
+                return;
+            }
+
+            _isCivicMode      = true;
+            _civicBlueprint   = blueprint;
+            _civicAB          = ab;
+            _activePrefabId   = blueprint.PrefabId;
+
+            _ghostInstance = Instantiate(blueprint.BuildingPrefab);
+            _ghostBuildingComponent = _ghostInstance.GetComponent<Building>();
+
+            if (_ghostInstance.TryGetComponent(out Rigidbody rb)) rb.isKinematic = true;
+            foreach (var col in _ghostInstance.GetComponentsInChildren<Collider>()) col.enabled = false;
+            if (_ghostInstance.TryGetComponent(out NetworkObject netObj)) netObj.enabled = false;
+            SetLayerRecursive(_ghostInstance, LayerMask.NameToLayer("Ignore Raycast"));
+
+            _ghostInstance.name = "PlacementGhost_Civic_" + blueprint.PrefabId;
+            _isPlacementActive = true;
+
+            ApplyGhostScaffoldPreview();
+            CreateFootprintOutline();
+
+            if (_character != null && !_character.IsBuilding)
+                _character.SetBuildingState(true);
+
+            ApplyGhostMaterials(_ghostMaterialValid);
+        }
 
         public void StartPlacement(string prefabId)
         {
@@ -178,6 +238,9 @@ namespace MWI.WorldSystem
             _activePrefabId = string.Empty;
             _ghostBuildingComponent = null;
             _permissionToastShown = false;
+            _isCivicMode = false;
+            _civicBlueprint = null;
+            _civicAB = null;
         }
 
         protected override void HandleIncapacitated(Character character)
@@ -273,6 +336,25 @@ namespace MWI.WorldSystem
             {
                 if (_ghostInstance != null && ValidatePlacement(_ghostInstance.transform.position))
                 {
+                    if (_isCivicMode && _civicAB != null && _civicBlueprint != null)
+                    {
+                        // Civic placement path — resolve target cell via the host map's grid
+                        // and fire the AB's ServerRpc. Server re-validates leader-authority +
+                        // Civic-category + tier-unlock + CanPlace and creates the BuildOrder.
+                        Vector3 ghostPos = _ghostInstance.transform.position;
+                        MapController hostMap = MapController.GetMapAtPosition(ghostPos);
+                        if (hostMap == null || hostMap.BuildingGrid == null)
+                        {
+                            Debug.LogWarning("[BuildingPlacementManager] Civic LMB: no host map / grid resolved for ghost position; aborting.");
+                            return;
+                        }
+                        Vector2Int targetCell = hostMap.BuildingGrid.GetCellCoord(ghostPos);
+                        Debug.Log($"<color=magenta>[BuildingPlacementManager.Click]</color> civic placement RPC | blueprint={_civicBlueprint.PrefabId} cell={targetCell} ab={_civicAB.name}");
+                        _civicAB.PlaceCityBlueprintServerRpc(_civicBlueprint.PrefabId, targetCell);
+                        CancelPlacement(); // close civic mode entirely; UI surface re-opens via the panel
+                        return;
+                    }
+
                     Debug.Log($"<color=magenta>[BuildingPlacementManager.Click]</color> sending placement RPC | _isInstantMode={_isInstantMode} prefab={_activePrefabId}");
                     RequestPlacementServerRpc(
                         _activePrefabId,
