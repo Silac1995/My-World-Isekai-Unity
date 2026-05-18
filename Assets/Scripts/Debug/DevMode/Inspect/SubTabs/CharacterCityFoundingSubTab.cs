@@ -93,6 +93,7 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
         BuildRefreshButton();
         BuildStatusHeader(_bound);
         BuildCreateCommunitySection(_bound);
+        BuildAssignAmbitionSection(_bound);
         // Feature sections land here in subsequent commits.
     }
 
@@ -186,6 +187,59 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
             ? $"<color=#64FF64>{citizenship.communityName}</color>"
             : "<color=grey>none</color>");
         MakeLabel(sb.ToString());
+    }
+
+    // ─── Feature 2: Assign Ambition_FoundACity ───────────────────────────
+
+    /// <summary>
+    /// Loads <c>Resources/Data/Ambitions/Ambition_FoundACity</c> and assigns it to
+    /// the target character via <see cref="CharacterAmbition.SetAmbition"/> — the
+    /// same entry point production callers use. Dev mode is host-only so we are
+    /// always on the server; SetAmbition short-circuits its ServerRpc and runs
+    /// <c>DoSetAmbition</c> directly. The BT picks up the new ambition on its next
+    /// tick (no manual nudge required).
+    /// </summary>
+    private void BuildAssignAmbitionSection(Character c)
+    {
+        if (c == null) return;
+        var ambitions = c.CharacterAmbition;
+        if (ambitions == null) return;
+
+        MakeHeader("Ambition_FoundACity");
+
+        var current = ambitions.Current;
+        string currentLabel = current != null && current.SO != null
+            ? $"<color=#64FF64>active:</color> {current.SO.name} (step {current.CurrentStepIndex + 1}/{current.TotalSteps})"
+            : "<color=grey>none</color>";
+        MakeLabel($"Current ambition: {currentLabel}");
+
+        var row = MakeRow();
+        MakeButton("[DEV] Assign Ambition_FoundACity", () =>
+        {
+            var so = Resources.Load<AmbitionSO>("Data/Ambitions/Ambition_FoundACity");
+            if (so == null)
+            {
+                Debug.LogWarning("<color=magenta>[DevMode]</color> Could not load Ambition_FoundACity at Resources/Data/Ambitions/Ambition_FoundACity. Asset path may have moved.");
+                return;
+            }
+            try
+            {
+                ambitions.SetAmbition(so);
+                Debug.Log($"<color=magenta>[DevMode]</color> SetAmbition(Ambition_FoundACity) invoked on '{c.CharacterName}'.");
+            }
+            catch (Exception e) { Debug.LogException(e); }
+            RebuildAll();
+        }, row.transform, minWidth: 220);
+
+        if (current != null)
+        {
+            MakeButton("[DEV] Clear Ambition", () =>
+            {
+                try { ambitions.ClearAmbition(); }
+                catch (Exception e) { Debug.LogException(e); }
+                RebuildAll();
+            }, row.transform);
+        }
     }
 
     // ─── Widget helpers (programmatic UGUI, dev-only) ────────────────────
