@@ -612,7 +612,11 @@ namespace MWI.AI
             {
                 var movement = self.CharacterMovement;
                 if (movement == null) return BTNodeStatus.Failure;
-                var dest = bounds.center;
+                // Project zone center down to the actor's Y — see commit c7812f76 +
+                // GoapAction_FulfillAmbitionConstruction Step 1 for the rationale.
+                // BuildingZone box colliders are tall, so bounds.center.y sits ~7.9u
+                // above the floor, past NavMesh.SamplePosition's 5m tolerance.
+                var dest = new Vector3(bounds.center.x, pos.y, bounds.center.z);
                 if (!_activeDestination.HasValue || Vector3.Distance(_activeDestination.Value, dest) > 0.5f
                     || !movement.HasPath)
                 {

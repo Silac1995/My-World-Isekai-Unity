@@ -124,7 +124,14 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
         bool inZone = actorPos.x >= zoneBounds.min.x && actorPos.x <= zoneBounds.max.x
                    && actorPos.z >= zoneBounds.min.z && actorPos.z <= zoneBounds.max.z;
 
-        // Step 1: carrying a relevant item → walk to zone + drop.
+        // Step 1: carrying a relevant item → walk to zone + drop. Project zone center
+        // down to the actor's Y because BuildingZone box colliders are tall (extents.y
+        // commonly ~7.5u, putting the geometric center 7.9u above the floor) — handing
+        // that Y to CharacterMovement.SetDestination triggers a NavMesh.SamplePosition
+        // miss ("off NavMesh/Far" warning) because the 5m sample tolerance can't reach
+        // the ground-level NavMesh from a 7.9u-elevated target. Same pitfall every
+        // future driver hitting BuildingZone.bounds.center must avoid — keep the X/Z,
+        // borrow the actor's Y so the navmesh probe lands on a walkable surface.
         if (_scratchMissing.Count > 0)
         {
             var carried = FindCarriedRelevantItem(worker, _scratchMissing);
@@ -135,7 +142,8 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
                     TryQueueAction(worker, new CharacterDropItem(worker, carried));
                     return;
                 }
-                WalkTo(worker, zoneBounds.center);
+                Vector3 dropDest = new Vector3(zoneBounds.center.x, actorPos.y, zoneBounds.center.z);
+                WalkTo(worker, dropDest);
                 return;
             }
         }
