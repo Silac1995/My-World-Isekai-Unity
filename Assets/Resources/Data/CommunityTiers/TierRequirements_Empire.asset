@@ -12,8 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e94108d5957397042bef413f0e65dc61, type: 3}
   m_Name: TierRequirements_Empire
   m_EditorClassIdentifier: Assembly-CSharp::MWI.WorldSystem.CommunityTierRequirementsSO
+  _tierId: TierRequirements_Empire
+  _order: 6
+  _displayName: Empire
   _level: 6
   _minPopulation: 250
+  _minHappyPopulationFraction: 0
   _requiredBuildings:
   - {fileID: 11400000, guid: 95543b040d5cd564d9bd4c183dc68a15, type: 2}
   - {fileID: 11400000, guid: 95543b040d5cd564d9bd4c183dc68a15, type: 2}

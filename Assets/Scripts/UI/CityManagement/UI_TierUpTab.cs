@@ -38,9 +38,15 @@ namespace MWI.UI.CityManagement
             if (_ab == null || _ab.OwnerCommunity == null) return;
 
             var community = _ab.OwnerCommunity;
-            if (_currentLevelLabel != null) _currentLevelLabel.text = $"Current: {community.level}";
+            var currentTier = community.CurrentTier;
+            string currentLabel = currentTier != null ? currentTier.DisplayName : community.level.ToString();
+            if (_currentLevelLabel != null) _currentLevelLabel.text = $"Current: {currentLabel}";
 
-            var nextReq = MWI.WorldSystem.CommunityTierRegistry.GetForNextLevelFrom(community.level);
+            // Walk the SO ladder (supports designer-authored off-enum tiers); fall back
+            // to the legacy enum next-level lookup for pre-migration saves.
+            var nextReq = currentTier != null
+                ? MWI.WorldSystem.CommunityTierRegistry.GetNext(currentTier)
+                : MWI.WorldSystem.CommunityTierRegistry.GetForNextLevelFrom(community.level);
             if (nextReq == null)
             {
                 if (_nextLevelLabel != null) _nextLevelLabel.text = "Max tier reached.";
@@ -49,7 +55,7 @@ namespace MWI.UI.CityManagement
                 return;
             }
 
-            if (_nextLevelLabel != null) _nextLevelLabel.text = $"Next: {nextReq.Level}";
+            if (_nextLevelLabel != null) _nextLevelLabel.text = $"Next: {nextReq.DisplayName}";
 
             var sb = new StringBuilder();
             int memberCount = community.members != null ? community.members.Count : 0;

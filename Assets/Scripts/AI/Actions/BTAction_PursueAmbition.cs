@@ -151,7 +151,7 @@ namespace MWI.AI
                         break;
 
                     case Task_PromoteCommunity promote:
-                        if (NeedsPromotion(self, promote.TargetLevel, out var ab))
+                        if (NeedsPromotion(self, promote, out var ab))
                             return DrivePromote(self, ab);
                         break;
                 }
@@ -637,7 +637,7 @@ namespace MWI.AI
             if (result.ok)
             {
                 if (NPCDebug.VerboseActions)
-                    Debug.Log($"<color=green>[BTAction_PursueAmbition]</color> {self.CharacterName} promoted '{community.communityName}' to {community.level}.");
+                    Debug.Log($"<color=green>[BTAction_PursueAmbition]</color> {self.CharacterName} promoted '{community.communityName}' to {(community.CurrentTier != null ? community.CurrentTier.DisplayName : community.level.ToString())}.");
                 return BTNodeStatus.Running; // Task_PromoteCommunity will report Completed next tick.
             }
 
@@ -682,17 +682,32 @@ namespace MWI.AI
         }
 
         /// <summary>
-        /// Returns true when the actor's <see cref="Community.level"/> is below
-        /// <paramref name="targetLevel"/> AND the community has an AB to anchor the
-        /// promotion call.
+        /// Returns true when the actor's <see cref="Community.CurrentTier"/> order is
+        /// below the task's target tier order AND the community has an AB to anchor
+        /// the promotion call. Resolves the target via
+        /// <see cref="Task_PromoteCommunity"/>'s three-mode priority
+        /// (SO ref → tier id → legacy CommunityLevel enum).
         /// </summary>
-        private bool NeedsPromotion(Character self, CommunityLevel targetLevel, out AdministrativeBuilding ab)
+        private bool NeedsPromotion(Character self, Task_PromoteCommunity task, out AdministrativeBuilding ab)
         {
             ab = null;
-            if (self.CharacterCommunity == null) return false;
+            if (task == null || self.CharacterCommunity == null) return false;
             var community = self.CharacterCommunity.CurrentCommunity;
             if (community == null) return false;
-            if (community.level >= targetLevel) return false;
+
+            // Resolve target tier through the SO ladder. We mirror Task_PromoteCommunity's
+            // own resolution priority (SO ref → string id → enum) but inline it because
+            // ResolveTargetTier() is private on the task.
+            CommunityTierRequirementsSO target = task.TargetTier;
+            if (target == null && !string.IsNullOrEmpty(task.TargetTierId))
+                target = CommunityTierRegistry.GetById(task.TargetTierId);
+            if (target == null)
+                target = CommunityTierRegistry.Get(task.TargetLevel);
+            if (target == null) return false;
+
+            var current = community.CurrentTier;
+            if (current != null && current.Order >= target.Order) return false;
+
             ab = community.AdministrativeBuilding;
             return ab != null;
         }

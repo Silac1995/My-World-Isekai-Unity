@@ -491,27 +491,37 @@ public class AdministrativeBuilding : CommercialBuilding
         }
         if (delta == 0) return;
 
-        int currentInt = (int)OwnerCommunity.level;
-        int targetInt = currentInt + delta;
-
-        // Clamp to the CommunityLevel enum's int range.
-        var values = System.Enum.GetValues(typeof(CommunityLevel));
-        int minInt = int.MaxValue;
-        int maxInt = int.MinValue;
-        foreach (var v in values)
+        // Walk the SO tier ladder via the registry — supports designer-authored off-enum
+        // tiers (a "Province" SO with Order between Town and City would be visited by
+        // GetNext / GetPrevious even though no CommunityLevel enum value exists for it).
+        var current = OwnerCommunity.CurrentTier;
+        CommunityTierRequirementsSO target = current;
+        if (delta > 0)
         {
-            int iv = (int)v;
-            if (iv < minInt) minInt = iv;
-            if (iv > maxInt) maxInt = iv;
+            for (int i = 0; i < delta; i++)
+            {
+                var next = MWI.WorldSystem.CommunityTierRegistry.GetNext(target);
+                if (next == null) break;
+                target = next;
+            }
         }
-        int clamped = Mathf.Clamp(targetInt, minInt, maxInt);
-        if (clamped == currentInt)
+        else
         {
-            Debug.LogWarning($"<color=magenta>[DevMode]</color> DevForceChangeCommunityLevel: already at {(CommunityLevel)currentInt}, no change.");
+            for (int i = 0; i < -delta; i++)
+            {
+                var prev = MWI.WorldSystem.CommunityTierRegistry.GetPrevious(target);
+                if (prev == null) break;
+                target = prev;
+            }
+        }
+
+        if (target == null || target == current)
+        {
+            Debug.LogWarning($"<color=magenta>[DevMode]</color> DevForceChangeCommunityLevel: already at {(current != null ? current.DisplayName : "<no tier>")}, no change.");
             return;
         }
 
-        OwnerCommunity.ChangeLevel((CommunityLevel)clamped);
+        OwnerCommunity.ChangeTier(target);
     }
 #endif
 

@@ -12,8 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e94108d5957397042bef413f0e65dc61, type: 3}
   m_Name: TierRequirements_SmallGroup
   m_EditorClassIdentifier: Assembly-CSharp::MWI.WorldSystem.CommunityTierRequirementsSO
+  _tierId: TierRequirements_SmallGroup
+  _order: 0
+  _displayName: Small Group
   _level: 0
   _minPopulation: 1
+  _minHappyPopulationFraction: 0
   _requiredBuildings: []
   _minTreasury: 0
   _unlockedBlueprints: []

@@ -38,13 +38,17 @@ namespace MWI.UI.CityManagement
             ClearRows();
             if (_ab == null || _ab.OwnerCommunity == null) return;
 
-            var tierReq = MWI.WorldSystem.CommunityTierRegistry.Get(_ab.OwnerCommunity.level);
+            // Prefer the SO-ref path (supports designer-authored off-enum tiers); fall
+            // back to the legacy enum lookup so old saves without a tier id still work.
+            var tierReq = _ab.OwnerCommunity.CurrentTier
+                       ?? MWI.WorldSystem.CommunityTierRegistry.Get(_ab.OwnerCommunity.level);
             var unlocked = tierReq != null ? tierReq.UnlockedBlueprints : null;
+            string tierLabel = tierReq != null ? tierReq.DisplayName : _ab.OwnerCommunity.level.ToString();
 
             if (unlocked == null || unlocked.Count == 0)
             {
                 if (_emptyStateLabel != null)
-                    _emptyStateLabel.text = $"No civic blueprints unlocked at {_ab.OwnerCommunity.level}.";
+                    _emptyStateLabel.text = $"No civic blueprints unlocked at {tierLabel}.";
                 if (_emptyStateLabel != null) _emptyStateLabel.gameObject.SetActive(true);
                 return;
             }

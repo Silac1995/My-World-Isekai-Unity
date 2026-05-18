@@ -189,7 +189,7 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
         sb.Append("<color=#FFD27A>Character:</color> ").Append(c.CharacterName ?? "—");
         sb.Append("    <color=#FFD27A>CurrentCommunity:</color> ");
         sb.Append(current != null
-            ? $"<color=#64FF64>{current.communityName}</color> ({current.level})"
+            ? $"<color=#64FF64>{current.communityName}</color> ({(current.CurrentTier != null ? current.CurrentTier.DisplayName : current.level.ToString())})"
             : "<color=grey>none</color>");
         sb.Append("    <color=#FFD27A>Citizenship:</color> ");
         sb.Append(citizenship != null
@@ -278,7 +278,7 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
             : "<color=grey>none — community not yet chartered</color>";
 
         MakeLabel($"<color=#FFD27A>Name:</color> {community.communityName}");
-        MakeLabel($"<color=#FFD27A>Level:</color> {community.level}");
+        MakeLabel($"<color=#FFD27A>Level:</color> {(community.CurrentTier != null ? $"{community.CurrentTier.DisplayName} <color=grey>(order {community.CurrentTier.Order}, id '{community.CurrentTier.TierId}')</color>" : community.level.ToString() + " <color=grey>(no tier SO)</color>")}");
         MakeLabel($"<color=#FFD27A>IsChartered:</color> <color={charteredColor}>{community.IsChartered}</color>");
         MakeLabel($"<color=#FFD27A>Members:</color> {memberCount}    <color=#FFD27A>Leaders:</color> {leaderCount} (primary: {community.PrimaryLeader?.CharacterName ?? "—"})");
         MakeLabel($"<color=#FFD27A>AdministrativeBuilding:</color> {abLabel}");
@@ -310,7 +310,7 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
         }
 
         var row = MakeRow();
-        MakeLabel($"<color=#FFD27A>Current:</color> {community.level}", row.transform);
+        MakeLabel($"<color=#FFD27A>Current:</color> {(community.CurrentTier != null ? community.CurrentTier.DisplayName : community.level.ToString())}", row.transform);
         MakeButton("[DEV] −1 Tier", () =>
         {
             try { ab.DevForceChangeCommunityLevel(-1); }
@@ -439,7 +439,10 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
         {
             var ab = candidates[i];
             var row = MakeRow();
-            string label = $"{ab.OwnerCommunity.communityName} <color=grey>({ab.OwnerCommunity.level}, members={ab.OwnerCommunity.members.Count})</color>";
+            string tierLabel = ab.OwnerCommunity.CurrentTier != null
+                ? ab.OwnerCommunity.CurrentTier.DisplayName
+                : ab.OwnerCommunity.level.ToString();
+            string label = $"{ab.OwnerCommunity.communityName} <color=grey>({tierLabel}, members={ab.OwnerCommunity.members.Count})</color>";
             MakeLabel(label, row.transform);
             var capturedAb = ab;
             MakeButton("[DEV] Submit Join Request", () =>

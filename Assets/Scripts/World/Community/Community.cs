@@ -14,7 +14,63 @@ using MWI.WorldSystem;
 public class Community
 {
     public string communityName;
+
+    /// <summary>
+    /// Legacy display field. Kept for save-data back-compat + any caller that still
+    /// reads the enum. Authoritative tier identity lives on
+    /// <see cref="CurrentTier"/> / <see cref="currentTierId"/>; this enum value
+    /// shadow-tracks <see cref="CurrentTierRef"/>.<see cref="CommunityTierRequirementsSO.Level"/>
+    /// so older consumers keep working. Designers adding off-enum tiers (e.g. a
+    /// "Province" tier between Town and City) can leave their SO's Level at SmallGroup —
+    /// gameplay paths use Tier / Order, not this field.
+    /// </summary>
     public CommunityLevel level;
+
+    /// <summary>
+    /// Authoritative tier identity, persisted as the SO's <see cref="CommunityTierRequirementsSO.TierId"/>
+    /// string so save data is stable across CommunityLevel enum churn and supports
+    /// off-enum designer-authored tiers. Resolved to <see cref="CurrentTier"/> lazily.
+    /// </summary>
+    public string currentTierId = string.Empty;
+
+    [System.NonSerialized] private CommunityTierRequirementsSO _currentTier;
+
+    /// <summary>
+    /// The community's current tier as a <see cref="CommunityTierRequirementsSO"/>
+    /// reference. Resolved from <see cref="currentTierId"/> via
+    /// <see cref="CommunityTierRegistry.GetById"/>; falls back to the legacy
+    /// <see cref="level"/> enum mapping when the id is empty (covers loads from
+    /// pre-migration save data).
+    /// </summary>
+    public CommunityTierRequirementsSO CurrentTier
+    {
+        get
+        {
+            // Lazy populate from the persisted id, then from the legacy enum.
+            if (_currentTier == null)
+            {
+                if (!string.IsNullOrEmpty(currentTierId))
+                    _currentTier = CommunityTierRegistry.GetById(currentTierId);
+                if (_currentTier == null)
+                    _currentTier = CommunityTierRegistry.Get(level);
+            }
+
+            // Desync sync: if a caller assigned to the legacy `level` field directly
+            // (tests + any pre-migration code paths), prefer that — honours the
+            // long-standing contract that writing `c.level = X` shifts the community
+            // tier. New code should call ChangeTier(SO) for off-enum tiers.
+            if (_currentTier != null && _currentTier.Level != level)
+            {
+                var byLevel = CommunityTierRegistry.Get(level);
+                if (byLevel != null)
+                {
+                    _currentTier = byLevel;
+                    currentTierId = byLevel.TierId;
+                }
+            }
+            return _currentTier;
+        }
+    }
 
     [Header("Leadership")]
     /// <summary>
@@ -86,6 +142,11 @@ public class Community
         communityName = name;
         leaders.Add(founder);   // founder = primary leader (index 0)
         level = CommunityLevel.SmallGroup;
+        // Bind the canonical first tier SO if available. CurrentTier getter falls back
+        // to the legacy level enum mapping when this stays empty, so this is best-effort.
+        var firstTier = CommunityTierRegistry.GetById("TierRequirements_SmallGroup")
+                      ?? CommunityTierRegistry.Get(CommunityLevel.SmallGroup);
+        if (firstTier != null) currentTierId = firstTier.TierId;
         members.Add(founder);
     }
 
@@ -195,10 +256,39 @@ public class Community
         return true;
     }
 
+    /// <summary>
+    /// Legacy enum-based tier mutator. Resolves <paramref name="newLevel"/> to a tier SO
+    /// via <see cref="CommunityTierRegistry.Get(CommunityLevel)"/> and routes through
+    /// <see cref="ChangeTier"/>. Kept so older callers keep compiling — new code should
+    /// pass the <see cref="CommunityTierRequirementsSO"/> directly.
+    /// </summary>
     public void ChangeLevel(CommunityLevel newLevel)
     {
+        var tier = CommunityTierRegistry.Get(newLevel);
+        if (tier != null)
+        {
+            ChangeTier(tier);
+            return;
+        }
+        // No SO authored for that enum value — keep the enum-only fallback so old tests
+        // that never touch the SO registry don't crash.
         level = newLevel;
-        Debug.Log($"<color=green>[Community]</color> {communityName} has evolved to {level}!");
+        Debug.Log($"<color=green>[Community]</color> {communityName} has evolved to {level} (no SO).");
+    }
+
+    /// <summary>
+    /// Authoritative tier mutator. Sets <see cref="CurrentTier"/> + the persistent
+    /// <see cref="currentTierId"/>, and shadow-writes the legacy <see cref="level"/>
+    /// enum for back-compat. Idempotent on the same tier.
+    /// </summary>
+    public void ChangeTier(CommunityTierRequirementsSO newTier)
+    {
+        if (newTier == null) return;
+        if (_currentTier == newTier && currentTierId == newTier.TierId) return;
+        _currentTier = newTier;
+        currentTierId = newTier.TierId;
+        level = newTier.Level;
+        Debug.Log($"<color=green>[Community]</color> {communityName} has evolved to {newTier.DisplayName}!");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -217,19 +307,32 @@ public class Community
     /// </summary>
     public (bool ok, string reason) TryPromoteLevel(AdministrativeBuilding ab)
     {
-        var nextLevel = (CommunityLevel)((int)level + 1);
-        if (!System.Enum.IsDefined(typeof(CommunityLevel), (int)nextLevel))
-            return (false, "Already at max tier.");
-
-        var req = MWI.WorldSystem.CommunityTierRegistry.Get(nextLevel);
-        if (req == null) return (false, $"No tier requirements authored for {nextLevel}.");
+        // SO-ladder lookup. Reads from CommunityTierRegistry.GetNext(CurrentTier) so the
+        // ladder is fully authored in Resources/Data/CommunityTiers/ — designers add a new
+        // tier between existing ones by dropping a new SO with an Order between two
+        // existing values, no enum edit needed.
+        var current = CurrentTier;
+        var req = CommunityTierRegistry.GetNext(current);
+        if (req == null) return (false, "Already at max tier.");
 
         // 1. Population gate.
         int memberCount = members != null ? members.Count : 0;
         if (memberCount < req.MinPopulation)
             return (false, $"Need {req.MinPopulation - memberCount} more citizen(s).");
 
-        // 2. Treasury gate. v1 uses the default currency (typically the map's
+        // 2. Happy-population-fraction gate. v1 stub: no NeedHappiness / CharacterMood
+        // system exists, so every citizen is treated as "happy" — the gate passes when
+        // MinHappyPopulationFraction <= 1.0 (the SO's [0,1] Range attribute enforces
+        // this). When the mood system ships, swap the citizens loop for a real read.
+        if (req.MinHappyPopulationFraction > 0f)
+        {
+            int happy = memberCount; // v1 stub — assume everyone is happy.
+            float fraction = memberCount > 0 ? (float)happy / memberCount : 0f;
+            if (fraction < req.MinHappyPopulationFraction)
+                return (false, $"Citizens not happy enough ({fraction:P0} vs {req.MinHappyPopulationFraction:P0} required).");
+        }
+
+        // 3. Treasury gate. v1 uses the default currency (typically the map's
         // NativeCurrency). Plan 4c follow-up may surface per-currency tier requirements.
         if (req.MinTreasury > 0)
         {
@@ -238,7 +341,7 @@ public class Community
                 return (false, $"Treasury needs {req.MinTreasury - treasury} more gold.");
         }
 
-        // 3. Required-building gate (duplicate-aware).
+        // 4. Required-building gate (duplicate-aware).
         var requiredList = req.RequiredBuildings;
         if (requiredList != null && requiredList.Count > 0)
         {
@@ -254,13 +357,13 @@ public class Community
                 int have   = CountOwnedCompletedBuildingsOfSO(so);
                 if (have < needed)
                 {
-                    string name = string.IsNullOrEmpty(so.BuildingName) ? so.name : so.BuildingName;
-                    return (false, $"Need {needed - have} more {name}.");
+                    string buildingName = string.IsNullOrEmpty(so.BuildingName) ? so.name : so.BuildingName;
+                    return (false, $"Need {needed - have} more {buildingName}.");
                 }
             }
         }
 
-        ChangeLevel(nextLevel);
+        ChangeTier(req);
         return (true, null);
     }
 
