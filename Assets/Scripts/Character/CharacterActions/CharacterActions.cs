@@ -128,6 +128,155 @@ public class CharacterActions : CharacterSystem
         station.Craft(itemSO, _character, primaryColor, secondaryColor);
     }
 
+    // ────────────────────── Equipment-window verb bridge (2026-05-19) ──────────────────────
+    // UI_CharacterEquipment click verbs route through this single RPC. The server validates
+    // the sender owns this character, then enqueues the matching CharacterAction via the
+    // standard ExecuteAction path so rule #22 (player↔NPC parity) holds — an NPC AI calling
+    // ExecuteAction(new CharacterAction_EquipWearable(...)) directly server-side goes through
+    // the exact same code below the dispatch switch.
+
+    /// <summary>VerbId values match <c>MWI.UI.Equipment.EquipmentVerbId</c> on the UI side.
+    /// Kept as byte constants here so this file does not take a using-dependency on the UI assembly.</summary>
+    public const byte EQUIP_VERB_EQUIP         = 0;
+    public const byte EQUIP_VERB_UNEQUIP       = 1;
+    public const byte EQUIP_VERB_CARRY_IN_HAND = 2;
+    public const byte EQUIP_VERB_STASH_IN_BAG  = 3;
+    public const byte EQUIP_VERB_USE           = 4;
+    public const byte EQUIP_VERB_UNEQUIP_BAG   = 5;
+    public const byte EQUIP_VERB_DROP          = 6;
+
+    /// <summary>SourceKind values match <see cref="EquipmentSourceKind"/>.</summary>
+    public const byte EQUIP_SRC_BAG     = 0;
+    public const byte EQUIP_SRC_WORN    = 1;
+    public const byte EQUIP_SRC_WEAPON  = 2;
+    public const byte EQUIP_SRC_HANDS   = 3;
+
+    /// <summary>
+    /// Player UI bridge: client-side equipment-window click fires this RPC; server validates
+    /// ownership + enqueues the matching CharacterAction. All five new actions plus the
+    /// drop / unequip-bag verbs are dispatched through this one entry-point.
+    /// </summary>
+    [Rpc(SendTo.Server)]
+    public void RequestEquipmentVerbServerRpc(
+        byte verbId,
+        byte sourceKind,
+        int bagIndex,
+        int layer,
+        int slot,
+        RpcParams rpcParams = default)
+    {
+        // Anti-cheat: sender must own this character.
+        if (_character == null) return;
+        if (rpcParams.Receive.SenderClientId != _character.OwnerClientId)
+        {
+            Debug.LogWarning($"<color=orange>[CharacterActions]</color> RequestEquipmentVerbServerRpc rejected — sender {rpcParams.Receive.SenderClientId} does not own {_character.CharacterName} (owner {_character.OwnerClientId}).");
+            return;
+        }
+
+        EquipmentSourceRef source = BuildSourceRef(sourceKind, bagIndex, layer, slot);
+
+        switch (verbId)
+        {
+            case EQUIP_VERB_EQUIP:
+                ExecuteAction(new CharacterAction_EquipWearable(_character, source.BagIndex));
+                break;
+
+            case EQUIP_VERB_UNEQUIP:
+                if (source.Kind != EquipmentSourceKind.WornSlot)
+                {
+                    Debug.LogWarning("[CharacterActions] Unequip verb requires WornSlot source.");
+                    return;
+                }
+                ExecuteAction(new CharacterAction_UnequipWearable(_character, source.Layer, source.Slot));
+                break;
+
+            case EQUIP_VERB_CARRY_IN_HAND:
+                ExecuteAction(new CharacterAction_CarryInHand(_character, source));
+                break;
+
+            case EQUIP_VERB_STASH_IN_BAG:
+                ExecuteAction(new CharacterAction_StashInBag(_character, source));
+                break;
+
+            case EQUIP_VERB_USE:
+                ExecuteAction(new CharacterAction_UseItem(_character, source));
+                break;
+
+            case EQUIP_VERB_UNEQUIP_BAG:
+                // No CharacterAction wrapper today — direct call preserves existing UnequipBag
+                // semantics (drops whole bag with contents to the world).
+                _character.CharacterEquipment?.UnequipBag();
+                break;
+
+            case EQUIP_VERB_DROP:
+                // The contextual item to drop depends on the source kind. We resolve the
+                // instance server-side from the source and queue the existing CharacterDropItem
+                // action which handles the WorldItem spawn.
+                ItemInstance toDrop = ResolveSourceInstance(source);
+                if (toDrop == null)
+                {
+                    if (NPCDebug.VerboseActions)
+                        Debug.LogWarning($"<color=orange>[CharacterActions]</color> Drop verb: source {source} resolved to null.");
+                    return;
+                }
+                ExecuteAction(new CharacterDropItem(_character, toDrop));
+                break;
+
+            default:
+                Debug.LogWarning($"<color=orange>[CharacterActions]</color> RequestEquipmentVerbServerRpc unknown verbId {verbId}.");
+                break;
+        }
+    }
+
+    private static EquipmentSourceRef BuildSourceRef(byte kind, int bagIndex, int layer, int slot)
+    {
+        switch (kind)
+        {
+            case EQUIP_SRC_BAG:    return EquipmentSourceRef.Bag(bagIndex);
+            case EQUIP_SRC_WORN:   return EquipmentSourceRef.Worn((WearableLayerEnum)layer, (WearableType)slot);
+            case EQUIP_SRC_WEAPON: return EquipmentSourceRef.Weapon();
+            case EQUIP_SRC_HANDS:  return EquipmentSourceRef.Hands();
+            default:               return EquipmentSourceRef.Bag(-1); // invalid
+        }
+    }
+
+    private ItemInstance ResolveSourceInstance(EquipmentSourceRef source)
+    {
+        var equip = _character.CharacterEquipment;
+        if (equip == null) return null;
+
+        switch (source.Kind)
+        {
+            case EquipmentSourceKind.BagSlot:
+            {
+                var inv = equip.GetInventory();
+                if (inv == null || source.BagIndex < 0 || source.BagIndex >= inv.ItemSlots.Count) return null;
+                var bagSlot = inv.ItemSlots[source.BagIndex];
+                return bagSlot.IsEmpty() ? null : bagSlot.ItemInstance;
+            }
+            case EquipmentSourceKind.WornSlot:
+            {
+                EquipmentLayer targetLayer = source.Layer switch
+                {
+                    WearableLayerEnum.Underwear => equip.UnderwearLayer,
+                    WearableLayerEnum.Clothing  => equip.ClothingLayer,
+                    WearableLayerEnum.Armor     => equip.ArmorLayer,
+                    _ => null,
+                };
+                return targetLayer?.GetInstance(source.Slot);
+            }
+            case EquipmentSourceKind.ActiveWeapon:
+                return equip.CurrentWeapon;
+            case EquipmentSourceKind.HandsCarry:
+            {
+                var hands = _character.CharacterVisual?.BodyPartsController?.HandsController;
+                return hands?.CarriedItem;
+            }
+            default:
+                return null;
+        }
+    }
+
     // ────────────────────── Generic RPCs ──────────────────────
 
     /// <summary>
