@@ -40,7 +40,7 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private MWI.UI.CityManagement.UI_CityManagementPanel _cityManagementWindow;
 
     [Header("UI Windows")]
-    [SerializeField] private CharacterEquipmentUI _equipmentUI;
+    [SerializeField] private MWI.UI.Equipment.UI_CharacterEquipment _equipmentUI;
     [SerializeField] private UI_StorageFurniturePanel _storagePanel;
     [SerializeField] private MWI.UI.Furniture.UI_SafePanel _safePanel;
     [SerializeField] private MWI.UI.Shop.UI_ShopBuyPanel _shopBuyPanel;
@@ -233,7 +233,7 @@ public class PlayerUI : MonoBehaviour
         if (_buttonEquipmentUI != null)
         {
             _buttonEquipmentUI.onClick.RemoveAllListeners();
-            _buttonEquipmentUI.onClick.AddListener(ToggleEquipmentUI);
+            _buttonEquipmentUI.onClick.AddListener(() => ToggleEquipmentWindow(characterComponent));
         }
 
         if (_buttonRelationsUI != null)
@@ -261,18 +261,39 @@ public class PlayerUI : MonoBehaviour
         }
     }
 
-    public void ToggleEquipmentUI()
+    /// <summary>
+    /// Opens the character equipment window for the given target Character.
+    /// Logs a directive warning if the SerializeField is unwired (rule #39).
+    /// Until <c>UI_CharacterEquipment.prefab</c> (Task 18 of the 2026-05-19 plan)
+    /// + scene wiring (Task 19) land, <c>_equipmentUI</c> is null and this method
+    /// no-ops with a warning — the window stays inaccessible.
+    /// </summary>
+    public void OpenEquipmentWindow(Character target)
+    {
+        if (_equipmentUI == null)
+        {
+            Debug.LogWarning("<color=orange>[PlayerUI]</color> OpenEquipmentWindow called but _equipmentUI SerializeField is null — author the prefab (variant of UI_WindowBase.prefab) and wire it to PlayerUI._equipmentUI in the Inspector.");
+            return;
+        }
+        if (target == null) return;
+        _equipmentUI.Initialize(target);
+    }
+
+    public void CloseEquipmentWindow()
     {
         if (_equipmentUI == null) return;
+        _equipmentUI.CloseWindow();
+    }
 
-        bool isCurrentlyActive = _equipmentUI.gameObject.activeSelf;
-        _equipmentUI.gameObject.SetActive(!isCurrentlyActive);
-
-        // If we are opening it, re-initialize to be safe with the current character data
-        if (!isCurrentlyActive && characterComponent != null)
+    public void ToggleEquipmentWindow(Character target)
+    {
+        if (_equipmentUI == null)
         {
-            _equipmentUI.Initialize(characterComponent);
+            Debug.LogWarning("<color=orange>[PlayerUI]</color> ToggleEquipmentWindow called but _equipmentUI SerializeField is null — author the prefab (variant of UI_WindowBase.prefab) and wire it to PlayerUI._equipmentUI in the Inspector.");
+            return;
         }
+        if (_equipmentUI.gameObject.activeSelf) CloseEquipmentWindow();
+        else OpenEquipmentWindow(target);
     }
 
     public void ToggleRelationsUI()
