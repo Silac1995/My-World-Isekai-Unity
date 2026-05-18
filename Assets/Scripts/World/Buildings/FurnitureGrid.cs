@@ -19,6 +19,9 @@ public class FurnitureGrid : MonoBehaviour
     [Tooltip("Floor planes/meshes that define the walkable area. Cells not above any of these are marked as walls.")]
     [SerializeField] private List<Renderer> _floorRenderers = new List<Renderer>();
 
+    [Tooltip("Optional. When set, the 'Initialize Furniture Grid' editor menu auto-resizes the root BoxCollider to encompass every Renderer in this subtree before baking the grid. If left null, the editor falls back to a child Transform named 'CompletedVisual' (project convention for the final building shell — see Building._completedVisualRoot) when the root BoxCollider is still at its unset (1,1,1) default. Set this explicitly to force a re-fit even when the BoxCollider has been authored manually.")]
+    [SerializeField] private Transform _autoSizeSource;
+
     [Header("Serialized Grid Data (Editor-Initialized)")]
     [SerializeField] private int _gridWidth;
     [SerializeField] private int _gridDepth;
@@ -115,10 +118,61 @@ public class FurnitureGrid : MonoBehaviour
 
         UnityEditor.Undo.RecordObject(this, "Initialize Furniture Grid");
 
+        // Auto-fit the root BoxCollider from a subtree of renderers when:
+        //  - an explicit _autoSizeSource is wired (designer is enforcing auto-fit), OR
+        //  - the BoxCollider is still at the unset default of size=(1,1,1) at center=(0,0,0)
+        //    AND a child Transform named "CompletedVisual" exists.
+        // Hands-off when the designer has manually sized the BoxCollider and no _autoSizeSource
+        // is set, so authored colliders are never overridden.
+        Transform source = _autoSizeSource;
+        bool boxIsDefault = boxCol.size == Vector3.one && boxCol.center == Vector3.zero;
+        if (source == null && boxIsDefault)
+        {
+            source = transform.Find("CompletedVisual");
+        }
+
+        if (source != null && TryComputeWorldBoundsFromSubtree(source, out Bounds worldBounds))
+        {
+            UnityEditor.Undo.RecordObject(boxCol, "Auto-fit Building BoxCollider");
+            ResizeBoxColliderToWorldBounds(boxCol, worldBounds);
+            UnityEditor.EditorUtility.SetDirty(boxCol);
+            Debug.Log($"<color=green>[FurnitureGrid]</color> Auto-fit root BoxCollider from '{source.name}' subtree: center={boxCol.center}, size={boxCol.size}");
+        }
+        else if (boxIsDefault)
+        {
+            Debug.LogWarning($"<color=orange>[FurnitureGrid]</color> Root BoxCollider on '{gameObject.name}' is still at default (1,1,1) and no auto-size source was found (wire FurnitureGrid._autoSizeSource or add a 'CompletedVisual' child holding the building renderers). Grid will be 1x1.");
+        }
+
         Initialize(boxCol);
 
         UnityEditor.EditorUtility.SetDirty(this);
         Debug.Log($"<color=green>[FurnitureGrid]</color> Furniture grid initialized in editor for {gameObject.name}: {_gridWidth}x{_gridDepth} cells.");
+    }
+
+    private static bool TryComputeWorldBoundsFromSubtree(Transform root, out Bounds worldBounds)
+    {
+        worldBounds = default;
+        var renderers = root.GetComponentsInChildren<Renderer>(includeInactive: false);
+        if (renderers.Length == 0) return false;
+        worldBounds = renderers[0].bounds;
+        for (int i = 1; i < renderers.Length; i++)
+        {
+            worldBounds.Encapsulate(renderers[i].bounds);
+        }
+        return true;
+    }
+
+    private void ResizeBoxColliderToWorldBounds(BoxCollider box, Bounds worldBounds)
+    {
+        // Convert world-space aggregate bounds into local-space center/size on this transform.
+        // Assumes the building root is at identity rotation (project convention for authored
+        // building prefabs). Scale is folded in via lossyScale division.
+        box.center = transform.InverseTransformPoint(worldBounds.center);
+        Vector3 ls = transform.lossyScale;
+        box.size = new Vector3(
+            worldBounds.size.x / Mathf.Max(Mathf.Abs(ls.x), 0.0001f),
+            worldBounds.size.y / Mathf.Max(Mathf.Abs(ls.y), 0.0001f),
+            worldBounds.size.z / Mathf.Max(Mathf.Abs(ls.z), 0.0001f));
     }
 #endif
 

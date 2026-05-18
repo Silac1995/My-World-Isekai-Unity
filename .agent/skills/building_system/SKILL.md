@@ -113,6 +113,178 @@ A specialized structural entity handling jobs and economic tasks.
 
 ---
 
+## Prefab Variant Hierarchy (mandatory — project rule #40)
+
+**Every furniture prefab MUST be a Prefab Variant of `Assets/Prefabs/Furniture/Furniture_prefab.prefab`. Every building prefab MUST be a Prefab Variant of `Assets/Prefabs/Building/Building_prefab.prefab`.** Codified in root [CLAUDE.md rule #40](../../../CLAUDE.md). This mirrors rule #39 (UI HUD) on the gameplay-prefab side.
+
+### Two-tier inheritance
+
+```
+Furniture_prefab.prefab                       Building_prefab.prefab
+├── Bed.prefab                                ├── Commercial/CommercialBuilding_prefab.prefab
+├── Cashier.prefab                            │   ├── Commercial/Shop/Shop.prefab
+├── CraftingStation.prefab                    │   │   └── Commercial/Shop/Clothing Shop.prefab
+├── TimeClock.prefab                          │   ├── Commercial/Farm/Farming Building.prefab
+├── Storage/                                  │   ├── Commercial/Crafting/Forge.prefab
+│   ├── Crate.prefab                          │   ├── Commercial/Harvesting/Lumberyard/Lumberyard.prefab
+│   └── Storage.prefab                        │   ├── Commercial/Transporter/Transporter Building.prefab
+│       └── Storage Visible Items.prefab      │   └── Commercial/Administrative/AdministrativeBuilding.prefab
+├── Safe/                                     └── House/House prefab.prefab
+│   └── Safe Base.prefab                          ├── House/Small house/Small house.prefab
+│       └── Safe.prefab                           └── House/Medium house/Medium house.prefab
+└── Management/
+    └── Commercial Console.prefab
+```
+
+- **Tier 0 — Root base**: `Furniture_prefab.prefab` / `Building_prefab.prefab`. Owns the shared scaffold. `Building_prefab` carries the building `NetworkObject`; `Furniture_prefab` MUST NOT carry one (see [`no-nested-networkobject-in-runtime-spawned-prefab`](../../../wiki/gotchas/no-nested-networkobject-in-runtime-spawned-prefab.md)).
+- **Tier 1 — Type base**: one variant per furniture/building *type*. Carries the type-specific script (`Furniture` subclass, `CommercialBuilding`/`House` subclass) and the type-shared components. Edit-once-propagate-many: every Tier-2 variant inherits Tier-1 edits automatically.
+- **Tier 2 — Specific variant**: one variant per concrete authored piece of content. Overrides SerializeFields only — icon/name/`FurnitureSO`/`BuildingSO` reference. Never overrides the script identity.
+
+### Authoring decision
+
+| Situation | What to variant from |
+|-----------|---------------------|
+| Brand-new TYPE of furniture (e.g. a `Workbench` family that doesn't exist yet) | `Furniture_prefab.prefab` (root) — then attach a new `Furniture` subclass. |
+| Brand-new TYPE of building (e.g. a new `WorkshopBuilding` family) | `Building_prefab.prefab` (root) — then attach a new `Building`/`CommercialBuilding` subclass. |
+| New crate variant | `Storage/Crate.prefab` (Tier-1 base). NEVER from `Furniture_prefab.prefab`. |
+| New shop variant | `Commercial/CommercialBuilding_prefab.prefab` (Tier-1 base) — or from `Commercial/Shop/Shop.prefab` if it inherits shop-distinct behavior. |
+| New house variant | `House/House prefab.prefab` (Tier-1 base). |
+| New safe variant | `Safe/Safe Base.prefab` (Tier-1 base). |
+
+### Authoring procedure (Editor or Roslyn)
+
+**Editor**: Right-click the chosen base in the Project view → Create → Prefab Variant. Drop the variant into the matching folder (`Assets/Prefabs/Furniture/<TypeSubfolder>/` or `Assets/Prefabs/Building/<Category>/<TypeSubfolder>/`).
+
+**Roslyn / MCP**:
+```csharp
+var basePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+    "Assets/Prefabs/Furniture/Storage/Crate.prefab");
+var instance = (GameObject)PrefabUtility.InstantiatePrefab(basePrefab);
+var saved = PrefabUtility.SaveAsPrefabAsset(instance,
+    "Assets/Prefabs/Furniture/Storage/MyNewCrate.prefab");
+Object.DestroyImmediate(instance);
+
+// Verify inheritance chain reaches the root base.
+var src = PrefabUtility.GetCorrespondingObjectFromSource(saved);
+Debug.Assert(src.name == "Crate", "must variant the Tier-1 base");
+```
+
+### Folder convention
+
+- Furniture: `Assets/Prefabs/Furniture/[<TypeSubfolder>/]<Variant>.prefab`. Single-line types (`Bed`, `Cashier`) sit at the folder root; type families with multiple variants live in a subfolder (`Storage/`, `Safe/`, `Management/`).
+- Building: `Assets/Prefabs/Building/<Category>/[<TypeSubfolder>/]<Variant>.prefab`. Categories: `Commercial/`, `House/`. Sub-categories under `Commercial/`: `Shop/`, `Farm/`, `Crafting/`, `Harvesting/`, `Transporter/`, `Administrative/`.
+
+### Network identity invariant
+
+- `Building_prefab.prefab` (root) carries the `NetworkObject`. Every Tier-1 and Tier-2 variant inherits it.
+- `Furniture_prefab.prefab` (root) does NOT carry a `NetworkObject`. A furniture prefab that needs network replication is handled by `Building.ConvertNestedNetworkFurnitureToLayout()` at runtime (see [Default furniture authoring](#default-furniture-authoring-building-level-system) below) — never bake a `NetworkObject` onto the furniture root.
+
+### Save-schema invariant
+
+- `BuildingSO._defaultFurnitureLayout` slot positions feed `FurnitureKey` (storage save key). Repositioning a slot AFTER a save silently drops storage contents bound to that key. Treat layout positions as **immutable post-ship** — this is a load-bearing constraint at the prefab-authoring stage.
+
+### Matching ScriptableObject is mandatory
+
+**A prefab alone is NEVER shipped.** Every furniture prefab and every building prefab must have a matching ScriptableObject authored at the same time. The prefab is the visual/component container; the SO is the data/registry record (PrefabId, display name, icon, recipe, footprint, treasury seed, etc.).
+
+#### Furniture → `FurnitureItemSO` (subclass of `ItemSO`)
+
+- **Location**: `Assets/Resources/Data/Item/Furniture/<Name>.asset`
+- **Create menu**: `Create → Scriptable Objects → Items → Furniture` (or via Roslyn: `ScriptableObject.CreateInstance<FurnitureItemSO>()` + `AssetDatabase.CreateAsset`).
+- **Bidirectional link** — both fields must be wired:
+  - `FurnitureItemSO._installedFurniturePrefab` (field on the SO) → references the Furniture prefab.
+  - `Furniture._furnitureItemSO` (SerializeField on the prefab) → references the SO.
+- **Existing examples**: `Cashier.asset`, `CommercialConsole.asset`, `CraftingStation.asset`, `Crate.asset`, `Safe.asset`, `Time Clock.asset`.
+- **Why both directions?** `CharacterPlaceFurnitureAction` reads `FurnitureItemSO._installedFurniturePrefab` to instantiate. `CharacterPickUpFurnitureAction` reads `Furniture._furnitureItemSO` to convert the world Furniture back to an ItemInstance. Missing either direction silently breaks one of the two flows.
+- **No global registry** — furniture is discovered via `BuildingSO._defaultFurnitureLayout` references + `Resources.LoadAll` on the item layer.
+
+```csharp
+// Roslyn authoring pattern for a new FurnitureItemSO.
+var so = ScriptableObject.CreateInstance<FurnitureItemSO>();
+// (set via SerializedObject — _installedFurniturePrefab is private)
+var serSo = new SerializedObject(so);
+serSo.FindProperty("_installedFurniturePrefab").objectReferenceValue = furniturePrefab;
+serSo.ApplyModifiedPropertiesWithoutUndo();
+AssetDatabase.CreateAsset(so, "Assets/Resources/Data/Item/Furniture/MyNewFurniture.asset");
+
+// Then wire the back-reference on the prefab (open the prefab in PrefabStage or
+// edit the asset directly via PrefabUtility):
+var prefabContent = PrefabUtility.LoadPrefabContents(prefabPath);
+var furniture = prefabContent.GetComponent<Furniture>();
+var serFurniture = new SerializedObject(furniture);
+serFurniture.FindProperty("_furnitureItemSO").objectReferenceValue = so;
+serFurniture.ApplyModifiedPropertiesWithoutUndo();
+PrefabUtility.SaveAsPrefabAsset(prefabContent, prefabPath);
+PrefabUtility.UnloadPrefabContents(prefabContent);
+```
+
+#### Building → `BuildingSO` (or `BuildingCommercialSO`)
+
+- **Location**: `Assets/Resources/Data/Buildings/<Name>.asset` (existing naming convention: `B###-<Name>.asset` for content order, e.g. `B000-Lumberyard.asset`, `B001-Crafting.asset` — but raw names like `AdministrativeBuilding.asset` are also accepted).
+- **Type choice**:
+  - `BuildingSO` — for buildings without jobs/treasury (House, plain Residential).
+  - `BuildingCommercialSO` — for Shop / Forge / Farming / Transporter / Harvesting / Administrative buildings; adds `BaseTreasury` (currency seeded once into the Treasury-role SafeFurniture at construction-complete).
+- **Create menu**: `Create → MWI → World → BuildingSO` or `Create → MWI → World → BuildingCommercialSO`.
+- **Fields** (set via Inspector or `SerializedObject`):
+  - `_prefabId` — stable cross-session save-key (e.g. `"Shop_Armor_A"`). **NEVER rename after first ship** — written verbatim into `BuildingSaveData.PrefabId`; renaming orphans every saved instance on load.
+  - `BuildingName`, `Icon` — display.
+  - `BuildingPrefab` — references the Tier-2 building prefab.
+  - `InteriorPrefab` — references the interior prefab (at y=5000 spatial offset).
+  - `BuildingType` — enum (House / Shop / Forge / Farm / ...).
+  - `ConstructionRequirements` — `List<ConstructionRequirement>` (ItemSO + quantity pairs consumed by `CharacterAction_FinishConstruction`).
+  - `DefaultFurnitureLayout` — `List<DefaultFurnitureSlot>` (FurnitureItemSO + local position + nearest Room ancestor). Slot positions feed `FurnitureKey` — immutable post-ship.
+  - `GridFootprintCells` — `Vector2Int` width × depth in 8-unit cells.
+  - `BlueprintCategory` — `Personal` (player-placed) | `Civic` (admin-placed during city founding).
+  - `MinTier` — `CommunityLevel` required to place.
+  - `BuildingCommercialSO._baseTreasury` (subclass only).
+- **Prefab wires back**: `Building._blueprint` SerializeField on the prefab references the SO. Every accessor (`BuildingType`, `BuildingName`, `ConstructionRequirements`, `DefaultFurnitureLayout`, `GridFootprintCells`) reads through `_blueprint` — without it, the building has no identity at runtime.
+- **MUST be added to `WorldSettingsData.BuildingRegistry`** (the `List<BuildingSO>` field on the WorldSettingsData asset; formerly `Blueprints`). Building lookup, hibernation/wake-up restore, placement UI, and community-tier unlock paths all scan this list by `PrefabId`. A SO on disk but absent from `BuildingRegistry` is dead weight.
+- **Existing examples**: `B000-Lumberyard.asset` (BuildingCommercialSO), `B001-Crafting.asset` (BuildingCommercialSO), `B002-SmallHouseA.asset` (BuildingSO), `B003-MediumHouseA.asset` (BuildingSO), `B004-ClothingShop.asset` (BuildingCommercialSO), `B005-TransportBuilding.asset` (BuildingCommercialSO), `B007-FarmBuilding.asset` (BuildingCommercialSO), `AdministrativeBuilding.asset` (BuildingCommercialSO).
+
+```csharp
+// Roslyn authoring pattern for a new BuildingCommercialSO.
+var so = ScriptableObject.CreateInstance<BuildingCommercialSO>();
+var serSo = new SerializedObject(so);
+serSo.FindProperty("_prefabId").stringValue = "Shop_Armor_A"; // IMMUTABLE post-ship
+serSo.FindProperty("BuildingName").stringValue = "Armor Shop";
+serSo.FindProperty("BuildingPrefab").objectReferenceValue = buildingPrefab;
+// ... set other fields ...
+serSo.ApplyModifiedPropertiesWithoutUndo();
+AssetDatabase.CreateAsset(so, "Assets/Resources/Data/Buildings/B008-ArmorShop.asset");
+
+// Wire prefab's _blueprint back to the SO.
+var prefabContent = PrefabUtility.LoadPrefabContents(prefabPath);
+var building = prefabContent.GetComponent<Building>();
+var serBuilding = new SerializedObject(building);
+serBuilding.FindProperty("_blueprint").objectReferenceValue = so;
+serBuilding.ApplyModifiedPropertiesWithoutUndo();
+PrefabUtility.SaveAsPrefabAsset(prefabContent, prefabPath);
+PrefabUtility.UnloadPrefabContents(prefabContent);
+
+// Add to WorldSettingsData.BuildingRegistry.
+var worldSettings = AssetDatabase.LoadAssetAtPath<WorldSettingsData>(
+    "Assets/Resources/Data/WorldSettings.asset"); // adjust path as needed
+var serWorld = new SerializedObject(worldSettings);
+var registry = serWorld.FindProperty("BuildingRegistry");
+registry.arraySize++;
+registry.GetArrayElementAtIndex(registry.arraySize - 1).objectReferenceValue = so;
+serWorld.ApplyModifiedPropertiesWithoutUndo();
+```
+
+### Authoring checklist (use every time)
+
+1. ☐ Decide tier: TYPE-new → variant from root base; specific-variant-new → variant from Tier-1 type base.
+2. ☐ Create the prefab variant in the correct folder (`Assets/Prefabs/Furniture/<TypeSubfolder>/` or `Assets/Prefabs/Building/<Category>/<TypeSubfolder>/`).
+3. ☐ Verify inheritance: `PrefabUtility.GetCorrespondingObjectFromSource(saved).name == "<expected base name>"`.
+4. ☐ Create the matching ScriptableObject (`FurnitureItemSO` or `BuildingSO`/`BuildingCommercialSO`) in the correct folder.
+5. ☐ Wire prefab ↔ SO links: furniture = bidirectional (`_installedFurniturePrefab` + `_furnitureItemSO`); building = `Building._blueprint` (prefab → SO) + `BuildingSO.BuildingPrefab` (SO → prefab).
+6. ☐ For buildings: add the new `BuildingSO` to `WorldSettingsData.BuildingRegistry`.
+7. ☐ For buildings: add the prefab to NGO's `DefaultNetworkPrefabsList`.
+8. ☐ For buildings: pick a unique `_prefabId` (lock it forever).
+9. ☐ `AssetDatabase.SaveAssets()` + `AssetDatabase.Refresh()`.
+
+---
+
 ## The Furniture System
 
 The interior of a `Room` is subdivided into a logical grid where objects can be placed.
@@ -379,6 +551,7 @@ Bidirectional link: `FurnitureItemSO._installedFurniturePrefab` → Furniture pr
 #### FurnitureGrid Editor Tools
 - `[ContextMenu("Initialize Furniture Grid")]` — bakes grid data into prefab from BoxCollider + floor renderers
 - `_floorRenderers` list — defines walkable floor planes for non-rectangular rooms (L-shapes, etc.)
+- `_autoSizeSource` (Transform, optional, added 2026-05-18) — when wired OR when the BoxCollider is still at its unset default `(1,1,1) @ (0,0,0)` AND a child Transform named `CompletedVisual` exists, the editor menu first auto-resizes the root BoxCollider from the aggregate `Renderer.bounds` of that subtree (`InverseTransformPoint` for center, `lossyScale` correction for size) before baking the grid. Hands-off when a designer has manually sized the BoxCollider and no `_autoSizeSource` is wired — authored colliders are never overridden. Rescues the "1×1 grid on freshly-baked variant" failure mode (root BoxCollider left at default, geometry under `CompletedVisual/...`). See [wiki/systems/furniture-grid.md](../../wiki/systems/furniture-grid.md) "Editor authoring" section.
 - Cells over void (no floor) are marked `IsWall = true` and rejected by `CanPlaceFurniture()`
 - Gizmo colors: green = free, red = occupied, gray = wall/no floor
 

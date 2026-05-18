@@ -3,7 +3,7 @@ type: system
 title: "Building & Furniture"
 tags: [building, furniture, world, tier-1]
 created: 2026-04-18
-updated: 2026-05-17
+updated: 2026-05-18
 sources: []
 related:
   - "[[world]]"
@@ -92,6 +92,36 @@ Give the world a single containment model that every gameplay system can hang of
 |------|------|
 | `BuildingInteriorDoor.cs` (in `MapSystem/`) | Links exterior footprint to interior map at y=5000. |
 | `BuildingInteriorRegistry.cs` (conceptual) | Lazy-spawn of interior maps on first entry. |
+
+### Prefab Variant Hierarchy (mandatory — project rule #40)
+
+Every building and every furniture prefab is a Prefab Variant chain rooted at one of two base prefabs. This is enforced by [CLAUDE.md rule #40](../../CLAUDE.md) and mirrors the UI side ([[player-hud]] rule #39).
+
+| Tier | Building root | Furniture root |
+|------|---------------|----------------|
+| **0 — Root base** | `Assets/Prefabs/Building/Building_prefab.prefab` (carries the building `NetworkObject` + zone collider + state-machine scaffolding) | `Assets/Prefabs/Furniture/Furniture_prefab.prefab` (NO `NetworkObject` — see [[no-nested-networkobject-in-runtime-spawned-prefab]]) |
+| **1 — Type base** | `Commercial/CommercialBuilding_prefab.prefab` (script: `CommercialBuilding` + `BuildingTaskManager` + `BuildingLogisticsManager`), `House/House prefab.prefab` | `Bed.prefab`, `Cashier.prefab`, `CraftingStation.prefab`, `TimeClock.prefab`, `Storage/Crate.prefab`, `Storage/Storage.prefab`, `Safe/Safe Base.prefab`, `Management/Commercial Console.prefab` |
+| **2 — Specific variant** | `Commercial/Shop/Shop.prefab`, `Commercial/Shop/Clothing Shop.prefab`, `Commercial/Farm/Farming Building.prefab`, `Commercial/Crafting/Forge.prefab`, `Commercial/Harvesting/Lumberyard/Lumberyard.prefab`, `Commercial/Transporter/Transporter Building.prefab`, `Commercial/Administrative/AdministrativeBuilding.prefab`, `House/Small house/Small house.prefab`, `House/Medium house/Medium house.prefab` | `Safe/Safe.prefab` (variant of `Safe Base`), `Storage/Storage Visible Items.prefab` (variant of `Storage`) |
+
+**Authoring rules:**
+- New TYPE of furniture/building (rare) = variant of the **root base**, attach a new `Furniture` / `Building` subclass.
+- New specific content (common) = variant of the matching **Tier-1 type base**. Never variant the root base for content — that bypasses the type-shared scripts.
+- Folder convention: furniture under `Assets/Prefabs/Furniture/<TypeSubfolder>/`; building under `Assets/Prefabs/Building/<Category>/<TypeSubfolder>/`.
+- Backing scripts live on the type base; Tier-2 variants override SerializeFields only (icon/name/`BuildingSO`/`FurnitureItemSO` references), not script identity.
+- Tier-2 variants inherit type-base edits automatically — that's why duplicating components on multiple variants is a smell; lift them to the type base.
+
+**Matching ScriptableObject is mandatory** (prefab alone is NOT enough — also enforced by [CLAUDE.md rule #40](../../CLAUDE.md)):
+
+| Side | SO type | Location | Create menu | Wired field on prefab |
+|------|---------|----------|-------------|------------------------|
+| Furniture | `FurnitureItemSO : ItemSO` | `Assets/Resources/Data/Item/Furniture/<Name>.asset` | `Create → Scriptable Objects → Items → Furniture` | `Furniture._furnitureItemSO` ↔ `FurnitureItemSO._installedFurniturePrefab` (bidirectional) |
+| Building | `BuildingSO` (or `BuildingCommercialSO` for jobs/treasury) | `Assets/Resources/Data/Buildings/<Name>.asset` | `Create → MWI → World → BuildingSO` / `BuildingCommercialSO` | `Building._blueprint` (one-way; the SO holds the `BuildingPrefab` ref) |
+
+- **Both furniture-side fields must be wired** — pickup and placement each route through one direction. Wiring only one silently breaks the other.
+- **BuildingSO must also be registered** in `WorldSettingsData.BuildingRegistry : List<BuildingSO>` (formerly `Blueprints`). Building lookup, hibernation/wake-up restore, placement UI, and community-tier unlock paths all scan this list by `PrefabId`. A SO on disk but absent from the registry is dead weight.
+- **`BuildingSO._prefabId` is the cross-session save-key — NEVER rename after first ship.** It is written verbatim into `BuildingSaveData.PrefabId`; rename = every saved instance becomes orphaned on load.
+- **No global registry exists for `FurnitureItemSO`** — furniture is discovered via `BuildingSO._defaultFurnitureLayout` references and `Resources.LoadAll` on the item layer.
+- **Network-prefab registration**: every Tier-2 building variant carries a `NetworkObject` and must be added to NGO's `DefaultNetworkPrefabsList`. Furniture variants generally do NOT (the `Furniture_prefab` root base has no `NetworkObject`); networked behavior on a placed furniture is replicated through the parent building's NO via `Building.ConvertNestedNetworkFurnitureToLayout`.
 
 ## Public API / entry points
 
@@ -272,6 +302,7 @@ for procedural authoring details.
 - [[building-placement-manager]] — community permission gate.
 
 ## Change log
+- 2026-05-18 — Documented the mandatory two-tier Prefab Variant hierarchy for furniture (`Furniture_prefab.prefab` → type base → specific variant) and buildings (`Building_prefab.prefab` → type base → specific variant), AND the matching ScriptableObject contract (every furniture prefab needs a `FurnitureItemSO` at `Assets/Resources/Data/Item/Furniture/`; every building prefab needs a `BuildingSO`/`BuildingCommercialSO` at `Assets/Resources/Data/Buildings/`, registered in `WorldSettingsData.BuildingRegistry`). Codified in root [CLAUDE.md rule #40](../../CLAUDE.md). New "Prefab Variant Hierarchy" section under Key classes / files. — claude
 - 2026-05-17 — BuildingGrid (8-unit per-MapController cell grid) wired into placement flow. BuildingSO gains GridFootprintCells / BlueprintCategory / MinTier. Building gains GridFootprintCells convenience getter. Server-only state, derived from BuildingSaveData on wake-up. New concept page [[building-grid]] added. — claude
 - 2026-05-16 — BuildingSO blueprint introduced. Replaces inline BuildingRegistryEntry + duplicated prefab fields. PrefabId strings preserved verbatim (zero save migration). — claude
 - 2026-05-13 (later) — Fixed the second half of the save-load storage bug: **prefab-authored default furniture** (e.g. Lumberyard's crate at `_defaultFurnitureLayout[0]`) was also vanishing on load, not just runtime-placed. Same subscription-timing race that bit `BuildInstantly` (see [[buildinstantly-pre-start-lifecycle-race]]): `MapController.SpawnSavedBuildings` → `Spawn()` → `OnNetworkSpawn` auto-derives `_currentState.Value = UnderConstruction` for any prefab with non-empty `_constructionRequirements` and `_spawnAsComplete=false`. Then `ApplyDynamicSaveDataToBuilding → RestoreFromSaveData` writes `_currentState.Value = Complete`, **but Start() (where the `OnValueChanged += HandleStateChanged` subscription lives) hasn't run yet** — so the post-Complete cascade (`TrySpawnDefaultFurniture`, `ConfigureNavMeshObstacles`, `OnConstructionComplete`) silently no-ops. Default furniture never spawns; storage CONTENTS restore then finds zero live storages and silently skips them too. Fix: `Building.RestoreFromSaveData` now manually invokes `TrySpawnDefaultFurniture()` + `ConfigureNavMeshObstacles()` after the state-flip when `_isStarted == false`; idempotent via `_defaultFurnitureSpawned`. `MapController.ApplyDynamicSaveDataToBuilding` reordered so `RestoreFromSaveData` runs FIRST — owners/employees → state-flip-with-cascade → placed-furniture → storage contents → cashier → shop hooks. Save-restore can't use the coroutine-defer pattern BuildInstantly uses because the synchronous content-restore steps need furniture live in the same call. See [[save-restore-state-flip-no-subscriber]] in gotchas. — claude
