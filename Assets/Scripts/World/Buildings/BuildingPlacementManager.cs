@@ -492,6 +492,22 @@ namespace MWI.WorldSystem
             }
             netObj.Spawn();
 
+            // Mirror RequestPlacementServerRpc's zero-reqs auto-complete branch (2026-05-18 parity fix).
+            // Building.OnNetworkSpawn starts every runtime placement in UnderConstruction regardless
+            // of req count, so without this BuildInstantly() call a zero-req placement (notably the
+            // AdministrativeBuilding itself) would sit stuck in UnderConstruction forever:
+            // CharacterAction_FinishConstruction.OnTick early-returns on empty reqs BEFORE calling
+            // Finalize, so even queueing the cooperative action does nothing. This is the path NPCs
+            // walk through when BTAction_PursueAmbition drives ambition placement; the player ghost
+            // path already had this branch.
+            int reqCount = placedBuilding.ConstructionRequirements != null
+                ? placedBuilding.ConstructionRequirements.Count
+                : 0;
+            if (reqCount == 0)
+            {
+                placedBuilding.BuildInstantly();
+            }
+
             // Reuse the standard map-registration path. This also handles the
             // AdministrativeBuilding-specific founder-binding (no-op for Civic since the
             // placer's CurrentCommunity is the chartered city, not a fresh community).
