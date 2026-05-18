@@ -748,3 +748,4 @@ MonoBehaviour:
   _interactionPoint: {fileID: 5327343471678721893}
   _sizeInCells: {x: 0, y: 0}
   _furnitureItemSO: {fileID: 11400000, guid: d0430bbf5213aa2439fe2701cf024c38, type: 2}
+  _toastChannel: {fileID: 11400000, guid: ea961c82479cb974997317e89f3aa9b6, type: 2}

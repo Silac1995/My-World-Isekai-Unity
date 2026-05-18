@@ -1,18 +1,22 @@
 using UnityEngine;
 
 /// <summary>
-/// AB-preplaced furniture (Plan 4c Task 6). When a drifter <see cref="Character"/>
-/// interacts with the desk, the desk forwards a join-request submission to its parent
-/// <see cref="AdministrativeBuilding"/> and queues a <see cref="CharacterAction_OccupyFurniture"/>
-/// so the applicant "sits and waits" at the desk (visual feedback for the player).
-///
-/// Inherits <see cref="OccupiableFurniture"/> so the seat machinery (reserve/use/release +
-/// the canonical OnInteract → CharacterAction_OccupyFurniture queueing) is reused.
+/// AB-preplaced furniture (Plan 4c Task 6). When a <see cref="Character"/> taps E on
+/// the desk, the desk forwards a join-request submission to its parent
+/// <see cref="AdministrativeBuilding"/> and raises a local toast on the interacting
+/// player's HUD. **Spontaneous one-shot interaction — the character does NOT sit on
+/// or occupy the desk.** Per design slip 2026-05-18: previously inherited
+/// <c>OccupiableFurniture</c> and queued <c>CharacterAction_OccupyFurniture</c> to
+/// make drifters "sit and wait"; reverted to a plain <see cref="Furniture"/> because
+/// the seat metaphor added no value for a fire-and-forget submission and blocked the
+/// actor's BT from continuing onto whatever it had to do next.
 ///
 /// Plan 4c Task 6.
 /// </summary>
-public class JoinRequestDesk : OccupiableFurniture
+public class JoinRequestDesk : Furniture
 {
+    [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
+
     private AdministrativeBuilding _ab;
 
     protected override void Awake()
@@ -63,8 +67,22 @@ public class JoinRequestDesk : OccupiableFurniture
             _ab.SubmitJoinRequestServerRpc(interactor.NetworkObject.NetworkObjectId);
         }
 
-        // Reuse the base Occupiable seat-wait machinery so the drifter visually waits at
-        // the desk until the leader processes the request.
-        return base.OnInteract(interactor);
+        // Local-player toast feedback. Only the interacting player's peer raises the
+        // toast (Cashier/CharacterEquipment pattern): IsPlayer() filters out NPCs and
+        // IsOwner filters out the host-NPC trap where IsOwner is true for the host on
+        // every NPC in the scene (rule #19b). The server-side ServerRpc is still the
+        // authoritative gate — this is purely UX confirmation that E was registered.
+        if (_toastChannel != null && interactor.IsPlayer() && interactor.IsOwner)
+        {
+            _toastChannel.Raise(new MWI.UI.Notifications.ToastNotificationPayload(
+                message: $"Join request submitted to {_ab.BuildingName}",
+                type: MWI.UI.Notifications.ToastType.Info,
+                duration: 3f
+            ));
+        }
+
+        // Spontaneous one-shot — no occupation, no sit, no action queued. The actor
+        // is free to immediately do whatever its BT / next input dictates.
+        return true;
     }
 }
