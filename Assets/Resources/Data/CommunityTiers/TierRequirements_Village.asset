@@ -20,4 +20,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 06ac6b23381fc1b4e896d927c0cdfd1e, type: 2}
   - {fileID: 11400000, guid: b3d0fca764552004c89d5c33eb156de8, type: 2}
   _minTreasury: 500
-  _unlockedBlueprints: []
+  _unlockedBlueprints:
+  - {fileID: 11400000, guid: 06ac6b23381fc1b4e896d927c0cdfd1e, type: 2}
+  - {fileID: 11400000, guid: b3d0fca764552004c89d5c33eb156de8, type: 2}

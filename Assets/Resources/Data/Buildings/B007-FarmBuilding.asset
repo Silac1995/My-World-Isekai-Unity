@@ -24,4 +24,7 @@ MonoBehaviour:
     Amount: 2
     IsReferenceOnly: 0
   _defaultFurnitureLayout: []
+  _gridFootprintCells: {x: 1, y: 1}
+  _blueprintCategory: 1
+  _minTier: 0
   _baseTreasury: 100

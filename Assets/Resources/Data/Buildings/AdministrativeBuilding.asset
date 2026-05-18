@@ -16,7 +16,7 @@ MonoBehaviour:
   _buildingName: City Hall
   _icon: {fileID: 0}
   _buildingType: 9
-  _buildingPrefab: {fileID: 0}
+  _buildingPrefab: {fileID: 4260897135377657532, guid: c98ddfc5c952a1f469db6e4df50cdeeb, type: 3}
   _interiorPrefab: {fileID: 0}
   _communityPriority: 0
   _constructionRequirements: []
