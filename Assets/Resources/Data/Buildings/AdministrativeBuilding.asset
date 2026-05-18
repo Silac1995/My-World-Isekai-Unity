@@ -19,7 +19,10 @@ MonoBehaviour:
   _buildingPrefab: {fileID: 411597335569631323, guid: 47145e02532203e43925bdd3682bed02, type: 3}
   _interiorPrefab: {fileID: 0}
   _communityPriority: 0
-  _constructionRequirements: []
+  _constructionRequirements:
+  - Item: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
+    Amount: 2
+    IsReferenceOnly: 0
   _defaultFurnitureLayout: []
   _gridFootprintCells: {x: 3, y: 3}
   _blueprintCategory: 0
