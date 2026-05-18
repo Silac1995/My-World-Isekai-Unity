@@ -34,7 +34,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1749596633331466633}
+  m_Father: {fileID: 9068106823020550351}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &3431047644747895331
 MonoBehaviour:
@@ -936,6 +936,10 @@ PrefabInstance:
       propertyPath: _toolStorageFurniture
       value: 
       objectReference: {fileID: 9205726073751855139}
+    - target: {fileID: 2058514990271563893, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+      propertyPath: _constructionVisualRoot
+      value: 
+      objectReference: {fileID: 6996873351803550215}
     - target: {fileID: 2058514990271563893, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       propertyPath: _cropsToGrow.Array.size
       value: 1
@@ -4335,16 +4339,11 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 3564774228829787976, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       insertIndex: -1
       addedObject: {fileID: 8423605904792108181}
-    - targetCorrespondingSourceObject: {fileID: 8358957988346440447, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+    - targetCorrespondingSourceObject: {fileID: 1269821317357712313, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
       insertIndex: -1
       addedObject: {fileID: 4328732905972203992}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
---- !u!4 &1749596633331466633 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 8358957988346440447, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
-  m_PrefabInstance: {fileID: 7802254215568206710}
-  m_PrefabAsset: {fileID: 0}
 --- !u!114 &2813645711975947936 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 5425499448889062870, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
@@ -4359,6 +4358,11 @@ MonoBehaviour:
 --- !u!4 &6719286638165457982 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 3564774228829787976, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+  m_PrefabInstance: {fileID: 7802254215568206710}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &6996873351803550215 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 963435935152279921, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
   m_PrefabInstance: {fileID: 7802254215568206710}
   m_PrefabAsset: {fileID: 0}
 --- !u!114 &7141532346969667694 stripped
@@ -4383,3 +4387,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ed641fdf26c13544c81ec94f81667318, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ManagementFurniture
+--- !u!4 &9068106823020550351 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1269821317357712313, guid: d941949b730fb1843991b09d42aa29bf, type: 3}
+  m_PrefabInstance: {fileID: 7802254215568206710}
+  m_PrefabAsset: {fileID: 0}

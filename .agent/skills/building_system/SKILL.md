@@ -603,6 +603,50 @@ Wiring checklist:
 | `void EvictLeftoversToPerimeter()` | Server-only | Moves leftover `WorldItem`s to NavMesh-valid points outside `_buildingZone`. |
 | `List<WorldItem> GetPhysicalItemsInCollider(Collider, List<WorldItem>)` | Any | Refactored sibling of `GetPhysicalItemsInZone`. Caller passes a reused buffer to satisfy Rule #34 (zero per-tick alloc). |
 | `void ContributeMaterial(ItemSO, int)` | Server-only | Existing — bumps `_contributedMaterials` ledger. Now called from `CharacterAction_FinishConstruction.OnTick`. |
+| `event Action<BuildingState, BuildingState> OnConstructionStateChanged` | All peers (fires from `HandleStateChanged`) | **Cosmetic-only** hook for peer-local subscribers (outline, scaffold hints, FX). Wrapped in try/catch — never blocks `HandleStateChanged`. Do not put server-authoritative side effects here. Added 2026-05-18b alongside `BuildingConstructionOutline`. |
+
+### Construction-zone outline (peer-local cosmetic — added 2026-05-18b, finalised 2026-05-18c)
+
+Renders a yellow rectangle along the `BuildingZone` footprint while `UnderConstruction`. Lives on `Building_prefab.prefab` (the base) so every variant inherits the wired SO automatically — mirrors the `BuildingCurtainSettingsHolder` pattern. **Crash-safe by construction** (see [[material-buildproperties-standalone-crash]] for why this is load-bearing): no `.mat` assets, no custom shaders, no texture refs.
+
+| File | Purpose |
+|---|---|
+| `Assets/Scripts/World/Buildings/Construction/BuildingConstructionOutline.cs` | MonoBehaviour. Subscribes to `Building.OnConstructionStateChanged` in `OnEnable`, refreshes once based on `CurrentState` (covers late-join). Lazily builds a child GameObject with one `LineRenderer` (4 corners, `loop = true`, `useWorldSpace = false`, points written once). Toggles `SetActive(true/false)` on state change. Gracefully no-ops if `BuildingZone` is null or not a `BoxCollider`. |
+| `Assets/Scripts/World/Buildings/Construction/BuildingConstructionOutlineSettings.cs` | ScriptableObject. Fields: `Width` (float), `Color` (Color), `HeightOffset` (float), `CornerVertices` (int), `ShaderName` (string), `FallbackShaderName` (string). **Only primitives + strings → zero `UnityEngine.Object` references → crash-safe in Resources/.** |
+| `Assets/Resources/Data/BuildingConstructionOutlineSettings.asset` | The shared default instance. Default look: yellow (1, 0.85, 0), **width 0.5 u (~7.5 cm)**, **height offset 0.15 u**, sharp corners, `Sprites/Default` shader. Width and HeightOffset were bumped 2026-05-18c — 0.15 u was sub-pixel at typical isometric camera distances; 0.5 u reads clearly. The extra height keeps the line cleanly above the cyan footprint Quad at Y = 0.02. |
+
+**The crash-safety rules — DO NOT VIOLATE without reading [[material-buildproperties-standalone-crash]]:**
+- The runtime `Material` is built in code: `new Material(Shader.Find(settings.ShaderName))` with `HideFlags.HideAndDontSave`. Never serialized to disk → impossible to land in `DefaultNetworkPrefabsList`'s preload chain with a broken texture ref.
+- Both shader names (`Sprites/Default`, `Unlit/Color`) are **built-in** to every Unity install and every render pipeline. Do not author a custom shader for the outline.
+- One `static Material s_sharedMaterial` is reused across every active outline in the scene → all outlines batch into one draw call → also means there's only one Material instance to worry about.
+- If a future tweak needs a textured outline, the texture should be a built-in (`Texture2D.whiteTexture`, `Texture2D.blackTexture`, `Texture2D.normalTexture`) OR a known-clean project sprite — never a brand-new `.mat` asset.
+
+**Wiring procedure (once-only, already done 2026-05-18b):**
+1. Author the SO asset at `Assets/Resources/Data/BuildingConstructionOutlineSettings.asset` (Right-click → Create → MWI → Building → Construction Outline Settings).
+2. Add `BuildingConstructionOutline` to `Assets/Prefabs/Building/Building_prefab.prefab` (the base prefab, NOT individual variants).
+3. Drag the SO into the component's `_settings` field on the base prefab. Every variant (Shop, Forge, Farming, Lumberyard, Transporter, House, Small house, Medium house, Clothing Shop, AdministrativeBuilding) inherits via Unity's prefab inheritance — no per-variant edits needed.
+
+**Network behaviour:**
+- Not a `NetworkBehaviour`. The component is purely client-side cosmetic on each peer.
+- The trigger is `Building._currentState` (server-authoritative `NetworkVariable`) → `OnValueChanged` → `HandleStateChanged` → `OnConstructionStateChanged` event → outline refresh.
+- Late-joiner: `_currentState` syncs on spawn → event fires on first `OnValueChanged` → outline activates if `UnderConstruction`. The component also runs `Refresh(CurrentState)` in `OnEnable` to cover the case where the state arrived BEFORE we subscribed (NetworkBehaviour replication ordering).
+- Host↔Client↔NPC parity: NPCs don't observe the outline (no consumers), but every player peer sees its own copy. No host-only state — Rule #19b late-joiner audit passes by construction.
+
+**Performance (Rule #34):**
+- One 4-vertex `LineRenderer` per active outline, `loop = true` → 1 draw call.
+- Geometry written once on first activation, never touched again.
+- Shared `Material` via static singleton → all outlines batch together.
+- GameObject deactivated when not `UnderConstruction` → engine pays zero cost when dormant.
+- Zero `Update()` / zero polling — fully event-driven.
+
+**⚠ The renderer-sweep gotcha (load-bearing 2026-05-18c).** `BuildingConstructionOutline` is decorated with `[DefaultExecutionOrder(100)]` and this is **load-bearing** — DO NOT REMOVE without reading the surrounding rationale. `Building.EnsureConstructionGhostVisual` (called from `Building.Start`) walks every top-level child of the Building (except `_constructionVisualRoot`, `_completedVisualRoot`, `Zone` children) and caches every `Renderer` it finds into `_extraOriginalRenderersToToggle`. `Building.ApplyConstructionVisuals` then sets `r.enabled = !underConstruction` on every cached renderer — purpose is to hide things like the Interior Door wall during construction. `LineRenderer` inherits from `Renderer`, so without the execution-order delay the outline's LineRenderer would be created BEFORE Building.Start's cache snapshot, get caught in the sweep, and be disabled exactly when we want it visible.
+
+**Pattern for any future Building cosmetic that creates a Renderer-derived visual at the Building root:**
+1. Add `[DefaultExecutionOrder(N)]` with N > 0 on your component (canonical fix).
+2. OR parent your Renderer GO under `_constructionVisualRoot` / `_completedVisualRoot` (skipped by the sweep, but those roots get wiped in `EnsureConstructionGhostVisual` so order-dependent).
+3. OR parent under a `Zone`-bearing GameObject (also skipped — hacky, last resort).
+
+See [[construction]] "Known gotchas / edge cases" for the full write-up.
 
 ### Persistence (`BuildingSaveData` extension)
 

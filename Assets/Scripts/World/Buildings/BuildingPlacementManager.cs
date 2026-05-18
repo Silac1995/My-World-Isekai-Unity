@@ -571,10 +571,25 @@ namespace MWI.WorldSystem
                 return;
             }
 
-            // If instant mode, skip construction requirements
-            if (instant)
+            // Trigger BuildInstantly() when either:
+            //   - the placement is explicitly InstantMode (skip construction loop), OR
+            //   - the blueprint has zero construction requirements (no materials to deliver
+            //     → would otherwise stay stuck in UnderConstruction forever, since
+            //     Building.OnNetworkSpawn now starts every runtime placement in
+            //     UnderConstruction regardless of req count).
+            //
+            // BuildInstantly defers the state flip via a coroutine that waits for
+            // Building.Start to finish wiring HandleStateChanged. The intentional
+            // 1-frame-or-so window is what makes the construction-zone outline,
+            // scaffold ghost, and curtain visuals appear-then-vanish on instant placements
+            // ("delay of some milliseconds before completion" — by design).
+            if (placedBuilding != null)
             {
-                if (placedBuilding != null)
+                int reqCount = placedBuilding.ConstructionRequirements != null
+                    ? placedBuilding.ConstructionRequirements.Count
+                    : 0;
+                bool autoComplete = instant || reqCount == 0;
+                if (autoComplete)
                 {
                     placedBuilding.BuildInstantly();
                 }

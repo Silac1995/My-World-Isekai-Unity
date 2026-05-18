@@ -21,7 +21,7 @@ MonoBehaviour:
   _communityPriority: 3
   _constructionRequirements:
   - Item: {fileID: 11400000, guid: a3f0471c4178efd4b9b5efdb38aea516, type: 2}
-    Amount: 20
+    Amount: 3
     IsReferenceOnly: 0
   _defaultFurnitureLayout: []
   _gridFootprintCells: {x: 1, y: 1}

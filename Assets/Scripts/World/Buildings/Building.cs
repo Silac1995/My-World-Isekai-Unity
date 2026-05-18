@@ -266,6 +266,17 @@ public class Building : ComplexRoom
     public System.Action OnConstructionComplete;
 
     /// <summary>
+    /// Fires on every peer (server + clients) whenever the building's construction state
+    /// changes, with the previous and new state values. Lets purely-cosmetic, per-peer
+    /// systems (outlines, scaffolding hints, FX) react to state without polling
+    /// <see cref="IsUnderConstruction"/> and without coupling to Building's internals.
+    /// Invoked from <see cref="HandleStateChanged"/> after <see cref="ApplyConstructionVisuals"/>.
+    /// Subscribers should be cosmetic-only — server-authoritative side effects belong in
+    /// <see cref="HandleStateChanged"/> itself.
+    /// </summary>
+    public System.Action<MWI.WorldSystem.BuildingState, MWI.WorldSystem.BuildingState> OnConstructionStateChanged;
+
+    /// <summary>
     /// Read-only view of the authored material requirements for construction. Empty when the
     /// building was authored without a build phase. Sourced from <see cref="_blueprint"/>;
     /// returns <see cref="System.Array.Empty{T}"/> when no blueprint is assigned
@@ -357,19 +368,43 @@ public class Building : ComplexRoom
         if (IsServer)
         {
             int reqCount = EffectiveConstructionRequirements?.Count ?? 0;
+            // PlacedByCharacterId is set by BuildingPlacementManager BEFORE Spawn for
+            // runtime-placed buildings, and is empty for scene-authored buildings.
+            // It is the canonical discriminator between the two birth paths inside
+            // OnNetworkSpawn (see also the ID-derivation logic below).
+            bool isRuntimePlaced = !PlacedByCharacterId.Value.IsEmpty;
             MWI.WorldSystem.BuildingState newState;
             if (_spawnAsComplete)
             {
                 newState = MWI.WorldSystem.BuildingState.Complete;
             }
+            else if (isRuntimePlaced)
+            {
+                // Runtime placements ALWAYS start in UnderConstruction, even when the
+                // blueprint has zero construction requirements. This matches the
+                // intent documented in the _spawnAsComplete tooltip on line 65, and
+                // gives cosmetic systems (BuildingConstructionOutline, scaffold ghost,
+                // construction-curtain particles) a visible window in which to render
+                // before BuildInstantly's deferred coroutine flips state to Complete.
+                // For non-instant, non-zero-req placements this is also the start of
+                // the cooperative construction loop; players deliver materials and
+                // CharacterAction_FinishConstruction drives the flip via Building.Finalize.
+                // BuildingPlacementManager is responsible for calling BuildInstantly()
+                // when reqCount == 0 OR instant-mode is on so 0-req placements don't
+                // get stuck in UnderConstruction forever.
+                newState = MWI.WorldSystem.BuildingState.UnderConstruction;
+            }
             else
             {
+                // Scene-authored: legacy behaviour. Empty requirements → spawn Complete.
+                // Non-empty requirements → start in UnderConstruction (treat scene-authored
+                // buildings with reqs as "needs to be built" the same as runtime placements).
                 newState = (reqCount > 0)
                     ? MWI.WorldSystem.BuildingState.UnderConstruction
                     : MWI.WorldSystem.BuildingState.Complete;
             }
             if (_currentState.Value != newState) _currentState.Value = newState;
-            Debug.Log($"<color=cyan>[Building.OnNetworkSpawn]</color> {BuildingName} reqs={reqCount} spawnAsComplete={_spawnAsComplete} → state={_currentState.Value}");
+            Debug.Log($"<color=cyan>[Building.OnNetworkSpawn]</color> {BuildingName} reqs={reqCount} spawnAsComplete={_spawnAsComplete} isRuntimePlaced={isRuntimePlaced} → state={_currentState.Value}");
         }
 
         if (IsServer && NetworkBuildingId.Value.IsEmpty)
@@ -924,7 +959,17 @@ public class Building : ComplexRoom
         // box values are in local space relative to the box's transform, which here is
         // the same hierarchy as ConstructionVisual (both children of building root), so the
         // bottom face Y in building-local space is box.center.y - size.y/2.
-        float bottomY = box.center.y - (box.size.y * 0.5f) + 0.02f;
+        //
+        // Y-clamp: BoxColliders on Building prefabs are often authored with `center.y` near
+        // the visual centroid and `size.y` covering the full vertical extent — meaning the
+        // box's *bottom face* (`center.y - size.y/2`) can land BELOW the building's pivot
+        // (e.g., Lumberyard's BZ bottom = -0.43 with pivot at 0). Since placed buildings
+        // always anchor pivot.y to the NavMesh ground, putting the marker at the box bottom
+        // would render it underground (hidden from camera). Clamp to max(box-bottom, 0) so
+        // the marker never sinks below the building's pivot. Mirrors the identical fix in
+        // BuildingConstructionOutline.EnsureOutlineCreated.
+        float boxBottomLocalY = box.center.y - (box.size.y * 0.5f);
+        float bottomY = Mathf.Max(boxBottomLocalY, 0f) + 0.02f;
         marker.transform.localPosition = new Vector3(box.center.x, bottomY, box.center.z);
         marker.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // lay flat (Quad faces +Z by default)
         marker.transform.localScale = new Vector3(box.size.x, box.size.z, 1f);
@@ -939,6 +984,11 @@ public class Building : ComplexRoom
 
         // Visual swap runs on every peer (client + server), every state change.
         ApplyConstructionVisuals(newValue);
+
+        // Notify purely-cosmetic peer-local subscribers (outline renderer, scaffold hints, …).
+        // Wrapped per Rule #31 — one buggy subscriber must not block the rest of the cascade.
+        try { OnConstructionStateChanged?.Invoke(previousValue, newValue); }
+        catch (System.Exception e) { Debug.LogException(e, this); }
 
         if (newValue == MWI.WorldSystem.BuildingState.Complete)
         {

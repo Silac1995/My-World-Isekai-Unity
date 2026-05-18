@@ -619,9 +619,17 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 7231545901852857222}
     - target: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
+      propertyPath: _completedVisualRoot
+      value: 
+      objectReference: {fileID: 4768471104724664134}
+    - target: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: _managementFurniture
       value: 
       objectReference: {fileID: 9131397440581988310}
+    - target: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
+      propertyPath: _constructionVisualRoot
+      value: 
+      objectReference: {fileID: 7545925230478872845}
     - target: {fileID: -7333590944410843724, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
       propertyPath: _itemsToSell.Array.size
       value: 3
@@ -6301,6 +6309,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 29e2732b7a37ee045becc3206b7e6a75, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TimeClockFurniture
+--- !u!1 &4768471104724664134 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 5242335412043713289, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
+  m_PrefabInstance: {fileID: 787434479500325967}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &6097543641115203380 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6805876774776333179, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
@@ -6328,6 +6341,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fab72e475a416ec4d9cc69850b45f132, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Cashier
+--- !u!1 &7545925230478872845 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7085574505717507394, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}
+  m_PrefabInstance: {fileID: 787434479500325967}
+  m_PrefabAsset: {fileID: 0}
 --- !u!114 &9131397440581988310 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 8382530325968722841, guid: cf8746b58cfecc543880c4a7798357d6, type: 3}

@@ -58,7 +58,7 @@ Transform:
   m_GameObject: {fileID: 3735168560071585711}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 2, y: 0, z: 0}
+  m_LocalPosition: {x: -7, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -161,7 +161,7 @@ Transform:
   m_GameObject: {fileID: 7885287143471553461}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -2, y: 0, z: 0}
+  m_LocalPosition: {x: 9, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -216,7 +216,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 2042257917715560045, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 662725382
+      value: 1144777172
       objectReference: {fileID: 0}
     - target: {fileID: 2042257917715560045, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: SceneMigrationSynchronization
@@ -226,9 +226,25 @@ PrefabInstance:
       propertyPath: InScenePlacedSourceGlobalObjectIdHash
       value: 3826203255
       objectReference: {fileID: 0}
+    - target: {fileID: 2871169940895605722, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 6
+      objectReference: {fileID: 0}
+    - target: {fileID: 2871169940895605722, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 8
+      objectReference: {fileID: 0}
+    - target: {fileID: 5480565783836491993, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -6
+      objectReference: {fileID: 0}
+    - target: {fileID: 5480565783836491993, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 8
+      objectReference: {fileID: 0}
     - target: {fileID: 6518796099225268499, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: GlobalObjectIdHash
-      value: 309552960
+      value: 14291890
       objectReference: {fileID: 0}
     - target: {fileID: 6518796099225268499, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: SceneMigrationSynchronization
@@ -241,6 +257,10 @@ PrefabInstance:
     - target: {fileID: 6528054620988570630, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_Name
       value: AdministrativeBuilding
+      objectReference: {fileID: 0}
+    - target: {fileID: 7806914289974330560, guid: 0266b0096947362429f7d224956a5096, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
       propertyPath: m_LocalPosition.x
@@ -311,9 +331,19 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 7776285963017915239}
   m_SourcePrefab: {fileID: 100100000, guid: 0266b0096947362429f7d224956a5096, type: 3}
+--- !u!1 &1021452871319801932 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8040365355134419702, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 7041923691461268154}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &1774204326636369982 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8729890495040055940, guid: 0266b0096947362429f7d224956a5096, type: 3}
+  m_PrefabInstance: {fileID: 7041923691461268154}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &2646266968585010695 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4972147162632629437, guid: 0266b0096947362429f7d224956a5096, type: 3}
   m_PrefabInstance: {fileID: 7041923691461268154}
   m_PrefabAsset: {fileID: 0}
 --- !u!65 &3839890907379753655 stripped
@@ -426,8 +456,8 @@ MonoBehaviour:
   _buildingZone: {fileID: 3839890907379753655}
   _deliveryZone: {fileID: 0}
   _spawnAsComplete: 0
-  _constructionVisualRoot: {fileID: 0}
-  _completedVisualRoot: {fileID: 0}
+  _constructionVisualRoot: {fileID: 2646266968585010695}
+  _completedVisualRoot: {fileID: 1021452871319801932}
   _constructionFootprintMaterial: {fileID: 0}
   _constructionCurtainMaterial: {fileID: 0}
   ConstructionProgress:
