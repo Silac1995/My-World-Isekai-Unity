@@ -95,6 +95,7 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
         BuildCreateCommunitySection(_bound);
         BuildAssignAmbitionSection(_bound);
         BuildCommunityReadoutSection(_bound);
+        BuildForcePromoteSection(_bound);
         // Feature sections land here in subsequent commits.
     }
 
@@ -275,6 +276,46 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
         MakeLabel($"<color=#FFD27A>Members:</color> {memberCount}    <color=#FFD27A>Leaders:</color> {leaderCount} (primary: {community.PrimaryLeader?.CharacterName ?? "—"})");
         MakeLabel($"<color=#FFD27A>AdministrativeBuilding:</color> {abLabel}");
         MakeLabel($"<color=#FFD27A>Treasury (Default):</color> <color=#FFD27A>{treasury}</color> coin");
+    }
+
+    // ─── Feature 4: Force-Promote Community ──────────────────────────────
+
+    /// <summary>
+    /// Bypasses <see cref="Community.TryPromoteLevel"/>'s population / treasury /
+    /// required-building gates and forces the community's level up (or down) one
+    /// tier via <see cref="AdministrativeBuilding.DevForceChangeCommunityLevel"/>.
+    /// Requires the community to be chartered (an AB exists) — production
+    /// promotion requires the same anchor.
+    /// </summary>
+    private void BuildForcePromoteSection(Character c)
+    {
+        if (c == null || c.CharacterCommunity == null) return;
+        var community = c.CharacterCommunity.CurrentCommunity;
+        if (community == null) return;
+
+        MakeHeader("Force-Promote Community");
+
+        var ab = community.AdministrativeBuilding;
+        if (ab == null)
+        {
+            MakeLabel("<color=grey>Requires a chartered AdministrativeBuilding. Place an AB first (Ambition_FoundACity step 2).</color>");
+            return;
+        }
+
+        var row = MakeRow();
+        MakeLabel($"<color=#FFD27A>Current:</color> {community.level}", row.transform);
+        MakeButton("[DEV] −1 Tier", () =>
+        {
+            try { ab.DevForceChangeCommunityLevel(-1); }
+            catch (Exception e) { Debug.LogException(e); }
+            RebuildAll();
+        }, row.transform);
+        MakeButton("[DEV] +1 Tier", () =>
+        {
+            try { ab.DevForceChangeCommunityLevel(+1); }
+            catch (Exception e) { Debug.LogException(e); }
+            RebuildAll();
+        }, row.transform);
     }
 
     // ─── Widget helpers (programmatic UGUI, dev-only) ────────────────────

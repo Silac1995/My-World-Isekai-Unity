@@ -468,6 +468,53 @@ public class AdministrativeBuilding : CommercialBuilding
         // Task 7 wires the UI_CityManagementPanel's TierUpTab to display the toast.
     }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    // ── DEV-ONLY mutators (Plan 4 city-founding tab) ──────────────────────
+
+    /// <summary>
+    /// DEV-ONLY. Bypasses <see cref="Community.TryPromoteLevel"/>'s population /
+    /// treasury / required-buildings gates and shoves the community's level by
+    /// <paramref name="delta"/> tiers (clamped to the <see cref="CommunityLevel"/>
+    /// enum bounds). Idempotent on no-change; logs a warning when the target
+    /// already sits at the requested level or when OwnerCommunity is null.
+    ///
+    /// Host-only + DevMode-gated via the inherited
+    /// <see cref="CommercialBuilding.DevAssertHostAndDevMode"/>.
+    /// </summary>
+    public void DevForceChangeCommunityLevel(int delta)
+    {
+        if (!DevAssertHostAndDevMode("DevForceChangeCommunityLevel")) return;
+        if (OwnerCommunity == null)
+        {
+            Debug.LogWarning($"<color=magenta>[DevMode]</color> DevForceChangeCommunityLevel: '{BuildingName}' has no OwnerCommunity.");
+            return;
+        }
+        if (delta == 0) return;
+
+        int currentInt = (int)OwnerCommunity.level;
+        int targetInt = currentInt + delta;
+
+        // Clamp to the CommunityLevel enum's int range.
+        var values = System.Enum.GetValues(typeof(CommunityLevel));
+        int minInt = int.MaxValue;
+        int maxInt = int.MinValue;
+        foreach (var v in values)
+        {
+            int iv = (int)v;
+            if (iv < minInt) minInt = iv;
+            if (iv > maxInt) maxInt = iv;
+        }
+        int clamped = Mathf.Clamp(targetInt, minInt, maxInt);
+        if (clamped == currentInt)
+        {
+            Debug.LogWarning($"<color=magenta>[DevMode]</color> DevForceChangeCommunityLevel: already at {(CommunityLevel)currentInt}, no change.");
+            return;
+        }
+
+        OwnerCommunity.ChangeLevel((CommunityLevel)clamped);
+    }
+#endif
+
     /// <summary>Server-side resolver: ClientId → Player Character via NGO's connected-client table.</summary>
     private static Character ResolveCharacterFromClientId(ulong clientId)
     {
