@@ -102,8 +102,8 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
         BuildCommunityReadoutSection(_bound);
         BuildForcePromoteSection(_bound);
         BuildGrantTreasurySection(_bound);
+        BuildSubmitJoinRequestSection(_bound);
         BuildTimeControlSection();
-        // Feature sections land here in subsequent commits.
     }
 
     // ─── Feature 1: Create Community ─────────────────────────────────────
@@ -398,6 +398,57 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
             RebuildAll();
         }, row.transform, minWidth: 160);
         MakeLabel("<color=grey>fires OnNewDay N times — drives DrifterMigrationSystem + ambition daily tasks.</color>", row.transform);
+    }
+
+    // ─── Feature 7: Submit Join Request ───────────────────────────────────
+
+    /// <summary>
+    /// Visible when the inspected character has no <c>CurrentCommunity</c> and no
+    /// <c>Citizenship</c>, and at least one chartered, fully-constructed
+    /// <see cref="AdministrativeBuilding"/> exists in the scene. One button per
+    /// candidate AB; click routes the join request through the canonical
+    /// <see cref="AdministrativeBuilding.SubmitJoinRequestServerRpc"/> using the
+    /// character's <c>NetworkObject.NetworkObjectId</c> — identical to the path
+    /// drifters take when they interact with the JoinRequestDesk.
+    /// </summary>
+    private void BuildSubmitJoinRequestSection(Character c)
+    {
+        if (c == null || c.CharacterCommunity == null) return;
+        if (c.CharacterCommunity.CurrentCommunity != null) return;
+        if (c.CharacterCommunity.Citizenship != null) return;
+        if (c.NetworkObject == null) return; // applicant must be a NetworkObject for SubmitJoinRequestServerRpc
+
+        // Scan the scene for chartered ABs whose construction is complete.
+        var abs = UnityEngine.Object.FindObjectsByType<AdministrativeBuilding>(FindObjectsSortMode.None);
+        var candidates = new List<AdministrativeBuilding>();
+        for (int i = 0; i < abs.Length; i++)
+        {
+            var ab = abs[i];
+            if (ab == null || ab.OwnerCommunity == null) continue;
+            if (ab.IsUnderConstruction) continue;
+            candidates.Add(ab);
+        }
+
+        if (candidates.Count == 0) return;
+
+        MakeHeader("Submit Join Request");
+        MakeLabel("<color=grey>Routes through AdministrativeBuilding.SubmitJoinRequestServerRpc — same path as drifters interacting with the JoinRequestDesk.</color>");
+
+        ulong applicantNetId = c.NetworkObject.NetworkObjectId;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            var ab = candidates[i];
+            var row = MakeRow();
+            string label = $"{ab.OwnerCommunity.communityName} <color=grey>({ab.OwnerCommunity.level}, members={ab.OwnerCommunity.members.Count})</color>";
+            MakeLabel(label, row.transform);
+            var capturedAb = ab;
+            MakeButton("[DEV] Submit Join Request", () =>
+            {
+                try { capturedAb.SubmitJoinRequestServerRpc(applicantNetId); }
+                catch (Exception e) { Debug.LogException(e); }
+                RebuildAll();
+            }, row.transform, minWidth: 200);
+        }
     }
 
     // ─── Widget helpers (programmatic UGUI, dev-only) ────────────────────
