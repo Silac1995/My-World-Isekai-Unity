@@ -22,10 +22,11 @@ The current tree evaluates in this order:
 3. **Combat** (`BTCond_IsInCombat`): The NPC is already engaged in combat.
 4. **Assistance** (`BTCond_FriendInDanger`): The NPC sees an ally under attack.
 5. **Aggression** (`BTCond_DetectedEnemy`): The NPC detects a threat and attacks it.
-6. **GOAP** (`BTAction_ExecuteGoapPlan`): Proactive life and needs planning (Shopping, socializing, fulfilling jobs).
-7. **Schedule** (`BTCond_HasScheduledActivity`): Daily routines (Native `BTAction_Work`, regular sleep, etc.).
-8. **Social** (`BTCond_WantsToSocialize`): Spontaneous discussions. (Native Node).
-9. **Wander** (`BTAction_Wander`): The Fallback. (Native Node).
+6. **Schedule** (`BTCond_HasScheduledActivity`): Daily routines (Native `BTAction_Work`, regular sleep, etc.).
+7. **Ambition** (`BTAction_PursueAmbition` — added 2026-05-18): Drives the active `AmbitionQuest` step. Reads `CharacterAmbition.Current.CurrentStepQuest`, dispatches to per-task drivers (Place / Finalize / Promote), then pumps `AmbitionQuest.TickActiveTasks` so active tasks + passive watchers advance. Preempts GOAP because a concrete life-goal commitment trumps proactive planning. Drivers route through canonical paths (`BuildingPlacementManager.PlaceCivicBuildingForLeader`, `CharacterAction_FinishConstruction`, `Community.TryPromoteLevel`) — no new replication channel. See [[wiki/systems/city-management]] for the end-to-end ambition loop.
+8. **GOAP** (`BTAction_ExecuteGoapPlan`): Proactive life and needs planning (Shopping, socializing, fulfilling jobs).
+9. **Social** (`BTCond_WantsToSocialize`): Spontaneous discussions. (Native Node).
+10. **Wander** (`BTAction_Wander`): The Fallback. (Native Node).
 
 *If you add a new behavior, think about which node to insert it into. Prefer native `BTNode` implementations for high-frequency or foundational logic, and use `BTActionNode` wrappers only for complex legacy behaviours that require full stack management.*
 
