@@ -291,6 +291,7 @@ for procedural authoring details.
 - [ ] Exact list of `BuildingTask` subclasses — tracked in [[jobs-and-logistics]].
 - [ ] `BuildingPlacementManager` location not directly verified — path inferred from SKILL + agent.
 - [ ] No SKILL.md covering `FurnitureGrid` specifically — it's inside `building_system` SKILL but could warrant its own.
+- [ ] **Building dev-spawn sub-tab** (in [[dev-mode|DevSpawnModule]], not in player flow) — when added, it MUST follow the ghost-placement + grid-snap convention enshrined for the Harvestable sub-tab on 2026-05-18. See [[dev-mode]] Open Questions for the full recipe + [.agent/skills/dev-mode/SKILL.md §7.1 "Placement-aware sub-tab pattern"](../../.agent/skills/dev-mode/SKILL.md). The dev-spawn flow MUST reuse `BuildingPlacementManager`'s existing footprint-overlap predicates rather than reimplementing them — but the validation ENFORCES nothing in dev mode (red tint as warning, LMB still confirms). Player-side placement (the normal `BuildingPlacementManager` flow) is unaffected by this work.
 
 ## Child sub-pages (to be written in Batch 2)
 
@@ -302,6 +303,7 @@ for procedural authoring details.
 - [[building-placement-manager]] — community permission gate.
 
 ## Change log
+- 2026-05-18 (later) — Added an Open Question entry tracking the future **Building dev-spawn sub-tab** on [[dev-mode|DevSpawnModule]] + the requirement that it follow the 2026-05-18 Harvestable sub-tab's ghost-placement + grid-snap convention (see [.agent/skills/dev-mode/SKILL.md §7.1 "Placement-aware sub-tab pattern"](../../.agent/skills/dev-mode/SKILL.md)). No code change in `Building` / `BuildingSO` / `BuildingPlacementManager`; the dev flow MUST reuse the existing footprint-overlap predicates rather than reimplementing them. — claude
 - 2026-05-18 — Documented the mandatory two-tier Prefab Variant hierarchy for furniture (`Furniture_prefab.prefab` → type base → specific variant) and buildings (`Building_prefab.prefab` → type base → specific variant), AND the matching ScriptableObject contract (every furniture prefab needs a `FurnitureItemSO` at `Assets/Resources/Data/Item/Furniture/`; every building prefab needs a `BuildingSO`/`BuildingCommercialSO` at `Assets/Resources/Data/Buildings/`, registered in `WorldSettingsData.BuildingRegistry`). Codified in root [CLAUDE.md rule #40](../../CLAUDE.md). New "Prefab Variant Hierarchy" section under Key classes / files. — claude
 - 2026-05-17 — BuildingGrid (8-unit per-MapController cell grid) wired into placement flow. BuildingSO gains GridFootprintCells / BlueprintCategory / MinTier. Building gains GridFootprintCells convenience getter. Server-only state, derived from BuildingSaveData on wake-up. New concept page [[building-grid]] added. — claude
 - 2026-05-16 — BuildingSO blueprint introduced. Replaces inline BuildingRegistryEntry + duplicated prefab fields. PrefabId strings preserved verbatim (zero save migration). — claude

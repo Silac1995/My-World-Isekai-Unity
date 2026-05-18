@@ -97,11 +97,11 @@ No edit to `DevModeManager` or `DevModePanel` is required to add a module.
 
 ## 7. Dev Spawn Module Details
 
-`DevSpawnModule` — the first shipping module. Lets the host click anywhere on the `Environment` layer to spawn fully configured NPCs **or** drop `ItemSO` instances. Mode is selected by a **Character / Item sub-tab bar** at the top of the Spawn panel.
+`DevSpawnModule` — the first shipping module. Lets the host click anywhere on the `Environment` layer to spawn fully configured NPCs, drop `ItemSO` instances, or instantiate `HarvestableSO` resource nodes (crops / trees / ore veins). Mode is selected by a **Character / Item / Harvestable sub-tab bar** at the top of the Spawn panel.
 
 **Configuration UI**
 
-The Spawn panel is a stack of: `SubTabBar` (Character / Item buttons) → active sub-panel (`CharacterSubPanel` or `ItemSubPanel`) → shared `Label_Count` + `CountField` + `ArmedToggle`. The two sub-panels are toggled via `SetActive`; only one is visible at a time. Count and Armed live OUTSIDE both sub-panels because they apply to both modes.
+The Spawn panel is a stack of: `SubTabBar` (Character / Item / Harvestable buttons) → active sub-panel (`CharacterSubPanel` or `ItemSubPanel` or `HarvestableSubPanel`) → shared `Label_Count` + `CountField` + `ArmedToggle`. The three sub-panels are toggled via `SetActive`; only one is visible at a time. Count and Armed live OUTSIDE the sub-panels because they apply to every mode.
 
 **Character sub-tab fields** (`CharacterSubPanel`):
 
@@ -120,6 +120,14 @@ The Spawn panel is a stack of: `SubTabBar` (Character / Item buttons) → active
 |---|---|
 | Item | TMP Dropdown — every `ItemSO` under `Resources/Data/Item` sorted by `ItemName`. No sentinel; the sub-tab itself selects mode, so index 0 is a real item. |
 
+**Harvestable sub-tab fields** (`HarvestableSubPanel`):
+
+| Field | Widget |
+|---|---|
+| Harvestable | TMP Dropdown — every `HarvestableSO` (incl. `CropSO` and `TreeHarvestableSO` subclasses) found recursively under `Resources/Data/` via `Resources.LoadAll<HarvestableSO>("Data")`, sorted by `DisplayName`. Entries without a `HarvestablePrefab` are filtered out at load time (they can't be instantiated). Shipping entries: `Crop_Wheat`, `Crop_Flower`, `AppleTreeSO`, `HarvestableSO_OreNode`. |
+
+**Ghost-placement UX (Harvestable sub-tab only).** When the user arms the Spawn toggle while the Harvestable sub-tab is active, `DevSpawnModule` spawns a stripped clone of the selected SO's `HarvestablePrefab` as a follow-cursor ghost — mirrors [CropPlacementManager](../../Assets/Scripts/Farming/CropPlacementManager.cs)'s UX so dev-spawned harvestables line up with the production crop placement grid. The ghost snaps to the nearest `TerrainCellGrid` cell of the `MapController` under the cursor, tints green on a valid grid cell / yellow off-grid (god-mode allows off-grid spawn). **LMB** confirms a single grid-snapped spawn at the ghost position then rebuilds the ghost for chain-placement; **RMB** cancels via disarm; **ESC** disarms via the global shortcut; **Space+LMB** shortcut still works and scatters N grid-snapped copies (each independently snapped to its containing cell). Switching off the Harvestable sub-tab, changing the dropdown selection, disarming, or closing dev mode all clear the ghost. Ghost interference is stripped via the canonical pattern: `NetworkObject.enabled = false` + `Rigidbody.isKinematic = true` + disable every `Collider` / `NavMeshObstacle` / `Harvestable` / `HarvestableNetSync` component recursively + move the whole tree onto the `Ignore Raycast` layer.
+
 **Shared (always visible regardless of sub-tab):**
 
 | Field | Widget |
@@ -130,23 +138,104 @@ The Spawn panel is a stack of: `SubTabBar` (Character / Item buttons) → active
 **Click flow**
 
 1. Host clicks on an `Environment`-layer collider. Ray is cast from the mouse.
-2. **Dispatch:** `SpawnAt(anchor)` reads `_activeSubTab`. If `Item`, the click routes to `SpawnItemBatch(anchor, _items[_itemDropdown.value])`. Otherwise the character path runs.
-3. Both paths share the same scatter formula: for `N = count`, the scatter **radius = `4 * sqrt(N)` Unity units** (per project rule 32, 11 units = 1.67 m, so ~0.6 m per unit of radius). Individual offsets are random within the disk.
+2. **Dispatch:** `SpawnAt(anchor)` reads `_activeSubTab`. If `Item`, the click routes to `SpawnItemBatch(anchor, _items[_itemDropdown.value])`. If `Harvestable`, the click routes to `SpawnHarvestableBatch(anchor, _harvestables[_harvestableDropdown.value])`. Otherwise the character path runs.
+3. All three paths share the same scatter formula: for `N = count`, the scatter **radius = `4 * sqrt(N)` Unity units** (per project rule 32, 11 units = 1.67 m, so ~0.6 m per unit of radius). Individual offsets are random within the disk.
 4. **Character path:** `SpawnManager.SpawnCharacter(...)` is invoked with the configured race/prefab/personality/trait/armed flag.
 5. **Item path:** `SpawnManager.SpawnItem(item, pos)` is invoked per spawn. The dev-mode wrapper adds an explicit `NetworkManager.Singleton.IsServer` check before the loop (clearer error than SpawnManager's internal check) and wraps each per-spawn call in `try/catch` so one bad item doesn't abort the batch. No combat styles / skills / personality apply on the item path.
-6. Dev-mode extras (combat styles + levels, skills + levels) are passed to `SpawnManager` via a **server-only `Dictionary<ulong, PendingDevConfig>`** keyed on NetworkObjectId. Character path only.
-7. `SpawnManager.ApplyDevExtras(...)` fires post-spawn on the server, applying combat styles via `CharacterCombat.UnlockCombatStyle(style, level)` and skills via the existing `CharacterSkills` API.
+6. **Harvestable path:** two surfaces share the same per-instance spawn helper (`TryInstantiateHarvestable`): `Instantiate(so.HarvestablePrefab) → Harvestable.InitializeAtStage(so, startStage: int.MaxValue, startDepleted: false, cellX: -1, cellZ: -1) → NetworkObject.Spawn(true)`. `int.MaxValue` is clamped to `crop.DaysToMature` internally so crop-aware SOs spawn fully mature; `cellX = -1` means free-positioned (no cell coupling, no `FarmGrowthSystem.RegisterHarvestable` call, no plow / growth-tick dependency). Both surfaces grid-snap their target position via `SnapPositionToGrid` (resolves `MapController.GetMapAtPosition` → `TerrainCellGrid.WorldToGrid` → `GridToWorld`, falls back to raw XZ when off-grid). Surfaces: **(a)** `ConfirmHarvestableGhostSpawn` (single, called from the LMB-confirm in the armed Update loop — position is already grid-snapped on the ghost itself), and **(b)** `SpawnHarvestableBatch` (scatter, called from Space+LMB shortcut + the legacy armed-click path — per-instance grid snap inside the scatter loop). Each iteration is `try/catch`-wrapped. The instance is "wild scenery you can pick or destroy immediately" — every SO subtype (`HarvestableSO`, `CropSO`, `TreeHarvestableSO`) takes this same path, so a dev-spawned apple tree, wheat plant, or ore vein all spawn as mature, free-positioned, immediately-harvestable nodes.
+7. Dev-mode extras (combat styles + levels, skills + levels) are passed to `SpawnManager` via a **server-only `Dictionary<ulong, PendingDevConfig>`** keyed on NetworkObjectId. Character path only.
+8. `SpawnManager.ApplyDevExtras(...)` fires post-spawn on the server, applying combat styles via `CharacterCombat.UnlockCombatStyle(style, level)` and skills via the existing `CharacterSkills` API.
 
 **Why a pending-config dict?** `SpawnCharacter` is an async network spawn — we don't have the instance yet when we configure it. The dict is populated on the main thread before spawn and drained in the spawn callback by NetworkObjectId.
 
 **Item catalog caching.** `_items` is loaded once in `LoadCatalogs` (called from `Start`) via `Resources.LoadAll<ItemSO>("Data/Item")`, sorted alphabetically by `ItemName`, and never mutated at click time. Adding new `ItemSO` assets requires re-entering play mode for them to appear in the dropdown.
+
+**Harvestable catalog caching.** `_harvestables` is loaded once in `LoadCatalogs` via `Resources.LoadAll<MWI.Interactables.HarvestableSO>("Data")` (recursive — picks up `CropSO` and `TreeHarvestableSO` subclasses via polymorphism), filtered to drop entries with a null `HarvestablePrefab`, then sorted alphabetically by `DisplayName`. Adding new `HarvestableSO` assets requires re-entering play mode for them to appear in the dropdown.
+
+**Why no cell-coupling on the dev-mode harvestable path?** The user-facing crop placement flow (`CharacterAction_PlaceCrop` → `FarmGrowthSystem.SpawnHarvestableAt`) plows the cell, anchors to `(cellX, cellZ)`, and registers with `FarmGrowthSystem` so the daily tick advances growth. The dev-mode path intentionally skips that: dropping a crop in dev mode is for *testing harvest behavior*, not testing growth. Free-positioned + instant-mature gives "I want to pick this in 2 seconds" semantics — no plowing, no day-skip, no FarmGrowthSystem dependency. Use the production crop-plant flow when you need to test growth.
 
 **Spawn panel layout contract — DO NOT REGRESS.** The Spawn panel uses Unity Auto Layout (nested VLG/HLG) end-to-end. Two contracts must hold or the layout collapses:
 
 1. **Every direct child of `ContentRoot` and of `SpawnTab` that hosts another `LayoutGroup` must carry a `LayoutElement`.** `LayoutGroup` itself reports `flexibleHeight=-1` and a preferred height derived from its own children — when those children also stretch via anchors, the chain returns 0 and the parent VLG redistributes the empty space unpredictably (in the original Spawn-tab regression, the top `TabBar` ended up consuming the whole panel). The fix shipped in the prefab: add a `LayoutElement` with explicit `MinHeight` / `PreferredHeight` and `FlexibleHeight=0` on `TabBar` (36) and `SubTabBar` (32) so they stay thin, and `FlexibleHeight=1` on `CharacterSubPanel` / `ItemSubPanel` so the active one takes the remaining vertical space.
 2. **`CharacterSubPanel` and `ItemSubPanel` must use top-stretch anchors `(0,1) → (1,1)` with pivot `(0.5, 1)`, NOT center-stretch `(0,0) → (1,1)`.** `SpawnTab`'s VLG runs with `ChildControlHeight=1` so it actively sets the children's heights. Center-stretch anchors with `SizeDelta (0,0)` make the panel report a rect height equal to the parent (chaos). Top-stretch with a real `SizeDelta.y` is what the VLG expects.
 
-Adding a third sub-tab (e.g., "Furniture") = create a sibling `*SubPanel` GameObject following the ItemSubPanel template (top-stretch anchors, VLG, LayoutElement with `FlexibleHeight=1`), add a button to `SubTabBar`, register it in `DevSpawnModule._*SubPanel` / `_*SubTabButton`, and extend the `SpawnSubTab` enum + `SpawnAt` dispatch.
+Adding a fourth sub-tab (e.g., "Furniture") = create a sibling `*SubPanel` GameObject following the ItemSubPanel / HarvestableSubPanel template (top-stretch anchors, VLG, LayoutElement with `FlexibleHeight=1`), add a button to `SubTabBar`, register it in `DevSpawnModule._*SubPanel` / `_*SubTabButton`, and extend the `SpawnSubTab` enum + `SpawnAt` dispatch. The canonical MCP-Roslyn recipe used for the 2026-05-18 Harvestable sub-tab: `PrefabUtility.LoadPrefabContents` → `Object.Instantiate(SubTab_Item, SubTabBar)` + `SetSiblingIndex(SubTab_Item.GetSiblingIndex() + 1)` → relabel TMP → `Object.Instantiate(ItemSubPanel, SpawnTab)` + sibling index + `SetActive(false)` → rename child `Label_Item` and `Dropdown_Item` to the new names → `new SerializedObject(spawnModule)` + `FindProperty(...).objectReferenceValue = ...` for each new SerializeField → `ApplyModifiedPropertiesWithoutUndo` → `PrefabUtility.SaveAsPrefabAsset` → `PrefabUtility.UnloadPrefabContents`.
+
+### 7.1 Placement-aware sub-tab pattern (MANDATORY for every new dev-spawn surface that drops a world entity)
+
+**Rule:** any future Spawn sub-tab that drops a *world entity that exists on the TerrainCellGrid* (Building, Furniture-in-world, NPC-in-formation, dynamic ore patch, weather marker, decal, …) **MUST** mirror the ghost-placement + grid-snap pattern enshrined by the 2026-05-18 Harvestable sub-tab. Click-and-spawn-at-raw-hit-point is only acceptable for non-spatial drops (Item: just falls; Character: pathfinds to walkable mesh). Anything that should "land on a specific cell" goes through ghost + grid snap. No exceptions for "dev tool, simple is fine" — the harvestable shipping pass proved the convention is small enough to mirror exactly.
+
+**The seven canonical pieces** — replicate verbatim, not approximated:
+
+1. **Per-SubTab serialized state on `DevSpawnModule`:**
+   - `private GameObject _xxxGhost;` — the live ghost instance (null when inactive).
+   - `private <SO type> _xxxGhostSO;` — the SO the current ghost was built from (so `HandleXxxDropdownChanged` can detect a swap).
+   - `private Vector3 _xxxGhostSnappedPos;` — last grid-snapped XZ + raycast Y. The confirm-click path reads this directly so the ghost's visible position IS the spawn position.
+   - `private bool _xxxGhostIsOnGrid;` + `int _xxxGhostCellX, _xxxGhostCellZ;` + `MapController _xxxGhostMap;` + `TerrainCellGrid _xxxGhostGrid;` — diagnostic state for the confirm log and validation.
+   - `private bool _warnedNoCameraGhost, _warnedRayMissGhost;` — first-time-warn-once flags so the verbose log doesn't spam.
+
+2. **Lifecycle hooks** (every one of these must clear the ghost; only the first two also build it):
+   - `HandleArmedChanged(bool armed)`: `if (armed && _activeSubTab == SpawnSubTab.Xxx) EnsureXxxGhost(); else ClearXxxGhost();`
+   - `Show<Xxx>SubTab()`: if armed, call `EnsureXxxGhost()` so a sub-tab switch re-spawns the ghost without re-toggling Armed.
+   - `Show<Other>SubTab()` (every OTHER sub-tab show method): call `ClearXxxGhost()` so leaving the sub-tab destroys the ghost.
+   - `HandleXxxDropdownChanged(int)`: if `_xxxGhost != null` call `EnsureXxxGhost()` to rebuild from the new SO.
+   - `HandleDevModeChanged(bool enabled)`: if `!enabled` call `ClearXxxGhost()` (defensive — dev-mode-off should always nuke ghosts).
+   - `OnDestroy` / `UnwireListeners`: call `ClearXxxGhost()` defensively.
+
+3. **`EnsureXxxGhost()` builder** — pattern (factor into a private method):
+   - `ClearXxxGhost()` first (always rebuild from scratch).
+   - Read selected SO from dropdown + catalog list; null-check; null-check the SO's prefab.
+   - `_xxxGhostSO = so; _xxxGhost = Instantiate(so.<PrefabField>); _xxxGhost.name = "Dev<Xxx>Ghost_" + so.Id;`
+   - `DisableGhostInterference(_xxxGhost)` — see piece 6.
+   - `TintGhost(_xxxGhost, 1f, 1f, 1f, 0.7f)` neutral until `UpdateXxxGhostPosition` runs.
+   - Reset `_warnedNoCameraGhost = _warnedRayMissGhost = false`.
+   - Call `UpdateXxxGhostPosition()` once so the ghost appears at the cursor on the very first frame (no flicker at world origin).
+
+4. **`UpdateXxxGhostPosition()` per-frame mover** — called from `Update()` inside the Harvestable / Xxx sub-tab branch (NOT from `LateUpdate`; the raycast must run before the click handler):
+   - Bail if `_xxxGhost == null` (defensive) or `Camera.main == null` (warn-once via `_warnedNoCameraGhost`).
+   - `Physics.Raycast(Camera.main.ScreenPointToRay(Input.mousePosition), out hit, 500f, _environmentLayerMask)`. If miss, warn-once via `_warnedRayMissGhost` and leave the ghost at its last position.
+   - Reset `_warnedRayMissGhost = false` once a valid hit returns.
+   - Default `finalPos = hit.point; onGrid = false; cellX = cellZ = -1;`.
+   - `var map = MapController.GetMapAtPosition(hit.point);` — null → off-grid (yellow tint, still spawnable in god mode).
+   - If map: `EnsureGridInitialized(map);` (see piece 5), get `grid = map.GetComponent<TerrainCellGrid>()`. If `grid.WorldToGrid(hit.point, out cellX, out cellZ)` → `var snapped = grid.GridToWorld(cellX, cellZ); snapped.y = hit.point.y; finalPos = snapped; onGrid = true;`.
+   - **CRITICAL: preserve `hit.point.y`, not `grid.GridToWorld(...).y`.** The grid plane Y is usually 0; the actual ground surface Y is on the raycast hit. Mixing them sinks ghosts into terrain or floats them above it.
+   - Assign to `_xxxGhost.transform.position` + write back `_xxxGhostSnappedPos / _xxxGhostIsOnGrid / _xxxGhostMap / _xxxGhostGrid / _xxxGhostCellX / _xxxGhostCellZ`.
+   - **Tint:** green `(0.6, 1, 0.6, 0.75)` when on grid, yellow `(1, 1, 0.4, 0.7)` when off grid. If the new entity type has stricter validation (footprint overlap, terrain type, ownership), tint red and block the confirm. For a building dev-spawn: green on grid AND footprint clear AND on valid terrain, yellow on grid but god-mode-acceptable (footprint overlap), red off grid AND/OR off-map (still spawnable but visually flagged).
+
+5. **`EnsureGridInitialized(MapController map)` static helper** — already in [DevSpawnModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSpawnModule.cs). Copy-of-CropPlacementManager defensive bootstrap. **Do not** re-implement per-sub-tab; reuse the existing static method.
+
+6. **`DisableGhostInterference(GameObject ghost)` static helper** — already in [DevSpawnModule.cs](../../Assets/Scripts/Debug/DevMode/Modules/DevSpawnModule.cs). When adding a new entity type, **extend the existing helper** to also disable the entity's specific scripts (e.g. for buildings: disable `Building`, `BuildingTaskManager`, `BuildingLogisticsManager`, every `Furniture` baked into the prefab, etc.) — otherwise the entity's `Awake → Update` poll will hammer on an unspawned NetworkObject and NPE. The pattern: every component on the entity that does NetworkVariable / NetworkObject lookups in its `Update` MUST be in the disable list. Don't trust "the NetworkObject is disabled so the NetVar reads will fail gracefully" — many of our components ToString-stringify the NetVar value into a log path that throws if the NGO sentinel is uninitialised.
+
+7. **`ConfirmXxxGhostSpawn()` LMB-confirm + chain-rebuild path** — pattern:
+   - Read `_xxxGhostSO`; null-check; validate via shared `Validate<Xxx>Spawn(so)` (server-only check, prefab non-null check).
+   - Spawn at `_xxxGhostSnappedPos` via the shared `TryInstantiate<Xxx>(so, pos, parentMap, out instance)` helper — **passing the cached `_xxxGhostMap`** so the spawn re-parents under the MapController.
+   - Compose a one-line log with the cell info (or "off-grid" / "free-positioned" / "off-grid + off-map (scene root)" depending on the path taken).
+   - **Call `EnsureXxxGhost()` again at the end so the ghost rebuilds for the next placement** — this is the chain-spawn behavior that lets a dev drop multiple copies without re-arming. Mirrors `CropPlacementManager`'s implicit chain-rebuild minus the seed-consume gate.
+
+8. **`TryInstantiate<Xxx>(so, pos, parentMap, out instance)` shared per-instance helper** — MUST re-parent the spawn under the `MapController`'s `NetworkObject`:
+   ```csharp
+   if (go.TryGetComponent<NetworkObject>(out var netObj) && !netObj.IsSpawned)
+   {
+       netObj.Spawn(true);
+       // CRITICAL: re-parent under the map's NetworkObject so the spawn lives inside the
+       // map's hibernation scope. Without this the harvestable / building / NPC sits at
+       // scene root, is ignored by MapController.Hibernate, and never serialises when the
+       // map sleeps. worldPositionStays:true keeps the visual fixed across the re-parent.
+       // Mirrors FarmGrowthSystem.SpawnHarvestableAt's final block verbatim.
+       if (parentMap != null && parentMap.TryGetComponent<NetworkObject>(out var mapNetObj))
+       {
+           if (!netObj.TrySetParent(mapNetObj, worldPositionStays: true))
+               Debug.LogWarning($"[DevSpawn] TrySetParent failed for '{so.name}' under map '{parentMap.name}' — falling back to scene root.");
+       }
+   }
+   ```
+   Pass `parentMap = null` to leave the spawn at scene root (off-map fallback). The scatter path threads the map through via `SnapPositionToGrid(scatteredPos, out MapController scatterMap)`. The ghost-confirm path reads `_xxxGhostMap` (already cached by `UpdateXxxGhostPosition`).
+
+**The scatter path (Space+LMB) must ALSO grid-snap.** Don't let the global Space+LMB shortcut fall through to raw hit-point spawning when ghost-mode applies to the sub-tab. Per-instance call to `SnapPositionToGrid(scatteredPos)` inside the scatter loop — each scattered copy lands on its own cell. The 2026-05-18 Harvestable scatter path is the reference implementation; clone its shape exactly.
+
+**For a future Building dev-spawn specifically** — the building's `BuildingSO.GridFootprintCells` (Vector2Int) defines its footprint; snap to the anchor cell and verify the full footprint is clear via the same `IsFootprintOccupied`-style predicate that `BuildingPlacementManager` uses for the player flow. Don't reinvent the validation — call into the existing predicates. The ghost should show the *full* footprint outline (BuildingPlacementManager's `_footprintOutlineLine` LineRenderer pattern), tinted to match grid-occupancy validity. Dev god mode still allows spawning a building that overlaps an existing one (red tint warning, no hard block) — that's the whole point of "dev mode bypasses validation". If you find yourself adding a hard block for "out of community range" or "tier requirement not met", you're recreating the player flow — stop and check the rule.
+
+**Tracking:** new placement-aware sub-tabs are listed in `wiki/systems/dev-mode.md` Open Questions / TODO until shipped. Mark them shipped with a change-log entry + a sentence in this section if the rules ever need extending.
 
 ## Select Tab
 
