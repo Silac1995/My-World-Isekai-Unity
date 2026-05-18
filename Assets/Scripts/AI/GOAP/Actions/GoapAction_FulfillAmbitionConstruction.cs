@@ -263,6 +263,62 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
         // Without that priority shift the actor enters an infinite drop ↔ pickup loop on
         // its own just-dropped material — Kevin's playtest 2026-05-18.)
 
+        // Step 5: distant fallback. Awareness saw nothing within ~35u, but a Harvestable
+        // or loose WorldItem yielding a missing material may exist farther afield. Scan
+        // the whole scene (rare path — only fires when awareness is empty; the 2s GOAP
+        // Replan throttle bounds the cost). Walk TOWARD the closest match. Awareness
+        // catches up as the NPC approaches and the next plan tick picks the harvest /
+        // pickup branch normally. Without this, an NPC stuck in the BuildingZone with
+        // remaining work but no trees in immediate awareness drops to BT Wander forever
+        // — Kevin observed this in the 2026-05-18 playtest: an NPC progressed from 0/2
+        // to 1/2 Wood and then wandered indefinitely (only an interaction unstuck it,
+        // by coincidentally moving it into awareness range of another tree).
+        if (_scratchMissing.Count > 0)
+        {
+            const float DistantSearchRadius = 80f;
+            Vector3 selfPos = worker.transform.position;
+            Vector3 destination = default;
+            float bestSqr = float.MaxValue;
+            bool found = false;
+
+            // Loose WorldItems first (cheaper trip than a harvest cycle).
+            var allItems = UnityEngine.Object.FindObjectsByType<WorldItem>(FindObjectsSortMode.None);
+            for (int i = 0; i < allItems.Length; i++)
+            {
+                var wi = allItems[i];
+                if (wi == null || wi.IsBeingCarried) continue;
+                var inst = wi.ItemInstance;
+                if (inst == null || inst.ItemSO == null) continue;
+                if (!_scratchMissing.ContainsKey(inst.ItemSO)) continue;
+                if (zoneBounds.Contains(wi.transform.position)) continue; // delivered material — leave for consume.
+                float sqr = (wi.transform.position - selfPos).sqrMagnitude;
+                if (sqr > DistantSearchRadius * DistantSearchRadius) continue;
+                if (sqr < bestSqr) { bestSqr = sqr; destination = wi.transform.position; found = true; }
+            }
+
+            // Then accessible Harvestables yielding missing items (harvest or destroy path).
+            var allHarvs = UnityEngine.Object.FindObjectsByType<Harvestable>(FindObjectsSortMode.None);
+            for (int i = 0; i < allHarvs.Length; i++)
+            {
+                var h = allHarvs[i];
+                if (h == null) continue;
+                bool harvestPath = h.CanHarvest() && HarvestableYieldsAny(h, _scratchMissing);
+                bool destroyPath = CanNpcDestroy(h) && h.HasAnyDestructionOutput(_scratchMissingKeys);
+                if (!harvestPath && !destroyPath) continue;
+                float sqr = (h.transform.position - selfPos).sqrMagnitude;
+                if (sqr > DistantSearchRadius * DistantSearchRadius) continue;
+                if (sqr < bestSqr) { bestSqr = sqr; destination = h.transform.position; found = true; }
+            }
+
+            if (found)
+            {
+                if (NPCDebug.VerboseActions)
+                    Debug.Log($"<color=yellow>[GoapAction_FulfillAmbitionConstruction]</color> {worker.CharacterName} no nearby source in awareness — walking toward distant target at dist {Mathf.Sqrt(bestSqr):F1}u so awareness can pick it up on approach.");
+                WalkTo(worker, destination);
+                return;
+            }
+        }
+
         // Step 6: empty awareness, nothing to consume, nothing to deliver — give up this
         // pass. The planner will replan after the throttle window; if the NPC has moved
         // (Wander branch) by then, awareness will catch a new harvestable.
