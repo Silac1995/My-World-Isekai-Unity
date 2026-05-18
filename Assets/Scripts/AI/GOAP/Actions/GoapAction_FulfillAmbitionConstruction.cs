@@ -77,7 +77,21 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
     // same instance until _isComplete = true).
     private Vector3? _activeDestination;
     private Harvestable _targetHarvestable;
+    private YieldMode _targetMode;
     private bool _actionStarted; // true while a queued CharacterAction is in flight.
+
+    // Reused list of missing ItemSO keys — handed to Harvestable.HasAnyDestructionOutput.
+    // Repopulated each Execute from _scratchMissing.Keys.
+    private readonly System.Collections.Generic.List<ItemSO> _scratchMissingKeys = new System.Collections.Generic.List<ItemSO>(4);
+
+    /// <summary>
+    /// How a candidate <see cref="Harvestable"/> yields a wanted item.
+    /// <see cref="Harvest"/> = pick its <c>HarvestOutputs</c> via
+    /// <see cref="CharacterHarvestAction"/>; <see cref="Destroy"/> = chop the node
+    /// for its <c>DestructionOutputs</c> via <see cref="CharacterAction_DestroyHarvestable"/>
+    /// (the apple-tree-yields-Wood-on-destruction case).
+    /// </summary>
+    private enum YieldMode { None, Harvest, Destroy }
 
     public override bool IsValid(Character worker)
     {
@@ -142,24 +156,37 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
             }
         }
 
-        // Step 3: cached harvestable still yields something we need + harvestable + valid?
+        // Refresh the keys list so destruction queries can use it.
+        _scratchMissingKeys.Clear();
+        foreach (var k in _scratchMissing.Keys) _scratchMissingKeys.Add(k);
+
+        // Step 3: cached harvestable still yields something we need + accessible?
         if (_targetHarvestable != null
             && _targetHarvestable.gameObject != null
-            && _targetHarvestable.CanHarvest()
-            && HarvestableYieldsAny(_targetHarvestable, _scratchMissing))
+            && _targetMode != YieldMode.None)
         {
-            DriveHarvest(worker, _targetHarvestable);
-            return;
+            // Re-validate that the cached mode is still viable on this tick.
+            var modeCheck = ClassifyYield(_targetHarvestable, _scratchMissing, _scratchMissingKeys, worker);
+            if (modeCheck == _targetMode)
+            {
+                DriveHarvestableInteraction(worker, _targetHarvestable, _targetMode);
+                return;
+            }
+            // Mode shifted (e.g. harvestable was harvested-out and destruction is now the path):
+            // drop the cache and re-scan.
+            _targetHarvestable = null;
+            _targetMode = YieldMode.None;
         }
-        _targetHarvestable = null;
 
-        // Step 4: scan awareness for a harvestable that yields a missing item.
+        // Step 4: scan awareness for a harvestable that yields a missing item — try Harvest
+        // first (cheaper / preserves the node), then Destroy (chop the apple tree for Wood).
         if (_scratchMissing.Count > 0)
         {
             var awareness = worker.CharacterAwareness;
             if (awareness != null)
             {
                 var candidates = awareness.GetVisibleInteractables<Harvestable>();
+                // Two-pass: any harvest match wins over any destroy match in awareness.
                 for (int i = 0; i < candidates.Count; i++)
                 {
                     var h = candidates[i];
@@ -167,7 +194,19 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
                     if (!h.CanHarvest()) continue;
                     if (!HarvestableYieldsAny(h, _scratchMissing)) continue;
                     _targetHarvestable = h;
-                    DriveHarvest(worker, h);
+                    _targetMode = YieldMode.Harvest;
+                    DriveHarvestableInteraction(worker, h, YieldMode.Harvest);
+                    return;
+                }
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    var h = candidates[i];
+                    if (h == null) continue;
+                    if (!CanNpcDestroy(h)) continue;
+                    if (!h.HasAnyDestructionOutput(_scratchMissingKeys)) continue;
+                    _targetHarvestable = h;
+                    _targetMode = YieldMode.Destroy;
+                    DriveHarvestableInteraction(worker, h, YieldMode.Destroy);
                     return;
                 }
             }
@@ -194,8 +233,28 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
             int visibleHarv = worker.CharacterAwareness != null
                 ? worker.CharacterAwareness.GetVisibleInteractables<Harvestable>().Count
                 : 0;
+            // Surface why each visible harvestable was rejected — most common scenario is
+            // "1 visible, but outputs Apple while we need Wood" or "destruction would yield
+            // Wood but AllowNpcDestruction is false". Logged once at completion (not per tick).
+            var rejReasons = new System.Text.StringBuilder();
+            if (worker.CharacterAwareness != null)
+            {
+                var cands = worker.CharacterAwareness.GetVisibleInteractables<Harvestable>();
+                for (int i = 0; i < cands.Count; i++)
+                {
+                    var h = cands[i];
+                    if (h == null) continue;
+                    rejReasons.Append("  ").Append(h.name)
+                        .Append(" canHarvest=").Append(h.CanHarvest())
+                        .Append(" yieldsMissing=").Append(HarvestableYieldsAny(h, _scratchMissing))
+                        .Append(" allowDestroy=").Append(h.AllowDestruction)
+                        .Append(" allowNpcDestroy=").Append(h.AllowNpcDestruction)
+                        .Append(" destroyYieldsMissing=").Append(h.HasAnyDestructionOutput(_scratchMissingKeys))
+                        .Append('\n');
+                }
+            }
             Debug.Log($"<color=orange>[GoapAction_FulfillAmbitionConstruction]</color> " +
-                $"{worker.CharacterName}: no actionable step. missing=[{missingNames}], visibleHarvestables={visibleHarv}, inZone={inZone}. " +
+                $"{worker.CharacterName}: no actionable step. missing=[{missingNames}], visibleHarvestables={visibleHarv}, inZone={inZone}.\n{rejReasons}" +
                 $"Completing action so BT falls through to Wander; will retry next Replan.");
         }
         _isComplete = true;
@@ -209,6 +268,7 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
         _actionStarted = false;
         _activeDestination = null;
         _targetHarvestable = null;
+        _targetMode = YieldMode.None;
         worker?.CharacterMovement?.ResetPath();
     }
 
@@ -278,6 +338,36 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
             if (missing.ContainsKey(o.Item)) return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// NPC-side destruction gate. Mirrors <see cref="Harvestable.CanDestroyWith"/> minus
+    /// the held-tool check (the held tool is validated by
+    /// <see cref="CharacterAction_DestroyHarvestable.CanExecute"/> when the action is
+    /// queued — if the actor's hands are wrong the action no-ops and the GoapAction
+    /// completes harmlessly). Designers can opt a harvestable out of NPC chopping via
+    /// <see cref="Harvestable.AllowNpcDestruction"/> on its SO.
+    /// </summary>
+    private static bool CanNpcDestroy(Harvestable h)
+    {
+        if (h == null) return false;
+        if (!h.AllowDestruction) return false;
+        if (!h.AllowNpcDestruction) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Returns the yield mode (harvest preferred over destroy) by which
+    /// <paramref name="h"/> can produce any of the items in <paramref name="missing"/>.
+    /// Called by the cached-target validity check in step 3.
+    /// </summary>
+    private static YieldMode ClassifyYield(Harvestable h, Dictionary<ItemSO, int> missing,
+        System.Collections.Generic.List<ItemSO> missingKeys, Character actor)
+    {
+        if (h == null || h.gameObject == null) return YieldMode.None;
+        if (h.CanHarvest() && HarvestableYieldsAny(h, missing)) return YieldMode.Harvest;
+        if (CanNpcDestroy(h) && h.HasAnyDestructionOutput(missingKeys)) return YieldMode.Destroy;
+        return YieldMode.None;
     }
 
     private static ItemInstance FindCarriedRelevantItem(Character self, Dictionary<ItemSO, int> missing)
@@ -356,7 +446,14 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
         return false;
     }
 
-    private void DriveHarvest(Character self, Harvestable target)
+    /// <summary>
+    /// Mode-dispatched approach + interaction. <see cref="YieldMode.Harvest"/> queues
+    /// <see cref="CharacterHarvestAction"/>; <see cref="YieldMode.Destroy"/> queues
+    /// <see cref="CharacterAction_DestroyHarvestable"/>. Both share the InteractionZone-
+    /// based arrival gate (rule #36 + softlock guard) verbatim from
+    /// <see cref="GoapAction_HarvestResources"/>.
+    /// </summary>
+    private void DriveHarvestableInteraction(Character self, Harvestable target, YieldMode mode)
     {
         if (target == null || target.gameObject == null) { _isComplete = true; return; }
         var movement = self.CharacterMovement;
@@ -395,7 +492,10 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
         if (isAtTarget)
         {
             self.transform.LookAt(new Vector3(target.transform.position.x, self.transform.position.y, target.transform.position.z));
-            TryQueueAction(self, new CharacterHarvestAction(self, target));
+            CharacterAction action = mode == YieldMode.Destroy
+                ? (CharacterAction)new CharacterAction_DestroyHarvestable(self, target)
+                : (CharacterAction)new CharacterHarvestAction(self, target);
+            TryQueueAction(self, action);
             return;
         }
 
