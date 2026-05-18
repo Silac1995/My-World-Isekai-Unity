@@ -371,7 +371,17 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
                     EquipmentInstance existingInstance = targetLayer.GetInstance(data.WearableType);
                     if (existingInstance != null)
                     {
-                        character.DropItem(existingInstance);
+                        // Bag-first displacement (2026-05-19 UI rework). The previously equipped
+                        // wearable now goes back to the bag if there's a compatible free slot;
+                        // only drops to ground when the bag is full. Mirrors the smart-swap
+                        // in CharacterAction_CarryInHand. The legacy "always drop" behavior was
+                        // surprising and punishing for accidental click-to-swap UX.
+                        // Callers swept 2026-05-19: WorldItem wearable pickup + NPC GOAP equip
+                        // paths benefit (less litter); none depended on drop-to-ground.
+                        if (!TryStashInBag(existingInstance))
+                        {
+                            character.DropItem(existingInstance);
+                        }
                     }
 
                     Debug.Log($"<color=green>[Equip]</color> {data.ItemName} vers {data.EquipmentLayer}");
@@ -407,6 +417,32 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         UpdateWeaponVisual(); // Deactivates the socket + resets the animator to civilian
         UpdateNetworkSlot(0, null);
         OnEquipmentChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Detaches the currently wielded weapon — socket hides, animator returns to
+    /// civilian — and returns the <see cref="WeaponInstance"/> without dropping it
+    /// to the world. The caller decides the sink (stash in bag, hand, or ground).
+    ///
+    /// <para>Inverse of <see cref="UnequipWeapon"/>: that method always drops; this
+    /// one never does. Used by <c>CharacterAction_CarryInHand</c> and
+    /// <c>CharacterAction_StashInBag</c> for the Active Weapon card.</para>
+    ///
+    /// <para>Returns null if no weapon is wielded.</para>
+    /// </summary>
+    public WeaponInstance WieldOffToHand()
+    {
+        if (_weapon == null) return null;
+
+        WeaponInstance detached = _weapon;
+        _weapon = null;
+
+        UpdateWeaponVisual();       // Deactivates the socket + resets animator to civilian.
+        UpdateNetworkSlot(0, null);
+        OnEquipmentChanged?.Invoke();
+
+        Debug.Log($"<color=orange>[WieldOffToHand]</color> {detached.ItemSO.ItemName} detached from active slot — sink decided by caller.");
+        return detached;
     }
 
     private void EquipBag(BagInstance newBag)
@@ -623,6 +659,67 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
 
             Debug.Log($"<color=orange>[Unequip]</color> {instanceToDrop.ItemSO.ItemName} removed and dropped.");
         }
+    }
+
+    /// <summary>
+    /// Removes a worn wearable and stashes it into the bag's first compatible free slot.
+    /// Falls back to a ground-drop only when the bag has no compatible space.
+    /// Used by <c>CharacterAction_UnequipWearable</c>; mirrors the bag-first
+    /// behavior of <see cref="Equip"/> displacement.
+    /// </summary>
+    /// <returns>True if the item ended up in the bag; false if it dropped to ground (still successful).</returns>
+    public bool UnequipToBag(WearableLayerEnum layerType, WearableType slotType)
+    {
+        // Bag-special case must still drop the entire bag (preserves UnequipBag semantics).
+        if (slotType == WearableType.Bag || layerType == WearableLayerEnum.Bag)
+        {
+            UnequipBag();
+            OnEquipmentChanged?.Invoke();
+            return false; // Bag dropped to world, not stashed.
+        }
+
+        EquipmentLayer targetLayer = GetTargetLayer(layerType);
+        if (targetLayer == null) return false;
+
+        EquipmentInstance instanceToDrop = targetLayer.GetInstance(slotType);
+        if (instanceToDrop == null) return false;
+
+        // Free the slot first so the bag-free-space check sees the up-to-date capacity.
+        targetLayer.Unequip(slotType);
+        UpdateNetworkSlot(GetSlotId(layerType, slotType), null);
+        OnEquipmentChanged?.Invoke();
+
+        if (TryStashInBag(instanceToDrop))
+        {
+            Debug.Log($"<color=orange>[UnequipToBag]</color> {instanceToDrop.ItemSO.ItemName} stashed in bag.");
+            return true;
+        }
+
+        // Bag full — fall back to ground drop.
+        character.DropItem(instanceToDrop);
+        Debug.Log($"<color=orange>[UnequipToBag]</color> {instanceToDrop.ItemSO.ItemName} bag full → dropped to ground.");
+        return false;
+    }
+
+    /// <summary>
+    /// Removes a worn wearable from the given layer/slot without spawning a WorldItem
+    /// and returns the detached instance. Caller decides the sink (carry-in-hand, etc.).
+    /// Mirrors <see cref="WieldOffToHand"/> shape — sink-agnostic detach.
+    /// Used by <c>CharacterAction_CarryInHand</c> when a worn item is moved to the hand.
+    /// </summary>
+    public WearableInstance DetachWornToCaller(WearableLayerEnum layerType, WearableType slotType)
+    {
+        EquipmentLayer targetLayer = GetTargetLayer(layerType);
+        if (targetLayer == null) return null;
+
+        EquipmentInstance instance = targetLayer.GetInstance(slotType);
+        if (instance == null) return null;
+
+        targetLayer.Unequip(slotType);
+        UpdateNetworkSlot(GetSlotId(layerType, slotType), null);
+        OnEquipmentChanged?.Invoke();
+
+        return instance as WearableInstance;
     }
 
     // Logic based on the EquipmentLayerEnum
@@ -902,6 +999,22 @@ public class CharacterEquipment : CharacterSystem, ICharacterSaveData<EquipmentS
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Tries to put an item into the equipped bag's first compatible free slot.
+    /// Returns true on success. No-op + returns false if no bag is equipped or no
+    /// slot accepts the item. Used by <see cref="Equip"/> displacement,
+    /// <see cref="UnequipToBag"/>, and the
+    /// <c>CharacterAction_StashInBag</c> / <c>CharacterAction_CarryInHand</c> smart-swap.
+    /// </summary>
+    private bool TryStashInBag(ItemInstance item)
+    {
+        if (item == null) return false;
+        var inv = GetInventory();
+        if (inv == null) return false;
+        if (!inv.HasFreeSpaceForItem(item)) return false;
+        return inv.AddItem(item, _character);
     }
 
     public bool PickUpItem(ItemInstance item)
