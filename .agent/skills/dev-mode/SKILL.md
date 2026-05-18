@@ -302,3 +302,57 @@ Planned modules, each to be added as a new child GameObject under `DevModePanel.
 | Assign Job | Select existing NPC, then click `CommercialBuilding` to assign. |
 
 All of them follow the same contract: one MonoBehaviour per tab, self-register by subscribing to `DevModeManager.OnDevModeChanged`, unsubscribe in `OnDisable`/`OnDestroy`, no edits to `DevModeManager` or `DevModePanel` required.
+
+## 11. Character City Founding Sub-Tab (2026-05-18)
+
+`CharacterCityFoundingSubTab` — 11th sub-tab on `CharacterInspectorView` ("Founding" in the tab bar). Dedicated playtest harness for the Plan 4 city-founding loop (community creation → AB placement → tier-up → drifter migration → join requests) without authoring full content or waiting for the natural in-game cadence. Lives at `Assets/Scripts/Debug/DevMode/Inspect/SubTabs/CharacterCityFoundingSubTab.cs`. Wrapped in `#if UNITY_EDITOR || DEVELOPMENT_BUILD` end-to-end.
+
+### Why widgets instead of text
+
+Existing `CharacterSubTab`s (Identity / Stats / Skills / Needs / AI / Combat / Social / Economy / Knowledge / Inventory) all output formatted text via the abstract `RenderContent(Character) → string`. The City Founding tab is interactive (buttons, input fields) so the 2026-05-18 commit virtualised `CharacterSubTab.Refresh` and `CharacterCityFoundingSubTab` overrides it directly to render programmatic UGUI widgets — mirroring the `BuildingConsoleManagementSubTab` pattern. `RenderContent` returns empty (satisfies the abstract base); the inherited `_content` TMP_Text is intentionally unwired on this variant.
+
+Widgets parent under a `[SerializeField] private RectTransform _widgetRoot` field (wired to the inner `Viewport/Content` RectTransform that carries the inherited `VerticalLayoutGroup` + `ContentSizeFitter`). Falls back to the script's own transform when null so the sub-tab also works on a flat (non-scrolling) panel.
+
+### Sections (top to bottom)
+
+| Section | Visibility | What it does |
+|---|---|---|
+| DEV banner | always | Red banner — flags this surface as bypassing production gates |
+| Refresh button | always | Re-runs `RebuildAll()`; useful for re-reading live state (treasury balance, member count) without triggering a mutator |
+| Status header | always | Shows Character name, CurrentCommunity (name + level), Citizenship — color-coded |
+| Create Community | `CurrentCommunity == null` | Optional name input (default "DebugCity"). Calls `CharacterCommunity.CreateCommunity(name)` — same path `Task_CreateCommunity` uses, so the founder auto-receives the AB blueprint |
+| Ambition_FoundACity | `CharacterAmbition != null` | Loads `Resources/Data/Ambitions/Ambition_FoundACity` and calls `CharacterAmbition.SetAmbition(so)`. Adds a "Clear Ambition" button when one is already active |
+| Community readout | `CurrentCommunity != null` | Diagnostic only: name / level / IsChartered / member count / leader count / primary leader / AB ref / AB treasury (CurrencyId.Default) |
+| Force-Promote | `CurrentCommunity != null && AB != null` | −1/+1 tier buttons. Routes through `AdministrativeBuilding.DevForceChangeCommunityLevel(int delta)` — bypasses `Community.TryPromoteLevel`'s population / treasury / required-building gates |
+| Grant Treasury | `CurrentCommunity != null && AB != null` | Designer-supplied amount input (default 1000). Calls `CommercialBuilding.DevForceCreditTreasury(int)` which resolves currency via enclosing map's NativeCurrency |
+| Submit Join Request | `CurrentCommunity == null && Citizenship == null && ≥1 chartered AB in scene` | One row per candidate chartered AB. Click calls `AdministrativeBuilding.SubmitJoinRequestServerRpc(applicantNetId)` — identical to the drifter ↔ JoinRequestDesk path |
+| Time | always | Live Day / Hour / Phase readout + count input + `[DEV] Force NewDay` button. Calls `MWI.Time.TimeManager.DevForceNewDay(count)`, which increments `CurrentDay` + fires `OnNewDay` once per day so `DrifterMigrationSystem` / `FarmGrowthSystem` / ambition deadlines see the same event volume |
+
+### New `DevForce*` methods this sub-tab depends on
+
+| Method | Located on | Behaviour |
+|---|---|---|
+| `AdministrativeBuilding.DevForceChangeCommunityLevel(int delta)` | `Assets/Scripts/World/Buildings/CommercialBuildings/AdministrativeBuilding.cs` | Host-only + `DevAssertHostAndDevMode`-gated. Clamps to `CommunityLevel` enum bounds. Calls `OwnerCommunity.ChangeLevel((CommunityLevel)clamped)` — fires the same change log as production tier-up |
+| `CommercialBuilding.DevForceCreditTreasury(int amount)` | `Assets/Scripts/World/Buildings/CommercialBuilding.cs` | Host-only + `DevAssertHostAndDevMode`-gated. Resolves currency from `MapController.GetMapAtPosition(transform.position).NativeCurrency` (CurrencyId.Default fallback). Routes through the canonical `CreditTreasury(currency, amount, reason)` path |
+| `MWI.Time.TimeManager.DevForceNewDay(int count = 1)` | `Assets/Scripts/DayNightCycle/TimeManager.cs` | Host-only (`NetworkManager.Singleton.IsServer`) + DevMode-gated. Bumps `CurrentDay` by `count` and fires `OnNewDay` once per day. Phase/hour untouched |
+
+### Prefab wiring
+
+`Assets/Resources/UI/DevModePanel.prefab` → `ContentRoot/InspectContent/Views/CharacterInspectorView`:
+- `TabBar/Btn_CityFounding` — button cloned from `Btn_Inventory`, label changed to "Founding".
+- `SubTabContents/CityFounding` — content GameObject cloned from `Inventory`. `InventorySubTab` component replaced by `CharacterCityFoundingSubTab`. Inherited `_content` TMP_Text removed (would render an empty band otherwise). The script's `_widgetRoot` field wired to `Viewport/Content` RectTransform.
+- `CharacterInspectorView._subTabs` extended from 10 → 11 entries; the new entry is `(TabButton = Btn_CityFounding's Button, Content = CityFounding GO, Tab = CharacterCityFoundingSubTab MonoBehaviour)`.
+
+### Authority + network model
+
+Dev Mode is host-only (gated by `DevModeManager.TryEnable` IsServer check). Every mutator on this sub-tab either:
+1. Calls a `DevForce*` method whose first line asserts host + DevMode and emits an audit log via the inherited `DevAssertHostAndDevMode`, OR
+2. Calls a public POCO method on `CharacterCommunity` / `Community` / `CharacterAmbition` whose contract is "server-only by caller convention" — safe because dev mode runs on the server.
+
+No new replication channels introduced. State changes flow through the existing paths (Community is a POCO, not a NetworkBehaviour; `OnNewDay` is a host-only event whose subscribers all run on the server; `SubmitJoinRequestServerRpc` already handles ApplicantNetId replication through `NetworkList<JoinRequest>`).
+
+### Adding a new section
+
+Append `BuildXxxSection(_bound);` to `RebuildAll()` and implement `BuildXxxSection(Character c)`. Use the inherited `MakeRow / MakeLabel / MakeHeader / MakeButton / MakeInput` helpers. Capture mutator targets into local variables before passing into lambdas (don't close over `_bound` directly — it can change between button-click rebuilds). End mutator callbacks with a `RebuildAll()` call so the readout reflects the new state immediately.
+
+For state-mutating buttons that talk to a `NetworkBehaviour`, either call an existing `DevForce*` helper or add a new one — never poke the production path directly without the host + DevMode assertion.

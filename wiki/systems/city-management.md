@@ -4,7 +4,8 @@ title: "City Management (Admin Console, Migration, Tier-Up)"
 tags: [city-founding, ui, community, building, gameplay-loop, tier-1-child]
 created: 2026-05-18
 updated: 2026-05-18
-sources: []
+sources:
+  - "[[.agent/skills/dev-mode/SKILL.md]]"
 related:
   - "[[administrative-building]]"
   - "[[world-community]]"
@@ -242,9 +243,36 @@ Per rule #19 validated scenarios:
 - **Renounce-then-rejoin citizenship UX**.
 - **Multi-leader concurrent edit** — last-write-wins for v1; future: optimistic concurrency.
 
+### Playtest hooks (2026-05-18 — Dev-Mode City Founding sub-tab)
+
+The full city-founding loop can be driven without authoring content or waiting for the natural in-game cadence. Enter dev mode (F3 in Editor / `/devmode on` in release builds), Ctrl+Click an NPC or your own character to inspect it, then open the **Founding** sub-tab (11th tab on `CharacterInspectorView`). Lives at [`CharacterCityFoundingSubTab.cs`](../../Assets/Scripts/Debug/DevMode/Inspect/SubTabs/CharacterCityFoundingSubTab.cs).
+
+| Button / Section | Effect | Routes through |
+|---|---|---|
+| **Create Community** *(when target has no CurrentCommunity)* | Founds a new SmallGroup-tier community. Auto-grants the AB blueprint. | `CharacterCommunity.CreateCommunity(name)` |
+| **Assign Ambition_FoundACity** | Loads the SO from `Resources/Data/Ambitions/Ambition_FoundACity` and queues it. BT picks it up next tick. | `CharacterAmbition.SetAmbition(so)` |
+| **Community readout** | Read-only: name, level, IsChartered, members/leaders, AB ref, treasury (CurrencyId.Default). | — |
+| **Force-Promote ±1 Tier** | Bypasses TryPromoteLevel's population / treasury / required-building gates. | `AdministrativeBuilding.DevForceChangeCommunityLevel(int delta)` |
+| **Grant Treasury N** | Credits N units of the enclosing map's NativeCurrency to the AB's Treasury safes. | `CommercialBuilding.DevForceCreditTreasury(int amount)` → canonical `CreditTreasury(currency, amount, reason)` |
+| **Submit Join Request** *(when target is in no community + ≥1 chartered AB exists)* | Submits a join request as the inspected character. Identical to the drifter ↔ JoinRequestDesk path. | `AdministrativeBuilding.SubmitJoinRequestServerRpc(applicantNetId)` |
+| **Force NewDay N** | Pumps `OnNewDay` N times → drives `DrifterMigrationSystem` daily-roll → one drifter NPC per chartered community per tick. | `MWI.Time.TimeManager.DevForceNewDay(int count)` |
+
+Each mutator is host-only and DevMode-gated via the inherited `CommercialBuilding.DevAssertHostAndDevMode` helper (or an equivalent inline guard on `TimeManager` which is not a `NetworkBehaviour`). Every state mutation flows through the same paths production callers use — no new replication channels are introduced. See [`.agent/skills/dev-mode/SKILL.md` §11](../../.agent/skills/dev-mode/SKILL.md) for the full Dev-Mode contract.
+
+**Recommended end-to-end smoke sequence:**
+1. Spawn an NPC via the Spawn tab (or use the host player).
+2. Inspect them → Founding sub-tab → **Create Community**.
+3. **Assign Ambition_FoundACity** → wait for the NPC's BT to walk through the planning step + place the AB (or place it via player click for the host).
+4. After the AB is placed, finish construction (cooperative finalize or via Build Inspector's Force Finalize).
+5. **Grant Treasury 1000** for sandbox spend money.
+6. **Force-Promote +1 Tier** to unlock the next tier's blueprints.
+7. **Force NewDay** a few times → drifters should arrive and queue join requests at the JoinRequestDesk.
+8. Inspect a drifter who hasn't applied yet → **Submit Join Request** to bypass the JoinRequestDesk walk-up step manually.
+
 ## Change log
 
 - 2026-05-18 — **Plan 4c scripts + content shipped.** Commits `9eafe529..` on `multiplayyer`: Plan 4c doc, CommunityTierRequirementsSO + 7 tier assets, Community.TryPromoteLevel + AB.RequestPromoteLevelServerRpc, AB.PlaceCityBlueprintServerRpc + BuildingPlacementManager.PlaceCivicBuildingForLeader + BuildingGrid.GetCellCenter, DrifterMigrationSystem, JoinRequest struct + JoinRequestDesk + AB submit/accept/decline RPCs, CityManagementFurniture + UI_CityManagementPanel + 3 tabs + 2 row scripts + PlayerUI surface. 214 EditMode tests pass. Prefab variants (UI + AB) + PlayerController RTS cursor mode deferred to follow-up. — claude
+- 2026-05-18 — **Dev-Mode playtest hooks shipped.** New 11th `CharacterCityFoundingSubTab` on the Character inspector with 7 sections (Create Community / Assign Ambition_FoundACity / Community readout / Force-Promote / Grant Treasury / Submit Join Request / Force NewDay). Three new DevForce* methods: `AdministrativeBuilding.DevForceChangeCommunityLevel`, `CommercialBuilding.DevForceCreditTreasury`, `MWI.Time.TimeManager.DevForceNewDay`. `CharacterSubTab.Refresh` is now virtual so widget-based sub-tabs can bypass the text-only `RenderContent` contract. 214/214 EditMode tests pass. — claude
 
 ## Sources
 
