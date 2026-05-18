@@ -412,13 +412,29 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
         return null;
     }
 
+    /// <summary>
+    /// Looks for a loose <see cref="WorldItem"/> matching a missing material near the
+    /// actor. Two passes: a fast <see cref="Physics.OverlapSphere"/> within a generous
+    /// radius (catches items the NPC just spawned via destruction at the harvestable's
+    /// foot — typically ≤ 3u away), then a one-shot <see cref="UnityEngine.Object.FindObjectsByType"/>
+    /// fallback within the same radius for the rare case where physics overlap misses
+    /// (collider lifecycle race, layer mismatch on the WorldItem prefab, etc.).
+    /// Picks the closest match.
+    /// </summary>
     private ItemInstance FindNearbyMatchingWorldItem(Character self, Dictionary<ItemSO, int> missing, out GameObject worldObject)
     {
         worldObject = null;
         if (missing.Count == 0) return null;
-        const float SearchRadius = 4f;
-        int hitCount = Physics.OverlapSphereNonAlloc(self.transform.position, SearchRadius, _scratchOverlap,
+
+        const float SearchRadius = 12f;
+        Vector3 selfPos = self.transform.position;
+
+        // Pass 1: physics overlap (fast, zero-alloc).
+        int hitCount = Physics.OverlapSphereNonAlloc(selfPos, SearchRadius, _scratchOverlap,
             Physics.AllLayers, QueryTriggerInteraction.Collide);
+        ItemInstance bestInst = null;
+        GameObject bestObj = null;
+        float bestSqr = float.MaxValue;
         for (int i = 0; i < hitCount; i++)
         {
             var col = _scratchOverlap[i];
@@ -428,8 +444,35 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
             var inst = wi.ItemInstance;
             if (inst == null || inst.ItemSO == null) continue;
             if (!missing.ContainsKey(inst.ItemSO)) continue;
-            worldObject = wi.gameObject;
-            return inst;
+            float sqr = (wi.transform.position - selfPos).sqrMagnitude;
+            if (sqr < bestSqr) { bestSqr = sqr; bestInst = inst; bestObj = wi.gameObject; }
+        }
+        if (bestInst != null) { worldObject = bestObj; return bestInst; }
+
+        // Pass 2: FindObjectsByType fallback. Allocs a fresh array but only fires when
+        // pass 1 finds nothing (cold path — the NPC genuinely has nothing nearby OR a
+        // freshly-spawned WorldItem's collider hasn't ticked yet). Not in the per-frame
+        // hot loop because Step 1 (carried item) usually short-circuits before we hit
+        // this method, and the NPC sits inside the BuildingZone consuming most of the
+        // time. Verbose log surfaces when this path fires so the diagnostic is obvious.
+        var all = UnityEngine.Object.FindObjectsByType<WorldItem>(FindObjectsSortMode.None);
+        for (int i = 0; i < all.Length; i++)
+        {
+            var wi = all[i];
+            if (wi == null || wi.IsBeingCarried) continue;
+            var inst = wi.ItemInstance;
+            if (inst == null || inst.ItemSO == null) continue;
+            if (!missing.ContainsKey(inst.ItemSO)) continue;
+            float sqr = (wi.transform.position - selfPos).sqrMagnitude;
+            if (sqr > SearchRadius * SearchRadius) continue;
+            if (sqr < bestSqr) { bestSqr = sqr; bestInst = inst; bestObj = wi.gameObject; }
+        }
+        if (bestInst != null)
+        {
+            if (NPCDebug.VerboseActions)
+                Debug.Log($"<color=yellow>[GoapAction_FulfillAmbitionConstruction]</color> {self.CharacterName} fell back to FindObjectsByType scan for nearby WorldItem (Physics overlap missed it — likely collider lifecycle race). Found '{bestInst.ItemSO?.ItemName}' at dist {Mathf.Sqrt(bestSqr):F1}u.");
+            worldObject = bestObj;
+            return bestInst;
         }
         return null;
     }
