@@ -169,6 +169,63 @@ public class AdministrativeBuilding : CommercialBuilding
             $"'{founder.CharacterName}' is now a citizen of '{OwnerCommunity.communityName}'.");
     }
 
+    // ── Tier-up (Plan 4c Task 3) ──────────────────────────────────────────
+
+    /// <summary>
+    /// Player UI entry for community tier-up. Resolves the requesting Character from the
+    /// ServerRpc's ClientId, gates on leader-of-OwnerCommunity, then delegates to
+    /// <see cref="Community.TryPromoteLevel"/>. Result is broadcast to the requester only
+    /// via <see cref="TierUpResultClientRpc"/> for a UI toast.
+    /// </summary>
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestPromoteLevelServerRpc(ServerRpcParams rpcParams = default)
+    {
+        if (!IsServer) return;
+
+        var single = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams { TargetClientIds = new[] { rpcParams.Receive.SenderClientId } }
+        };
+
+        if (OwnerCommunity == null)
+        {
+            TierUpResultClientRpc(false, "AB has no owner community.", single);
+            return;
+        }
+
+        Character requester = ResolveCharacterFromClientId(rpcParams.Receive.SenderClientId);
+        if (requester == null)
+        {
+            TierUpResultClientRpc(false, "Could not resolve requester.", single);
+            return;
+        }
+
+        if (!OwnerCommunity.IsLeader(requester))
+        {
+            TierUpResultClientRpc(false, "Not a leader of this community.", single);
+            return;
+        }
+
+        var (ok, reason) = OwnerCommunity.TryPromoteLevel(this);
+        TierUpResultClientRpc(ok, ok ? $"Promoted to {OwnerCommunity.level}!" : reason ?? "Promotion denied.", single);
+    }
+
+    [ClientRpc]
+    private void TierUpResultClientRpc(bool ok, string message, ClientRpcParams rpcParams = default)
+    {
+        Debug.Log($"<color={(ok ? "green" : "orange")}>[AdministrativeBuilding]</color> Tier-up result: {message}");
+        // UI consumers can subscribe to a static event on PlayerUI if needed. Plan 4c
+        // Task 7 wires the UI_CityManagementPanel's TierUpTab to display the toast.
+    }
+
+    /// <summary>Server-side resolver: ClientId → Player Character via NGO's connected-client table.</summary>
+    private static Character ResolveCharacterFromClientId(ulong clientId)
+    {
+        if (NetworkManager.Singleton == null) return null;
+        if (!NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var nc)) return null;
+        return nc?.PlayerObject?.GetComponent<Character>();
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────
 
     /// <summary>

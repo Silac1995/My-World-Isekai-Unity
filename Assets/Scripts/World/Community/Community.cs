@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using MWI.WorldSystem;
 
 /// <summary>
 /// Server-side group container. Holds members, leaders (List — primary at index 0,
@@ -198,5 +199,91 @@ public class Community
     {
         level = newLevel;
         Debug.Log($"<color=green>[Community]</color> {communityName} has evolved to {level}!");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Tier-up (Plan 4c Task 3)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Server-only. Validates the next tier's requirements
+    /// (<see cref="MWI.WorldSystem.CommunityTierRequirementsSO"/>) against the AB's
+    /// accumulators (population, treasury, completed buildings). On success calls
+    /// <see cref="ChangeLevel"/> and returns <c>(true, null)</c>. On failure returns
+    /// <c>(false, reason)</c> for UI display.
+    ///
+    /// Pure POCO method — caller (<see cref="AdministrativeBuilding.RequestPromoteLevelServerRpc"/>)
+    /// is responsible for the <c>IsServer</c> + leader-authority gate.
+    /// </summary>
+    public (bool ok, string reason) TryPromoteLevel(AdministrativeBuilding ab)
+    {
+        var nextLevel = (CommunityLevel)((int)level + 1);
+        if (!System.Enum.IsDefined(typeof(CommunityLevel), (int)nextLevel))
+            return (false, "Already at max tier.");
+
+        var req = MWI.WorldSystem.CommunityTierRegistry.Get(nextLevel);
+        if (req == null) return (false, $"No tier requirements authored for {nextLevel}.");
+
+        // 1. Population gate.
+        int memberCount = members != null ? members.Count : 0;
+        if (memberCount < req.MinPopulation)
+            return (false, $"Need {req.MinPopulation - memberCount} more citizen(s).");
+
+        // 2. Treasury gate. v1 uses the default currency (typically the map's
+        // NativeCurrency). Plan 4c follow-up may surface per-currency tier requirements.
+        if (req.MinTreasury > 0)
+        {
+            int treasury = ab != null ? ab.GetTreasuryBalance(MWI.Economy.CurrencyId.Default) : 0;
+            if (treasury < req.MinTreasury)
+                return (false, $"Treasury needs {req.MinTreasury - treasury} more gold.");
+        }
+
+        // 3. Required-building gate (duplicate-aware).
+        var requiredList = req.RequiredBuildings;
+        if (requiredList != null && requiredList.Count > 0)
+        {
+            // Walk unique blueprint SOs in the requirement list, count duplicates in the
+            // requirement and compare with the community's completed-owned count.
+            var counted = new HashSet<BuildingSO>();
+            for (int i = 0; i < requiredList.Count; i++)
+            {
+                var so = requiredList[i];
+                if (so == null) continue;
+                if (!counted.Add(so)) continue;
+                int needed = CountInList(requiredList, so);
+                int have   = CountOwnedCompletedBuildingsOfSO(so);
+                if (have < needed)
+                {
+                    string name = string.IsNullOrEmpty(so.BuildingName) ? so.name : so.BuildingName;
+                    return (false, $"Need {needed - have} more {name}.");
+                }
+            }
+        }
+
+        ChangeLevel(nextLevel);
+        return (true, null);
+    }
+
+    private int CountOwnedCompletedBuildingsOfSO(BuildingSO so)
+    {
+        if (ownedBuildings == null || so == null) return 0;
+        int n = 0;
+        for (int i = 0; i < ownedBuildings.Count; i++)
+        {
+            var b = ownedBuildings[i];
+            if (b == null) continue;
+            if (b.IsUnderConstruction) continue;
+            if (b.Blueprint == so) n++;
+        }
+        return n;
+    }
+
+    private static int CountInList(System.Collections.Generic.IReadOnlyList<BuildingSO> list, BuildingSO so)
+    {
+        if (list == null || so == null) return 0;
+        int n = 0;
+        for (int i = 0; i < list.Count; i++)
+            if (list[i] == so) n++;
+        return n;
     }
 }
