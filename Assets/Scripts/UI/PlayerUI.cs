@@ -36,6 +36,9 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private UI_PlayerTargeting _playerTargeting;
     [SerializeField] private MWI.UI.Combat.UI_CombatItemsWindow _combatItemsWindow;
 
+    [Header("City Management (Plan 4c)")]
+    [SerializeField] private MWI.UI.CityManagement.UI_CityManagementPanel _cityManagementWindow;
+
     [Header("UI Windows")]
     [SerializeField] private CharacterEquipmentUI _equipmentUI;
     [SerializeField] private UI_StorageFurniturePanel _storagePanel;
@@ -438,6 +441,36 @@ public class PlayerUI : MonoBehaviour
     {
         if (IsCombatItemsWindowOpen) CloseCombatItemsWindow();
         else OpenCombatItemsWindow(customer);
+    }
+
+    // ── City Management window (Plan 4c Task 7) ────────────────────────────
+
+    /// <summary>True when the city-management window is currently open.</summary>
+    public bool IsCityManagementWindowOpen
+        => _cityManagementWindow != null && _cityManagementWindow.IsOpen;
+
+    /// <summary>
+    /// Open the city-management window bound to <paramref name="ab"/>. Idempotent —
+    /// re-opening rebinds the tabs. Null-guard warning when the SerializeField is unwired
+    /// (per rule #39 — the prefab variant is authored in Task 8).
+    /// </summary>
+    public void OpenCityManagementWindow(AdministrativeBuilding ab)
+    {
+        if (ab == null) return;
+        if (_cityManagementWindow == null)
+        {
+            Debug.LogWarning("<color=orange>[PlayerUI]</color> OpenCityManagementWindow called but _cityManagementWindow SerializeField is null — author the prefab (variant of UI_WindowBase.prefab) and wire it to PlayerUI._cityManagementWindow in the Inspector. Tapping E on a CityManagementFurniture will silently no-op until this is fixed (Plan 4c Task 8).");
+            return;
+        }
+        _cityManagementWindow.Initialize(ab);
+        _cityManagementWindow.OpenWindow();
+    }
+
+    /// <summary>Close the city-management window if currently open. Safe to call when closed.</summary>
+    public void CloseCityManagementWindow()
+    {
+        if (_cityManagementWindow == null) return;
+        if (_cityManagementWindow.gameObject.activeSelf) _cityManagementWindow.CloseWindow();
     }
 
     /// <summary>
