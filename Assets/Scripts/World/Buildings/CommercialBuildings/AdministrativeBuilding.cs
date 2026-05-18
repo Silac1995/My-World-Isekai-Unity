@@ -21,6 +21,31 @@ public class AdministrativeBuilding : CommercialBuilding
 {
     public override BuildingType BuildingType => BuildingType.Administrative;
 
+    /// <summary>
+    /// Initialize NetworkList<JoinRequest> in Awake per NGO conventions. NetworkLists must
+    /// exist before NetworkBehaviour.Spawn fires so the late-joiner replay path can write
+    /// initial elements; constructing in OnNetworkSpawn is too late and triggers
+    /// "NetworkList not initialized" errors when the host writes during the first tick.
+    /// </summary>
+    protected override void Awake()
+    {
+        base.Awake();
+        if (PendingJoinRequests == null)
+        {
+            PendingJoinRequests = new NetworkList<JoinRequest>();
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        if (PendingJoinRequests != null)
+        {
+            PendingJoinRequests.Dispose();
+            PendingJoinRequests = null;
+        }
+        base.OnNetworkDespawn();
+    }
+
     // ── Owner community ───────────────────────────────────────────────────
 
     /// <summary>
@@ -169,6 +194,104 @@ public class AdministrativeBuilding : CommercialBuilding
         founder.CharacterCommunity.SetCitizenship(OwnerCommunity);
         Debug.Log($"<color=green>[AdministrativeBuilding]</color> '{BuildingName}' complete — " +
             $"'{founder.CharacterName}' is now a citizen of '{OwnerCommunity.communityName}'.");
+    }
+
+    // ── Join requests (Plan 4c Task 6) ────────────────────────────────────
+
+    /// <summary>
+    /// Server-replicated queue of drifter applicants who interacted with the AB's
+    /// JoinRequestDesk and are waiting on leader Accept/Decline.
+    /// </summary>
+    public NetworkList<JoinRequest> PendingJoinRequests { get; private set; }
+
+    /// <summary>
+    /// Cached JoinRequestDesk reference. Resolved lazily on first Get call (lives baked
+    /// into the AB.prefab — Task 8 wires it).
+    /// </summary>
+    private JoinRequestDesk _joinRequestDesk;
+
+    public JoinRequestDesk GetJoinRequestDesk()
+    {
+        if (_joinRequestDesk == null)
+        {
+            _joinRequestDesk = GetComponentInChildren<JoinRequestDesk>(true);
+        }
+        return _joinRequestDesk;
+    }
+
+    /// <summary>
+    /// Server-side queue submission. Drifter walks to the JoinRequestDesk, the desk's
+    /// OnInteract calls this. Validates the applicant isn't already in a community + isn't
+    /// a citizen anywhere; dedupes on ApplicantNetId.
+    /// </summary>
+    [ServerRpc(RequireOwnership = false)]
+    public void SubmitJoinRequestServerRpc(ulong applicantNetId, ServerRpcParams rpcParams = default)
+    {
+        if (!IsServer) return;
+        if (PendingJoinRequests == null) return;
+        if (IsUnderConstruction || OwnerCommunity == null) return;
+
+        var applicant = ResolveCharacterByNetId(applicantNetId);
+        if (applicant == null || applicant.CharacterCommunity == null) return;
+        if (applicant.CharacterCommunity.CurrentCommunity != null) return;
+        if (applicant.CharacterCommunity.Citizenship != null) return;
+
+        // Dedupe.
+        for (int i = 0; i < PendingJoinRequests.Count; i++)
+            if (PendingJoinRequests[i].ApplicantNetId == applicantNetId) return;
+
+        int day = MWI.Time.TimeManager.Instance != null ? MWI.Time.TimeManager.Instance.CurrentDay : 0;
+        PendingJoinRequests.Add(new JoinRequest { ApplicantNetId = applicantNetId, RequestedAtDay = day });
+
+        Debug.Log($"<color=cyan>[AdministrativeBuilding]</color> '{BuildingName}' received join request from '{applicant.CharacterName}'.");
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void AcceptJoinRequestServerRpc(ulong applicantNetId, ServerRpcParams rpcParams = default)
+    {
+        if (!IsServer || OwnerCommunity == null || PendingJoinRequests == null) return;
+        Character leader = ResolveCharacterFromClientId(rpcParams.Receive.SenderClientId);
+        if (leader == null || !OwnerCommunity.IsLeader(leader)) return;
+
+        var applicant = ResolveCharacterByNetId(applicantNetId);
+        if (applicant == null) return;
+
+        OwnerCommunity.AddMember(applicant);
+        applicant.CharacterCommunity?.JoinCommunity(OwnerCommunity);
+        applicant.CharacterCommunity?.SetCitizenship(OwnerCommunity);
+        RemoveJoinRequestByNetId(applicantNetId);
+        applicant.CharacterActions?.ClearCurrentAction();
+
+        Debug.Log($"<color=green>[AdministrativeBuilding]</color> '{BuildingName}' accepted '{applicant.CharacterName}' into community '{OwnerCommunity.communityName}'.");
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void DeclineJoinRequestServerRpc(ulong applicantNetId, ServerRpcParams rpcParams = default)
+    {
+        if (!IsServer || OwnerCommunity == null || PendingJoinRequests == null) return;
+        Character leader = ResolveCharacterFromClientId(rpcParams.Receive.SenderClientId);
+        if (leader == null || !OwnerCommunity.IsLeader(leader)) return;
+
+        var applicant = ResolveCharacterByNetId(applicantNetId);
+        RemoveJoinRequestByNetId(applicantNetId);
+        applicant?.CharacterActions?.ClearCurrentAction();
+
+        Debug.Log($"<color=orange>[AdministrativeBuilding]</color> '{BuildingName}' declined applicant netId={applicantNetId}.");
+    }
+
+    private void RemoveJoinRequestByNetId(ulong applicantNetId)
+    {
+        if (PendingJoinRequests == null) return;
+        for (int i = PendingJoinRequests.Count - 1; i >= 0; i--)
+            if (PendingJoinRequests[i].ApplicantNetId == applicantNetId)
+                PendingJoinRequests.RemoveAt(i);
+    }
+
+    private static Character ResolveCharacterByNetId(ulong netId)
+    {
+        if (NetworkManager.Singleton == null) return null;
+        if (!NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(netId, out var no)) return null;
+        return no != null ? no.GetComponent<Character>() : null;
     }
 
     // ── Civic placement (Plan 4c Task 4) ──────────────────────────────────
