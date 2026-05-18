@@ -49,21 +49,38 @@ namespace MWI.AI
         // per-tick. Cleared and re-populated each call.
         private readonly List<Building> _scratchBuildings = new List<Building>(8);
 
+        // Reused buffers for the gather state machine.
+        private readonly Dictionary<ItemSO, int> _scratchMissing = new Dictionary<ItemSO, int>(4);
+        private readonly Collider[] _scratchOverlap = new Collider[32];
+
         // While walking to a target, cache the target position so we don't recompute it
         // every tick. Cleared on OnExit.
         private Vector3? _activeDestination;
         private bool _hasActiveAction;
 
+        // Gather state machine — persists across ticks so the BTAction can resume a
+        // multi-step harvest → pickup → drop chain (each step takes 1+ ticks because
+        // the queued CharacterAction blocks the BT until it ends).
+        private Harvestable _targetHarvestable;
+        private float _wanderUntilTime;
+        private Vector3? _wanderDestination;
+
         protected override void OnEnter(Blackboard bb)
         {
             _activeDestination = null;
             _hasActiveAction = false;
+            _targetHarvestable = null;
+            _wanderUntilTime = 0f;
+            _wanderDestination = null;
         }
 
         protected override void OnExit(Blackboard bb)
         {
             _activeDestination = null;
             _hasActiveAction = false;
+            _targetHarvestable = null;
+            _wanderUntilTime = 0f;
+            _wanderDestination = null;
         }
 
         protected override BTNodeStatus OnExecute(Blackboard bb)
@@ -201,49 +218,367 @@ namespace MWI.AI
         }
 
         /// <summary>
-        /// Walks the actor into the building's BuildingZone and queues a
-        /// <c>CharacterAction_FinishConstruction</c>. Once the action ends (construction
-        /// complete or stall), this BTNode returns Failure on the next tick if the building
-        /// is still under construction (BT retries) or Success once it's complete.
+        /// Top-level orchestrator for the Task_FinishConstruction step. Computes the
+        /// missing-materials delta from <see cref="Building.ConstructionRequirements"/>
+        /// minus <see cref="Building.ContributedMaterials"/>, then dispatches:
+        /// <list type="number">
+        /// <item>If carrying a relevant item → walk to <see cref="Building.BuildingZone"/> + drop.</item>
+        /// <item>If a matching <see cref="WorldItem"/> lies near the actor (e.g. the
+        /// just-harvested output at the harvestable's foot) → pick it up.</item>
+        /// <item>If a target <see cref="Harvestable"/> is cached and still valid → walk to
+        /// it; when in its <see cref="InteractableObject.InteractionZone"/> queue
+        /// <see cref="CharacterHarvestAction"/>.</item>
+        /// <item>Else scan <see cref="CharacterAwareness.GetVisibleInteractables{Harvestable}"/>
+        /// for a yielder of any missing item — set as target and walk there.</item>
+        /// <item>Else nothing in awareness → wander to a random nearby NavMesh point and
+        /// retry next tick. The wander destination is re-rolled every few seconds so the
+        /// NPC actually moves across the map looking for something.</item>
+        /// <item>If inside the BuildingZone AND zone WorldItems already match a req →
+        /// queue <see cref="CharacterAction_FinishConstruction"/> (consumes them).</item>
+        /// </list>
         /// </summary>
         private BTNodeStatus DriveFinishConstruction(Character self, Building building)
         {
             if (building == null || building.BuildingZone == null) return BTNodeStatus.Failure;
+            if (!building.IsUnderConstruction) return BTNodeStatus.Success;
 
-            // If we're already inside the zone, queue the action and stay Running. The
-            // CharacterAction blocks the BT tick (NPCBehaviourTree.Update checks
-            // CurrentAction != null and returns) so we won't re-enter this branch until
-            // the action ends — at which point the NPC is still inside the zone.
-            var bounds = building.BuildingZone.bounds;
-            Vector3 pos = self.transform.position;
-            bool inZone = pos.x >= bounds.min.x && pos.x <= bounds.max.x
-                       && pos.z >= bounds.min.z && pos.z <= bounds.max.z;
+            // Outstanding-material accounting. Empty when every requirement is met (or
+            // when the SO authored zero requirements).
+            ComputeMissingMaterials(building, _scratchMissing);
 
-            if (inZone)
+            // Step 0: action already queued (harvest / pickup / drop / consume in flight).
+            // BT will be paused by NPCBehaviourTree.Update; we just stay Running.
+            if (self.CharacterActions != null && self.CharacterActions.CurrentAction != null)
+                return BTNodeStatus.Running;
+
+            var zoneBounds = building.BuildingZone.bounds;
+            Vector3 actorPos = self.transform.position;
+            bool inZone = actorPos.x >= zoneBounds.min.x && actorPos.x <= zoneBounds.max.x
+                       && actorPos.z >= zoneBounds.min.z && actorPos.z <= zoneBounds.max.z;
+
+            // Step 1: carrying a relevant item? walk to zone + drop it inside.
+            if (_scratchMissing.Count > 0)
             {
-                if (self.CharacterActions == null) return BTNodeStatus.Failure;
-                if (self.CharacterActions.CurrentAction != null) return BTNodeStatus.Running;
+                var carried = FindCarriedRelevantItem(self, _scratchMissing);
+                if (carried != null)
+                {
+                    if (inZone)
+                    {
+                        try
+                        {
+                            self.CharacterActions.ExecuteAction(new CharacterDropItem(self, carried));
+                        }
+                        catch (System.Exception e) { Debug.LogException(e); }
+                        return BTNodeStatus.Running;
+                    }
+                    return WalkTo(self, zoneBounds.center);
+                }
+            }
+
+            // Step 2: nearby loose WorldItem that matches a missing req? pick it up.
+            if (_scratchMissing.Count > 0)
+            {
+                var loose = FindNearbyMatchingWorldItem(self, _scratchMissing, out var looseObj);
+                if (loose != null && looseObj != null)
+                {
+                    if (IsInPickupRange(self, looseObj))
+                    {
+                        try
+                        {
+                            self.CharacterActions.ExecuteAction(new CharacterPickUpItem(self, loose, looseObj));
+                        }
+                        catch (System.Exception e) { Debug.LogException(e); }
+                        return BTNodeStatus.Running;
+                    }
+                    return WalkTo(self, looseObj.transform.position);
+                }
+            }
+
+            // Step 3: cached target harvestable still yields something we need?
+            if (_targetHarvestable != null
+                && _targetHarvestable.gameObject != null
+                && _targetHarvestable.CanHarvest()
+                && HarvestableYieldsAny(_targetHarvestable, _scratchMissing))
+            {
+                return DriveHarvest(self, _targetHarvestable);
+            }
+            _targetHarvestable = null;
+
+            // Step 4: still need materials AND there's something in awareness that yields them?
+            if (_scratchMissing.Count > 0)
+            {
+                var awareness = self.CharacterAwareness;
+                if (awareness != null)
+                {
+                    var candidates = awareness.GetVisibleInteractables<Harvestable>();
+                    for (int i = 0; i < candidates.Count; i++)
+                    {
+                        var h = candidates[i];
+                        if (h == null || !h.CanHarvest()) continue;
+                        if (!HarvestableYieldsAny(h, _scratchMissing)) continue;
+                        _targetHarvestable = h;
+                        return DriveHarvest(self, h);
+                    }
+                }
+            }
+
+            // Step 5: inside zone AND already-dropped items can be consumed → queue the
+            // canonical consume action. This is the "finalize what we already delivered"
+            // branch; it also covers the no-reqs case (CharacterAction_FinishConstruction
+            // early-returns harmlessly when there's nothing to consume).
+            if (inZone && _scratchMissing.Count == 0)
+            {
                 try
                 {
-                    var action = new CharacterAction_FinishConstruction(self, building);
-                    self.CharacterActions.ExecuteAction(action);
-                    _hasActiveAction = true;
+                    self.CharacterActions.ExecuteAction(new CharacterAction_FinishConstruction(self, building));
+                }
+                catch (System.Exception e) { Debug.LogException(e); return BTNodeStatus.Failure; }
+                return BTNodeStatus.Running;
+            }
+            if (inZone && AnyZoneItemSatisfiesReq(building, _scratchMissing))
+            {
+                try
+                {
+                    self.CharacterActions.ExecuteAction(new CharacterAction_FinishConstruction(self, building));
                 }
                 catch (System.Exception e) { Debug.LogException(e); return BTNodeStatus.Failure; }
                 return BTNodeStatus.Running;
             }
 
-            // Walk to the zone centre.
-            var dest = bounds.center;
+            // Step 6: still need materials, nothing visible, nothing on hand → wander to
+            // expand awareness coverage. Wander destination is re-rolled every 4-8 seconds
+            // unless we've arrived sooner.
+            if (_scratchMissing.Count > 0) return DriveWander(self);
+
+            // No requirements outstanding AND not in zone → just walk to zone.
+            return WalkTo(self, zoneBounds.center);
+        }
+
+        // ─── Gather state-machine helpers ────────────────────────────────────
+
+        private BTNodeStatus DriveHarvest(Character self, Harvestable target)
+        {
+            if (target == null || target.gameObject == null) return BTNodeStatus.Failure;
             var movement = self.CharacterMovement;
             if (movement == null) return BTNodeStatus.Failure;
-            if (!_activeDestination.HasValue || Vector3.Distance(_activeDestination.Value, dest) > 0.5f
+
+            // Pick a destination on the harvestable's InteractionZone (rule #36).
+            Vector3 gatherPos = target.transform.position;
+            if (target.InteractionZone != null)
+                gatherPos = target.InteractionZone.bounds.ClosestPoint(self.transform.position);
+
+            bool isAtTarget = false;
+            if (target.InteractionZone != null)
+            {
+                var b = target.InteractionZone.bounds;
+                if (b.Contains(self.transform.position))
+                {
+                    isAtTarget = true;
+                }
+                else
+                {
+                    float dist = Vector3.Distance(self.transform.position, b.ClosestPoint(self.transform.position));
+                    if (dist <= 2.5f) isAtTarget = true;
+                    // Softlock guard (rule #36): NavMesh sampled landing point is just
+                    // outside the zone but the agent stopped advancing → treat as arrived.
+                    if (!isAtTarget && (!movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f))
+                    {
+                        Vector3 a = new Vector3(self.transform.position.x, 0f, self.transform.position.z);
+                        Vector3 c = new Vector3(target.transform.position.x, 0f, target.transform.position.z);
+                        if (Vector3.Distance(a, c) <= 4f) isAtTarget = true;
+                    }
+                }
+            }
+            else
+            {
+                isAtTarget = Vector3.Distance(self.transform.position, target.transform.position) <= 3f;
+            }
+
+            if (isAtTarget)
+            {
+                try
+                {
+                    self.transform.LookAt(new Vector3(target.transform.position.x, self.transform.position.y, target.transform.position.z));
+                    var action = new CharacterHarvestAction(self, target);
+                    self.CharacterActions.ExecuteAction(action);
+                }
+                catch (System.Exception e) { Debug.LogException(e); return BTNodeStatus.Failure; }
+                return BTNodeStatus.Running;
+            }
+
+            // Walk to gatherPos. Re-fire SetDestination on path-loss (rule #36 softlock guard).
+            if (!_activeDestination.HasValue
+                || Vector3.Distance(_activeDestination.Value, gatherPos) > 0.5f
+                || !movement.HasPath)
+            {
+                movement.SetDestination(gatherPos);
+                _activeDestination = gatherPos;
+            }
+            return BTNodeStatus.Running;
+        }
+
+        private BTNodeStatus DriveWander(Character self)
+        {
+            var movement = self.CharacterMovement;
+            if (movement == null) return BTNodeStatus.Failure;
+
+            float now = UnityEngine.Time.time;
+            bool arrived = !movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+            bool needNewDest = !_wanderDestination.HasValue || now >= _wanderUntilTime || arrived;
+            if (needNewDest)
+            {
+                Vector3 dest = self.transform.position;
+                float walkRadius = 18f; // ≈ awareness radius default × 1.2 — enough to drift into new awareness coverage each pick.
+                for (int i = 0; i < 5; i++)
+                {
+                    Vector2 r = UnityEngine.Random.insideUnitCircle * walkRadius;
+                    Vector3 candidate = self.transform.position + new Vector3(r.x, 0f, r.y);
+                    if (UnityEngine.AI.NavMesh.SamplePosition(candidate, out var hit, walkRadius, UnityEngine.AI.NavMesh.AllAreas))
+                    {
+                        dest = hit.position;
+                        break;
+                    }
+                }
+                movement.SetDestination(dest);
+                _wanderDestination = dest;
+                _wanderUntilTime = now + UnityEngine.Random.Range(4f, 8f);
+
+                if (NPCDebug.VerboseActions)
+                    Debug.Log($"[BTAction_PursueAmbition.Wander] {self.CharacterName} → {dest} (search-for-materials wander).");
+            }
+            return BTNodeStatus.Running;
+        }
+
+        private BTNodeStatus WalkTo(Character self, Vector3 dest)
+        {
+            var movement = self.CharacterMovement;
+            if (movement == null) return BTNodeStatus.Failure;
+            if (!_activeDestination.HasValue
+                || Vector3.Distance(_activeDestination.Value, dest) > 0.5f
                 || !movement.HasPath)
             {
                 movement.SetDestination(dest);
                 _activeDestination = dest;
             }
             return BTNodeStatus.Running;
+        }
+
+        // ─── Material accounting ─────────────────────────────────────────────
+
+        /// <summary>
+        /// Fills <paramref name="missing"/> with the per-ItemSO shortfall (required - contributed),
+        /// skipping fully-satisfied requirements. Cleared at the start so the caller can
+        /// reuse a scratch dictionary.
+        /// </summary>
+        private static void ComputeMissingMaterials(Building building, Dictionary<ItemSO, int> missing)
+        {
+            missing.Clear();
+            var reqs = building.ConstructionRequirements;
+            if (reqs == null) return;
+            var contributed = building.ContributedMaterials;
+            for (int i = 0; i < reqs.Count; i++)
+            {
+                var r = reqs[i];
+                if (r.Item == null || r.Amount <= 0) continue;
+                int delivered = (contributed != null && contributed.TryGetValue(r.Item, out int v)) ? v : 0;
+                int delta = r.Amount - delivered;
+                if (delta > 0) missing[r.Item] = delta;
+            }
+        }
+
+        private static bool HarvestableYieldsAny(Harvestable h, Dictionary<ItemSO, int> missing)
+        {
+            if (h == null || h.HarvestOutputs == null || missing.Count == 0) return false;
+            for (int i = 0; i < h.HarvestOutputs.Count; i++)
+            {
+                var o = h.HarvestOutputs[i];
+                if (o.Item == null) continue;
+                if (missing.ContainsKey(o.Item)) return true;
+            }
+            return false;
+        }
+
+        private static ItemInstance FindCarriedRelevantItem(Character self, Dictionary<ItemSO, int> missing)
+        {
+            var equipment = self.CharacterEquipment;
+            if (equipment == null || !equipment.HaveInventory()) return null;
+            var inv = equipment.GetInventory();
+            if (inv == null) return null;
+            var slots = inv.ItemSlots;
+            if (slots == null) return null;
+            for (int i = 0; i < slots.Count; i++)
+            {
+                var s = slots[i];
+                if (s == null || s.IsEmpty()) continue;
+                var inst = s.ItemInstance;
+                if (inst == null || inst.ItemSO == null) continue;
+                if (missing.ContainsKey(inst.ItemSO)) return inst;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Overlap-scans a small radius around <paramref name="self"/> for a
+        /// <see cref="WorldItem"/> whose <c>ItemSO</c> matches a missing requirement and
+        /// which is not currently being carried by someone. Returns the underlying
+        /// <see cref="ItemInstance"/> + the <see cref="GameObject"/> so callers can hand
+        /// them straight to <see cref="CharacterPickUpItem"/>.
+        /// </summary>
+        private ItemInstance FindNearbyMatchingWorldItem(Character self, Dictionary<ItemSO, int> missing, out GameObject worldObject)
+        {
+            worldObject = null;
+            if (missing.Count == 0) return null;
+            const float SearchRadius = 4f;
+            int hitCount = Physics.OverlapSphereNonAlloc(self.transform.position, SearchRadius, _scratchOverlap,
+                Physics.AllLayers, QueryTriggerInteraction.Collide);
+            for (int i = 0; i < hitCount; i++)
+            {
+                var col = _scratchOverlap[i];
+                if (col == null) continue;
+                var wi = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
+                if (wi == null || wi.IsBeingCarried) continue;
+                var inst = wi.ItemInstance;
+                if (inst == null || inst.ItemSO == null) continue;
+                if (!missing.ContainsKey(inst.ItemSO)) continue;
+                worldObject = wi.gameObject;
+                return inst;
+            }
+            return null;
+        }
+
+        private bool IsInPickupRange(Character self, GameObject worldObject)
+        {
+            if (worldObject == null) return false;
+            var interactable = worldObject.GetComponent<InteractableObject>() ?? worldObject.GetComponentInParent<InteractableObject>();
+            if (interactable != null && interactable.InteractionZone != null)
+            {
+                var bounds = interactable.InteractionZone.bounds;
+                if (bounds.Contains(self.transform.position)) return true;
+                Vector3 closest = bounds.ClosestPoint(self.transform.position);
+                Vector3 a = new Vector3(self.transform.position.x, 0f, self.transform.position.z);
+                Vector3 b = new Vector3(closest.x, 0f, closest.z);
+                return Vector3.Distance(a, b) <= 1.5f;
+            }
+            return Vector3.Distance(self.transform.position, worldObject.transform.position) <= 1.5f;
+        }
+
+        private bool AnyZoneItemSatisfiesReq(Building building, Dictionary<ItemSO, int> missing)
+        {
+            if (building == null || building.BuildingZone == null || missing.Count == 0) return false;
+            var b = building.BuildingZone.bounds;
+            int hitCount = Physics.OverlapBoxNonAlloc(b.center, b.extents, _scratchOverlap, Quaternion.identity,
+                Physics.AllLayers, QueryTriggerInteraction.Collide);
+            for (int i = 0; i < hitCount; i++)
+            {
+                var col = _scratchOverlap[i];
+                if (col == null) continue;
+                var wi = col.GetComponent<WorldItem>() ?? col.GetComponentInParent<WorldItem>();
+                if (wi == null || wi.IsBeingCarried) continue;
+                var inst = wi.ItemInstance;
+                if (inst == null || inst.ItemSO == null) continue;
+                if (missing.ContainsKey(inst.ItemSO)) return true;
+            }
+            return false;
         }
 
         /// <summary>
