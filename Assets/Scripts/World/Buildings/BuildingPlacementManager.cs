@@ -441,6 +441,65 @@ namespace MWI.WorldSystem
 
         // ────────────────────── Server-Authoritative Spawn ──────────────────────
 
+        /// <summary>
+        /// Plan 4c Task 4 — server-side entry for admin-console-driven civic placement.
+        /// Bypasses the player ghost flow entirely. The caller
+        /// (<see cref="AdministrativeBuilding.PlaceCityBlueprintServerRpc"/>) has already
+        /// validated leader-authority + tier-unlock + BuildingGrid CanPlace; this method
+        /// performs the server-side region re-check, spawns the building, and runs the
+        /// existing RegisterBuildingWithMap flow. Returns the spawned <see cref="Building"/>
+        /// or null on failure.
+        ///
+        /// Server-only. <paramref name="placer"/> is the leader requesting the placement —
+        /// its CharacterId becomes the new building's <c>PlacedByCharacterId</c>.
+        /// </summary>
+        public Building PlaceCivicBuildingForLeader(BuildingSO blueprint, Character placer,
+                                                    Vector3 worldPos, Quaternion rotation)
+        {
+            if (!NetworkManager.Singleton.IsServer) return null;
+            if (blueprint == null || placer == null) return null;
+
+            EnsureSettings();
+            if (!IsInsideRegion(worldPos))
+            {
+                Debug.LogWarning($"<color=orange>[BuildingPlacementManager]</color> Civic placement rejected: position {worldPos} outside any Region.");
+                return null;
+            }
+
+            if (blueprint.BuildingPrefab == null)
+            {
+                Debug.LogError($"<color=red>[BuildingPlacementManager]</color> Civic placement: blueprint '{blueprint.BuildingName}' has no BuildingPrefab.");
+                return null;
+            }
+
+            GameObject buildingObj = Instantiate(blueprint.BuildingPrefab, worldPos, rotation);
+            var placedBuilding = buildingObj.GetComponent<Building>();
+            if (placedBuilding == null)
+            {
+                Debug.LogError("[BuildingPlacementManager] Civic placement: spawned prefab has no Building component.");
+                Destroy(buildingObj);
+                return null;
+            }
+
+            placedBuilding.PlacedByCharacterId.Value = placer.CharacterId;
+
+            var netObj = buildingObj.GetComponent<NetworkObject>();
+            if (netObj == null)
+            {
+                Debug.LogError($"[BuildingPlacementManager] Civic placement: blueprint '{blueprint.BuildingName}' BuildingPrefab missing NetworkObject. Aborted.");
+                Destroy(buildingObj);
+                return null;
+            }
+            netObj.Spawn();
+
+            // Reuse the standard map-registration path. This also handles the
+            // AdministrativeBuilding-specific founder-binding (no-op for Civic since the
+            // placer's CurrentCommunity is the chartered city, not a fresh community).
+            RegisterBuildingWithMap(buildingObj, worldPos);
+
+            return placedBuilding;
+        }
+
         [ServerRpc]
         private void RequestPlacementServerRpc(string prefabId, Vector3 position, Quaternion rotation, bool instant)
         {

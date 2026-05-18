@@ -46,6 +46,19 @@ namespace MWI.WorldSystem
                 _originXZ.y + (cell.y + 0.5f) * CellSizeUnits);
         }
 
+        /// <summary>
+        /// Returns the world-space center of <paramref name="cell"/>. Y can be supplied
+        /// explicitly (e.g. the placer's terrain-relative Y) or left at 0 for systems
+        /// that resolve Y separately.
+        /// </summary>
+        public Vector3 GetCellCenter(Vector2Int cell, float y = 0f)
+        {
+            return new Vector3(
+                _originXZ.x + (cell.x + 0.5f) * CellSizeUnits,
+                y,
+                _originXZ.y + (cell.y + 0.5f) * CellSizeUnits);
+        }
+
         /// <summary>Resolves an arbitrary world position to the integer cell coordinate it occupies.</summary>
         public Vector2Int GetCellCoord(Vector3 worldPos)
         {

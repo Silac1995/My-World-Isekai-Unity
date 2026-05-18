@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
+using MWI.WorldSystem;
 
 /// <summary>
 /// The city's capital building. One per community (enforced by
@@ -167,6 +169,131 @@ public class AdministrativeBuilding : CommercialBuilding
         founder.CharacterCommunity.SetCitizenship(OwnerCommunity);
         Debug.Log($"<color=green>[AdministrativeBuilding]</color> '{BuildingName}' complete — " +
             $"'{founder.CharacterName}' is now a citizen of '{OwnerCommunity.communityName}'.");
+    }
+
+    // ── Civic placement (Plan 4c Task 4) ──────────────────────────────────
+
+    /// <summary>
+    /// Player UI entry for admin-console-driven civic building placement. Leader picks a
+    /// tier-unlocked Civic blueprint, the UI sends prefabId + targetCell here. Server:
+    /// 1. Validates requester is a leader of OwnerCommunity.
+    /// 2. Validates blueprint is Civic + unlocked at current community tier.
+    /// 3. Validates the host map's BuildingGrid.CanPlace at targetCell.
+    /// 4. Delegates the actual spawn to <see cref="BuildingPlacementManager.PlaceCivicBuildingForLeader"/>.
+    /// 5. Wires the new building into community.ownedBuildings + multi-owner + BuildingGrid.
+    /// 6. Auto-creates a <see cref="BuildOrder"/> on this AB's LogisticsManager so
+    ///    JobBuilder + JobLogisticsManager pick it up on the next tick (Plan 4b).
+    /// 7. Replies via <see cref="PlaceCityBlueprintResultClientRpc"/> for a UI toast.
+    /// </summary>
+    [ServerRpc(RequireOwnership = false)]
+    public void PlaceCityBlueprintServerRpc(string blueprintPrefabId, Vector2Int targetCell,
+                                              ServerRpcParams rpcParams = default)
+    {
+        if (!IsServer) return;
+        var single = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams { TargetClientIds = new[] { rpcParams.Receive.SenderClientId } }
+        };
+
+        if (OwnerCommunity == null)
+        {
+            PlaceCityBlueprintResultClientRpc(false, "AB has no owner community.", single);
+            return;
+        }
+
+        Character requester = ResolveCharacterFromClientId(rpcParams.Receive.SenderClientId);
+        if (requester == null || !OwnerCommunity.IsLeader(requester))
+        {
+            PlaceCityBlueprintResultClientRpc(false, "Not a leader of this community.", single);
+            return;
+        }
+
+        // Resolve blueprint via WorldSettingsData.
+        var settings = Resources.Load<WorldSettingsData>("Data/World/WorldSettingsData");
+        var blueprint = settings != null ? settings.GetBuildingBlueprint(blueprintPrefabId) : null;
+        if (blueprint == null)
+        {
+            PlaceCityBlueprintResultClientRpc(false, "Unknown blueprint.", single);
+            return;
+        }
+
+        if (blueprint.BlueprintCategory != BlueprintCategory.Civic)
+        {
+            PlaceCityBlueprintResultClientRpc(false, "Personal blueprints must be placed via the normal flow, not the admin console.", single);
+            return;
+        }
+
+        // Tier-unlock gate.
+        var req = MWI.WorldSystem.CommunityTierRegistry.Get(OwnerCommunity.level);
+        if (req == null || req.UnlockedBlueprints == null || !req.UnlockedBlueprints.Contains(blueprint))
+        {
+            PlaceCityBlueprintResultClientRpc(false, $"'{blueprint.BuildingName}' not unlocked at current tier.", single);
+            return;
+        }
+
+        // Host map + BuildingGrid lookup.
+        var hostMap = MapController.GetMapAtPosition(transform.position);
+        if (hostMap == null || hostMap.BuildingGrid == null)
+        {
+            PlaceCityBlueprintResultClientRpc(false, "AB has no host map / grid.", single);
+            return;
+        }
+
+        if (!hostMap.BuildingGrid.CanPlace(targetCell, blueprint.GridFootprintCells))
+        {
+            PlaceCityBlueprintResultClientRpc(false, "Cell occupied or out of bounds.", single);
+            return;
+        }
+
+        Vector3 worldPos = hostMap.BuildingGrid.GetCellCenter(targetCell, transform.position.y);
+
+        // Delegate to the BuildingPlacementManager on the leader's Character.
+        var bpm = requester.GetComponentInChildren<BuildingPlacementManager>();
+        if (bpm == null)
+        {
+            PlaceCityBlueprintResultClientRpc(false, "Leader has no BuildingPlacementManager subsystem.", single);
+            return;
+        }
+
+        Building newBuilding = bpm.PlaceCivicBuildingForLeader(blueprint, requester, worldPos, Quaternion.identity);
+        if (newBuilding == null)
+        {
+            PlaceCityBlueprintResultClientRpc(false, "Placement failed (see Console).", single);
+            return;
+        }
+
+        // Wire community + multi-owner.
+        if (!OwnerCommunity.ownedBuildings.Contains(newBuilding))
+            OwnerCommunity.ownedBuildings.Add(newBuilding);
+        foreach (var leader in OwnerCommunity.leaders)
+        {
+            if (leader == null) continue;
+            try { newBuilding.AddOwner(leader); }
+            catch (System.Exception e) { Debug.LogException(e); }
+        }
+
+        // Register footprint on the grid (host map's BuildingGrid).
+        if (newBuilding.NetworkObject != null)
+        {
+            hostMap.BuildingGrid.Register(newBuilding.NetworkObject.NetworkObjectId, targetCell, blueprint.GridFootprintCells);
+        }
+
+        // Auto-create the BuildOrder. JobLogisticsManager.ProcessActiveBuildOrders (Plan 4b
+        // Task 6) consumes it on the next tick; JobBuilder picks it up via CurrentBuildOrder.
+        if (LogisticsManager != null && newBuilding.IsUnderConstruction)
+        {
+            int day = MWI.Time.TimeManager.Instance != null ? MWI.Time.TimeManager.Instance.CurrentDay : 0;
+            var order = new BuildOrder(newBuilding, this, requester, day);
+            LogisticsManager.AddBuildOrder(order);
+        }
+
+        PlaceCityBlueprintResultClientRpc(true, $"{blueprint.BuildingName} placed.", single);
+    }
+
+    [ClientRpc]
+    private void PlaceCityBlueprintResultClientRpc(bool ok, string message, ClientRpcParams rpcParams = default)
+    {
+        Debug.Log($"<color={(ok ? "green" : "orange")}>[AdministrativeBuilding]</color> Civic placement: {message}");
     }
 
     // ── Tier-up (Plan 4c Task 3) ──────────────────────────────────────────
