@@ -76,6 +76,7 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
     // Cached movement target across consecutive Execute calls (planner reuses the
     // same instance until _isComplete = true).
     private Vector3? _activeDestination;
+    private Vector3? _exploreDestination; // Step 5b active-exploration target. Cleared on arrival.
     private Harvestable _targetHarvestable;
     private YieldMode _targetMode;
     private bool _actionStarted; // true while a queued CharacterAction is in flight.
@@ -265,23 +266,15 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
 
         // Step 5: distant fallback. Awareness saw nothing within ~35u, but a Harvestable
         // or loose WorldItem yielding a missing material may exist farther afield. Scan
-        // the whole scene (rare path — only fires when awareness is empty; the 2s GOAP
-        // Replan throttle bounds the cost). Walk TOWARD the closest match. Awareness
-        // catches up as the NPC approaches and the next plan tick picks the harvest /
-        // pickup branch normally. Without this, an NPC stuck in the BuildingZone with
-        // remaining work but no trees in immediate awareness drops to BT Wander forever
-        // — Kevin observed this in the 2026-05-18 playtest: an NPC progressed from 0/2
-        // to 1/2 Wood and then wandered indefinitely (only an interaction unstuck it,
-        // by coincidentally moving it into awareness range of another tree).
+        // the WHOLE scene (no distance cap — if a viable source exists anywhere, the NPC
+        // should commit and walk to it). Cost is bounded by the 2s GOAP Replan throttle.
         if (_scratchMissing.Count > 0)
         {
-            const float DistantSearchRadius = 80f;
             Vector3 selfPos = worker.transform.position;
             Vector3 destination = default;
             float bestSqr = float.MaxValue;
             bool found = false;
 
-            // Loose WorldItems first (cheaper trip than a harvest cycle).
             var allItems = UnityEngine.Object.FindObjectsByType<WorldItem>(FindObjectsSortMode.None);
             for (int i = 0; i < allItems.Length; i++)
             {
@@ -292,11 +285,9 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
                 if (!_scratchMissing.ContainsKey(inst.ItemSO)) continue;
                 if (zoneBounds.Contains(wi.transform.position)) continue; // delivered material — leave for consume.
                 float sqr = (wi.transform.position - selfPos).sqrMagnitude;
-                if (sqr > DistantSearchRadius * DistantSearchRadius) continue;
                 if (sqr < bestSqr) { bestSqr = sqr; destination = wi.transform.position; found = true; }
             }
 
-            // Then accessible Harvestables yielding missing items (harvest or destroy path).
             var allHarvs = UnityEngine.Object.FindObjectsByType<Harvestable>(FindObjectsSortMode.None);
             for (int i = 0; i < allHarvs.Length; i++)
             {
@@ -306,7 +297,6 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
                 bool destroyPath = CanNpcDestroy(h) && h.HasAnyDestructionOutput(_scratchMissingKeys);
                 if (!harvestPath && !destroyPath) continue;
                 float sqr = (h.transform.position - selfPos).sqrMagnitude;
-                if (sqr > DistantSearchRadius * DistantSearchRadius) continue;
                 if (sqr < bestSqr) { bestSqr = sqr; destination = h.transform.position; found = true; }
             }
 
@@ -319,7 +309,48 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
             }
         }
 
-        // Step 6: empty awareness, nothing to consume, nothing to deliver — give up this
+        // Step 5b: nothing in scene at all OR all viable sources unreachable. Drive an
+        // active exploration wander inside the GoapAction instead of completing — this
+        // way the BT stays on the GOAP branch (CharacterGoapController.CurrentAction
+        // remains visible in the inspector) and the NPC explores broadly. BTAction_Wander
+        // is map-bounds-clamped and tends to circle the same area; this picks a far
+        // NavMesh.SamplePosition'd point so each tick the NPC actually covers ground and
+        // brings new tiles of the world into awareness coverage.
+        if (_scratchMissing.Count > 0)
+        {
+            const float ExploreRadius = 60f;
+            var movement = worker.CharacterMovement;
+            if (movement != null)
+            {
+                bool arrived = !movement.HasPath || movement.RemainingDistance <= movement.StoppingDistance + 0.5f;
+                if (!_exploreDestination.HasValue || arrived)
+                {
+                    Vector3 best = worker.transform.position;
+                    bool sampled = false;
+                    for (int i = 0; i < 6; i++)
+                    {
+                        Vector2 circle = UnityEngine.Random.insideUnitCircle.normalized * UnityEngine.Random.Range(0.6f * ExploreRadius, ExploreRadius);
+                        Vector3 cand = worker.transform.position + new Vector3(circle.x, 0f, circle.y);
+                        if (UnityEngine.AI.NavMesh.SamplePosition(cand, out var hit, ExploreRadius, UnityEngine.AI.NavMesh.AllAreas))
+                        {
+                            best = hit.position;
+                            sampled = true;
+                            break;
+                        }
+                    }
+                    if (sampled)
+                    {
+                        movement.SetDestination(best);
+                        _exploreDestination = best;
+                        if (NPCDebug.VerboseActions)
+                            Debug.Log($"<color=yellow>[GoapAction_FulfillAmbitionConstruction]</color> {worker.CharacterName} no source visible anywhere in scene — exploring toward {best} (dist {Vector3.Distance(worker.transform.position, best):F1}u).");
+                    }
+                }
+                return;
+            }
+        }
+
+        // Step 6: still nothing actionable (no movement subsystem, _scratchMissing empty
         // pass. The planner will replan after the throttle window; if the NPC has moved
         // (Wander branch) by then, awareness will catch a new harvestable.
         if (NPCDebug.VerboseActions)
@@ -367,6 +398,7 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
         _isComplete = false;
         _actionStarted = false;
         _activeDestination = null;
+        _exploreDestination = null;
         _targetHarvestable = null;
         _targetMode = YieldMode.None;
         worker?.CharacterMovement?.ResetPath();
