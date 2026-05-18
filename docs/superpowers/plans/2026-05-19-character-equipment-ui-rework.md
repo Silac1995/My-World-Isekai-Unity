@@ -17,6 +17,41 @@
 
 ---
 
+## Execution log (2026-05-19, late session)
+
+Partial execution shipped 8 commits — Phases A through D + script-side of Phase E.
+
+| Phase | Status | Commits |
+|---|---|---|
+| A — Foundation (Tasks 1+2) | ✅ Done | `0377cc24`, `80121569` |
+| B — CharacterEquipment refactor (Tasks 3+4+5) | ✅ Done | `3832879e` |
+| C — Five new CharacterActions (Tasks 6–10) | ✅ Done | `b85d2ac0`, `67af330b` |
+| D — UI scripts (Tasks 11–15) | ✅ Done | `12487db8` |
+| E — Wiring + cleanup + docs (Tasks 16–21) | ⚠️ Partial | `6fb2795d` (Task 16 + Task 20 button repoint), plus this commit (docs) |
+
+**Plan deviations recorded:**
+
+- **Task 10b added (new):** `CharacterActions.RequestEquipmentVerbServerRpc(byte verbId, byte sourceKind, int bagIndex, int layer, int slot)` — consolidated RPC bridge for all seven verbs. Discovered mid-execution: direct `actions.ExecuteAction(...)` from a client owner runs locally only (`CharacterActions.cs:78-86`, both `if/else` branches call `OnApplyEffect` locally), and the new actions early-exit on `!IsServer`. Without the RPC bridge the UI never reaches the server. Pattern from `SafeFurnitureNetworkSync.RequestDepositServerRpc`. NPC AI paths continue to `ExecuteAction` directly. Landed in commit `67af330b`.
+- **Task 17 SKIPPED:** Spec said "keep Tab binding" but Tab at `PlayerController.cs:216` is `HandleTabTargeting()` (cycle-select closest interactable), NOT the equipment opener. Only the HUD `_buttonEquipmentUI` button opens the window. No hotkey added.
+- **Phase D / Task 13 small change:** dropped the Quantity label from `UI_EquipmentBagCell` — `ItemInstance` has no `Quantity` accessor today (1-per-slot model per `wiki/systems/inventory.md` open question). Added a placeholder comment for when stack sizes land.
+- **Task 15 dispatch:** UI's `OnVerbSelected` calls `RequestEquipmentVerbServerRpc(...)` instead of `actions.ExecuteAction(new X)` (Task 10b consequence).
+- **CharacterEquipment caller-sweep findings (Task 3 Step 1):** `Equip()` is called from `EquipmentInstance.EquipToCharacter` + `CharacterEquipAction.OnApplyEffect` (the existing 0.8s wearable-equip action used by `WorldItem.RequestInteractServerRpc` wearable pickup + `GoapAction_EquipCarriedClothing` + `GoapAction_WearClothing`). None depended on the legacy drop-to-ground side-effect; all benefit from less litter.
+
+**Deferred — next session:**
+
+- **Task 18: prefab authoring via MCP Roslyn.** Overwrites the existing `Assets/UI/Player HUD/UI_CharacterEquipment.prefab` (destructive — old prefab's authoring is lost). Authors `UI_CharacterEquipment.prefab` as Variant of `UI_WindowBase.prefab` + leaf `UI_EquipmentBagCell.prefab`. Designer polish (15 worn mini-cells under DollStage, popup button-prefab styling, fonts/sprites) is a follow-up commit per "scaffold-first" convention.
+- **Task 19: scene wiring.** Rebind `PlayerUI._equipmentUI` to the new prefab instance in the active scene; deletes the old child GameObject that hosts `CharacterEquipmentUI`. Edit-mode only.
+- **Task 20 step 2: delete legacy `CharacterEquipmentUI.cs`.** Held until the old prefab is gone (Task 18 overwrites it) — deleting the script while a prefab still references it risks the standalone build crash from rule #38 ("Prefabs with MonoBehaviour components whose script GUID no longer resolves to a `.cs` file").
+- **Agent files** (`.claude/agents/character-system-specialist.md`, `item-inventory-specialist.md`, `ui-hud-specialist.md`): one-sentence description bumps deferred. Low priority — agent loading still works without them.
+
+**Current state on disk:**
+
+- `_equipmentUI` SerializeField on `PlayerUI` is now typed `MWI.UI.Equipment.UI_CharacterEquipment` but null in the scene (type mismatch from old `CharacterEquipmentUI`). The window cannot open; `OpenEquipmentWindow` logs the orange `[PlayerUI]` rule #39 warning + early-returns. **In-game equipment access is broken until Tasks 18+19 land.**
+- Old `CharacterEquipmentUI.cs` + old `UI_CharacterEquipment.prefab` both still on disk. The old prefab's scene instance under PlayerUI is still there with its old script attached but has no callers in the new PlayerUI.
+- Compile is clean. No console errors. The game runs, just without equipment UI.
+
+---
+
 ## Plan-phase decisions (resolved)
 
 The spec left three open questions for the plan phase. Decisions baked into the tasks below:

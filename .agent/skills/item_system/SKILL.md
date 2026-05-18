@@ -179,3 +179,37 @@ Books are a specialized item type for reading content and learning abilities/ski
 - Books are NOT consumed on completion.
 - Reading speed scales with Intelligence.
 - `Character.CharacterBookKnowledge` property added to `Character.cs` with auto-resolution in initialization.
+
+
+---
+
+## Equipment-window action surface (2026-05-19)
+
+Five new `CharacterAction` subclasses route every equipment-window mutation
+through one server-authoritative surface (rule #22):
+
+- `CharacterAction_EquipWearable(bagSlotIndex)` — bag → worn (auto-displaces).
+- `CharacterAction_UnequipWearable(layer, slot)` — worn → bag, fallback ground.
+- `CharacterAction_CarryInHand(EquipmentSourceRef)` — smart-swap with current hand.
+- `CharacterAction_StashInBag(EquipmentSourceRef)` — hand/worn/weapon → bag.
+- `CharacterAction_UseItem(EquipmentSourceRef)` — consumable dispatch via `ConsumableInstance.ApplyEffect`.
+
+`EquipmentSourceRef` is the shared discriminator: `BagSlot(int)` / `WornSlot(layer,slot)` /
+`ActiveWeapon` / `HandsCarry`. Smart-swap algorithm captured in the [design spec](../../docs/superpowers/specs/2026-05-19-character-equipment-ui-rework-design.md) §6.
+
+**Behavior change**: `CharacterEquipment.Equip` displacement is now bag-first with
+ground fallback (was: always drop). Three new helpers on `CharacterEquipment`:
+`UnequipToBag(layer, slot)` (worn → bag, fallback ground), `WieldOffToHand()`
+(active weapon → caller without drop), `DetachWornToCaller(layer, slot)` (worn → caller).
+Plus private `TryStashInBag(ItemInstance)` used by all three. The older `Equip()` /
+`UnequipBag()` / `UnequipWeapon()` API remains for non-UI callers.
+
+**Player-UI ↔ server bridge**: one consolidated
+`CharacterActions.RequestEquipmentVerbServerRpc(byte verbId, byte sourceKind, int bagIndex, int layer, int slot)`
+routes all seven verbs (5 actions + UnequipBag + DropToGround). UI calls the RPC;
+the RPC validates ownership and enqueues the matching action. NPC AI paths call
+`ExecuteAction` directly server-side, bypassing the RPC.
+
+Bag-inventory replication contract ("Bag-inventory replication authority" section
+above) is unchanged — all five new actions are owner-local-triggered, so the
+documented "server-side mutation on remote-client character" path is not hit.
