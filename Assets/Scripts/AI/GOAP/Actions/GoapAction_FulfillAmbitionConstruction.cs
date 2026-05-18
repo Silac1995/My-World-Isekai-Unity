@@ -124,6 +124,20 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
         bool inZone = actorPos.x >= zoneBounds.min.x && actorPos.x <= zoneBounds.max.x
                    && actorPos.z >= zoneBounds.min.z && actorPos.z <= zoneBounds.max.z;
 
+        // Step 0.5 (PRIORITY): if we're inside the zone AND there's at least one zone-
+        // resident WorldItem matching a missing req, queue CharacterAction_FinishConstruction
+        // IMMEDIATELY — before Step 1's drop or Step 2's pickup. Otherwise the moment we
+        // drop a wood inside the zone the next tick's Step 2 (loose-item-nearby scan) sees
+        // that same wood at our feet and picks it up, leading to an infinite drop ↔ pickup
+        // loop. Reordering this branch to the top is the right fix because the consume
+        // action is what actually moves construction forward — gathering more wood is
+        // useless if we never consume what we already delivered.
+        if (inZone && _scratchMissing.Count > 0 && AnyZoneItemSatisfiesReq(building, _scratchMissing))
+        {
+            TryQueueAction(worker, new CharacterAction_FinishConstruction(worker, building));
+            return;
+        }
+
         // Step 1: carrying a relevant item → walk to zone + drop. Two pitfalls handled
         // here (each cost a playtest iteration to surface):
         //
@@ -169,10 +183,14 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
         }
 
         // Step 2: loose WorldItem nearby matching a missing req → walk + pickup.
+        // Skip anything that's already inside the BuildingZone — that's "delivered
+        // material" waiting on Step 0.5's consume, not "loose stuff to gather". Without
+        // this guard the actor would re-pick its own just-dropped wood when Step 0.5
+        // hasn't yet ticked the consume action to completion.
         if (_scratchMissing.Count > 0)
         {
             var loose = FindNearbyMatchingWorldItem(worker, _scratchMissing, out var looseObj);
-            if (loose != null && looseObj != null)
+            if (loose != null && looseObj != null && !zoneBounds.Contains(looseObj.transform.position))
             {
                 if (IsInPickupRange(worker, looseObj))
                 {
@@ -240,12 +258,10 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
             }
         }
 
-        // Step 5: inside zone + zone has consumable items → queue the consume action.
-        if (inZone && AnyZoneItemSatisfiesReq(building, _scratchMissing))
-        {
-            TryQueueAction(worker, new CharacterAction_FinishConstruction(worker, building));
-            return;
-        }
+        // (Old Step 5 "inside zone + consumable items → consume" promoted to Step 0.5
+        // at the top of Execute, so the consume happens BEFORE the drop / pickup branches.
+        // Without that priority shift the actor enters an infinite drop ↔ pickup loop on
+        // its own just-dropped material — Kevin's playtest 2026-05-18.)
 
         // Step 6: empty awareness, nothing to consume, nothing to deliver — give up this
         // pass. The planner will replan after the throttle window; if the NPC has moved
