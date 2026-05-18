@@ -102,6 +102,7 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
         BuildCommunityReadoutSection(_bound);
         BuildForcePromoteSection(_bound);
         BuildGrantTreasurySection(_bound);
+        BuildTimeControlSection();
         // Feature sections land here in subsequent commits.
     }
 
@@ -358,6 +359,45 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
             catch (Exception e) { Debug.LogException(e); }
             RebuildAll();
         }, row.transform, minWidth: 160);
+    }
+
+    // ─── Feature 6: Time control ──────────────────────────────────────────
+
+    /// <summary>
+    /// Universal — visible regardless of the inspected character's community state.
+    /// Pumps <see cref="MWI.Time.TimeManager.OnNewDay"/> N times via
+    /// <see cref="MWI.Time.TimeManager.DevForceNewDay"/>, which is the trigger
+    /// <see cref="DrifterMigrationSystem"/> listens on. One click ≙ one drifter
+    /// roll (subject to the system's own probability gates).
+    ///
+    /// Lives in this sub-tab (not a dedicated Time tab) because the only current
+    /// caller is the city-founding loop iteration. Move it to a Time sub-tab if a
+    /// second consumer appears.
+    /// </summary>
+    private void BuildTimeControlSection()
+    {
+        MakeHeader("Time");
+
+        var tm = MWI.Time.TimeManager.Instance;
+        if (tm == null)
+        {
+            MakeLabel("<color=grey>(no TimeManager in scene)</color>");
+            return;
+        }
+
+        MakeLabel($"<color=#FFD27A>Day:</color> {tm.CurrentDay}    <color=#FFD27A>Hour:</color> {tm.CurrentHour:00}:{tm.CurrentMinute:00}    <color=#FFD27A>Phase:</color> {tm.CurrentPhase}");
+
+        var row = MakeRow();
+        var countInput = MakeInput("days", _newDayCountInput, row.transform, minWidth: 60);
+        MakeButton("[DEV] Force NewDay", () =>
+        {
+            if (!int.TryParse(countInput.text, out int count) || count <= 0) count = 1;
+            _newDayCountInput = countInput.text;
+            try { tm.DevForceNewDay(count); }
+            catch (Exception e) { Debug.LogException(e); }
+            RebuildAll();
+        }, row.transform, minWidth: 160);
+        MakeLabel("<color=grey>fires OnNewDay N times — drives DrifterMigrationSystem + ambition daily tasks.</color>", row.transform);
     }
 
     // ─── Widget helpers (programmatic UGUI, dev-only) ────────────────────

@@ -221,6 +221,44 @@ namespace MWI.Time
             UpdatePhase(false);
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>
+        /// DEV-ONLY. Bumps <see cref="CurrentDay"/> by <paramref name="count"/> days
+        /// (default 1) and fires <see cref="OnNewDay"/> once per skipped day so server
+        /// subscribers (<c>DrifterMigrationSystem</c>, <c>FarmGrowthSystem</c>,
+        /// community trackers, ambition deadlines, …) see the same event volume as a
+        /// natural midnight rollover. Phase/hour are left untouched — only the day
+        /// counter advances.
+        ///
+        /// Host-only + DevMode-gated. Production code should NEVER call this; for
+        /// natural-speed time advancement use <see cref="AdvanceOneHour"/> (driven by
+        /// <c>TimeSkipController</c>).
+        /// </summary>
+        public void DevForceNewDay(int count = 1)
+        {
+            if (count <= 0) return;
+            if (Unity.Netcode.NetworkManager.Singleton != null
+                && Unity.Netcode.NetworkManager.Singleton.IsListening
+                && !Unity.Netcode.NetworkManager.Singleton.IsServer)
+            {
+                Debug.LogWarning("<color=magenta>[DevMode]</color> DevForceNewDay ignored — not on server.");
+                return;
+            }
+            if (DevModeManager.Instance == null || !DevModeManager.Instance.IsEnabled)
+            {
+                Debug.LogWarning("<color=magenta>[DevMode]</color> DevForceNewDay ignored — DevMode not enabled.");
+                return;
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                CurrentDay++;
+                OnNewDay?.Invoke();
+            }
+            Debug.LogWarning($"<color=magenta>[DevMode]</color> DevForceNewDay — advanced {count} day(s) to Day {CurrentDay}.");
+        }
+#endif
+
         #region ISaveable Implementation
 
         public string SaveKey => "TimeManager_Data";
