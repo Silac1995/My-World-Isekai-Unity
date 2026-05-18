@@ -134,8 +134,20 @@ namespace MWI.AI
                         break;
 
                     case Task_FinishConstruction finish when finish.TargetBlueprint != null:
-                        if (TryFindActorBuilding(self, finish.TargetBlueprint, requireUnderConstruction: true, out var b))
-                            return DriveFinishConstruction(self, b);
+                        // DELIBERATE STEP-ASIDE: Task_FinishConstruction is delegated to GOAP
+                        // via NeedAmbitionFinishConstruction → GoapAction_FulfillAmbitionConstruction.
+                        // The BT priority order is Ambition (this node) → GOAP → Wander. By
+                        // returning Failure here we step aside; the BT Selector tries the next
+                        // child (GOAP) which picks up the goal "ambitionBuildingFinalized=true"
+                        // and executes the composite gather/carry/drop/finalize state machine.
+                        // This makes the active goal + action visible in the CharacterGoapController
+                        // inspector — closing the "his goap goal and action is at none" gap from
+                        // the BTAction-only path. The BTAction's own DriveFinishConstruction
+                        // helper below is kept for reference but no longer called (left in place
+                        // for any future ambition step whose driver can't easily be expressed as
+                        // a GoapGoal).
+                        if (TryFindActorBuilding(self, finish.TargetBlueprint, requireUnderConstruction: true, out _))
+                            return BTNodeStatus.Failure;
                         break;
 
                     case Task_PromoteCommunity promote:

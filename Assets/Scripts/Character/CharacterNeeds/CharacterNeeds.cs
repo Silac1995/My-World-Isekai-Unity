@@ -156,6 +156,7 @@ public class CharacterNeeds : CharacterSystem, ICharacterSaveData<NeedsSaveData>
 
             _allNeeds.Add(new NeedToWearClothing(_character));
             _allNeeds.Add(new NeedJob(_character));
+            _allNeeds.Add(new NeedAmbitionFinishConstruction(_character));
 
             // NeedHunger needs a back-reference to CharacterNeeds so it can read/write the NetworkVariable.
             var hunger = new NeedHunger(_character, this);
