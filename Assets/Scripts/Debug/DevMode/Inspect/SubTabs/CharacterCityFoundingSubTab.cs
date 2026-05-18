@@ -52,6 +52,11 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
     private Character _bound;
     private readonly List<GameObject> _spawnedWidgets = new();
 
+    // Cached transient input values (preserve between rebuilds when the user typed
+    // something then triggered a rebuild via a sibling button).
+    private string _treasuryAmountInput = "1000";
+    private string _newDayCountInput = "1";
+
     private Transform WidgetParent => _widgetRoot != null ? (Transform)_widgetRoot : transform;
 
     /// <summary>Required by the abstract base — this sub-tab renders widgets, not text.</summary>
@@ -96,6 +101,7 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
         BuildAssignAmbitionSection(_bound);
         BuildCommunityReadoutSection(_bound);
         BuildForcePromoteSection(_bound);
+        BuildGrantTreasurySection(_bound);
         // Feature sections land here in subsequent commits.
     }
 
@@ -316,6 +322,42 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
             catch (Exception e) { Debug.LogException(e); }
             RebuildAll();
         }, row.transform);
+    }
+
+    // ─── Feature 5: Grant Treasury ────────────────────────────────────────
+
+    /// <summary>
+    /// Credits a designer-supplied amount (default 1000) into the AB's Treasury safes
+    /// via <see cref="CommercialBuilding.DevForceCreditTreasury"/>. Currency resolves
+    /// to the enclosing map's <c>NativeCurrency</c> with a <c>Default</c> fallback.
+    /// Requires the community to be chartered (an AB exists) and the AB to have at
+    /// least one Treasury-role safe (otherwise <c>CreditTreasury</c> logs and skips).
+    /// </summary>
+    private void BuildGrantTreasurySection(Character c)
+    {
+        if (c == null || c.CharacterCommunity == null) return;
+        var community = c.CharacterCommunity.CurrentCommunity;
+        if (community == null) return;
+        var ab = community.AdministrativeBuilding;
+        if (ab == null) return;
+
+        MakeHeader("Grant Treasury");
+        MakeLabel("<color=grey>Credits the AB's Treasury-role safe(s) directly. Currency = enclosing map's NativeCurrency (CurrencyId.Default fallback).</color>");
+
+        var row = MakeRow();
+        var amountInput = MakeInput("amount", _treasuryAmountInput, row.transform, minWidth: 100);
+        MakeButton("[DEV] Grant Treasury", () =>
+        {
+            if (!int.TryParse(amountInput.text, out int amount) || amount <= 0)
+            {
+                Debug.LogWarning($"<color=magenta>[DevMode]</color> Grant Treasury: invalid amount '{amountInput.text}'.");
+                return;
+            }
+            _treasuryAmountInput = amountInput.text;
+            try { ab.DevForceCreditTreasury(amount); }
+            catch (Exception e) { Debug.LogException(e); }
+            RebuildAll();
+        }, row.transform, minWidth: 160);
     }
 
     // ─── Widget helpers (programmatic UGUI, dev-only) ────────────────────

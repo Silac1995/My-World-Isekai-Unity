@@ -3839,6 +3839,38 @@ public abstract class CommercialBuilding : Building
     }
 
     /// <summary>
+    /// Dev-only: credit <paramref name="amount"/> directly into the building's
+    /// Treasury safes via the canonical <see cref="CreditTreasury"/> path. Currency
+    /// resolves to the enclosing <see cref="MapController.NativeCurrency"/> with a
+    /// <see cref="MWI.Economy.CurrencyId.Default"/> fallback when no map encloses
+    /// (mirrors <c>SeedTreasuryIfNeeded</c>'s currency resolution). No-op on
+    /// non-positive amounts or when the building has no Treasury-role safe.
+    /// </summary>
+    public void DevForceCreditTreasury(int amount)
+    {
+        if (!DevAssertHostAndDevMode("DevForceCreditTreasury")) return;
+        if (amount <= 0)
+        {
+            Debug.LogWarning($"<color=magenta>[DevMode]</color> DevForceCreditTreasury: ignored non-positive amount {amount}.");
+            return;
+        }
+
+        MWI.Economy.CurrencyId currency = MWI.Economy.CurrencyId.Default;
+        try
+        {
+            var owningMap = MapController.GetMapAtPosition(transform.position);
+            if (owningMap != null) currency = owningMap.NativeCurrency;
+        }
+        catch (System.Exception e)
+        {
+            // Rule #31: don't crash on map lookup failure — default-currency fallback.
+            Debug.LogException(e);
+        }
+
+        CreditTreasury(currency, amount, $"DevForceCreditTreasury (currency={currency})");
+    }
+
+    /// <summary>
     /// Dev-only: set assignment wage directly, bypassing the owner / community-leader
     /// auth check applied by <see cref="TrySetAssignmentWage"/>. Same null-tolerance
     /// for fields as the production method (null means "leave unchanged"). Returns
