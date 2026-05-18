@@ -285,3 +285,33 @@ UI button onClick handlers and PlayerController hotkeys call the **same** `Chara
 
 - Plan: [docs/superpowers/plans/2026-05-17-combat-action-bar.md](../../../docs/superpowers/plans/2026-05-17-combat-action-bar.md)
 - Prefab checklist (active TODO): [docs/superpowers/plans/2026-05-17-combat-action-bar-prefab-authoring.md](../../../docs/superpowers/plans/2026-05-17-combat-action-bar-prefab-authoring.md)
+
+
+---
+
+## Click-to-popup pattern (2026-05-19)
+
+`UI_CharacterEquipment` introduces a **shared popup component** pattern. The window
+hosts one `UI_EquipmentActionPopup` child and reuses it for every item-bearing
+cell click (worn mini-cells, bag cells, special-slot cards). The popup is fed a
+state-aware `List<EquipmentVerb>` per cell — see the verb matrix in the [design spec](../../docs/superpowers/specs/2026-05-19-character-equipment-ui-rework-design.md) §5.
+
+**Pattern shape:**
+
+- Window root owns one popup instance (SerializeField).
+- Each cell type (worn / bag / special-slot) calls `window.OpenPopupForXxxCell(this)`.
+- The window builds the verb list for that state and calls `popup.Show(anchor, title, subtitle, verbs, onVerbSelected)`.
+- Popup dismisses on ESC, click-outside, or button-click. Single instance — clicking a new cell while the popup is open replaces the content.
+- Verb selection callback maps the `EquipmentVerbId` enum to a server RPC call (`CharacterActions.RequestEquipmentVerbServerRpc`).
+
+**When to reuse**: any new window that needs per-cell contextual actions (storage
+panel right-click menus, party-member context menus, future inventory grids).
+Lift the popup component to a more general location if a third user appears.
+
+**Files** (under `Assets/Scripts/UI/Equipment/`):
+
+- `UI_EquipmentActionPopup.cs` — shared popup component. Also defines `EquipmentVerb` struct + `EquipmentVerbId` enum.
+- `UI_EquipmentWornCell.cs` — leaf, paper-doll mini-cell.
+- `UI_EquipmentBagCell.cs` — leaf, bag-grid cell.
+- `UI_EquipmentSpecialSlotCard.cs` — leaf, top-row Weapon/Hands/Bag card.
+- `UI_CharacterEquipment.cs` — window root.

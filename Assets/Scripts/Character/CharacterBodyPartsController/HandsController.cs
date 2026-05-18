@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.U2D.Animation;
@@ -30,12 +31,20 @@ public class HandsController : MonoBehaviour, ICharacterSaveData<HandsSaveData>
     public bool IsCarrying => _carriedItem != null;
 
     /// <summary>
+    /// Fires whenever the carried item changes (carry, drop, clear, save-restore).
+    /// Subscribers receive the NEW carried item (null when hands become empty).
+    /// Used by UI_CharacterEquipment to repaint the Hands card without polling.
+    /// </summary>
+    public event Action<ItemInstance> OnCarriedItemChanged;
+
+    /// <summary>
     /// Clears the currently carried item without spawning a WorldItem (unlike CharacterDropItem).
     /// Used by consume-from-hand flow (food, potion). The item is destroyed, not dropped.
     /// </summary>
     public void ClearCarriedItem()
     {
         _carriedItem = null;
+        OnCarriedItemChanged?.Invoke(null);
         if (_carriedVisual != null)
         {
             Destroy(_carriedVisual);
@@ -225,6 +234,7 @@ public class HandsController : MonoBehaviour, ICharacterSaveData<HandsSaveData>
         }
 
         _carriedItem = item;
+        OnCarriedItemChanged?.Invoke(_carriedItem);
         AttachVisualToHand(item);
 
         Debug.Log($"<color=green>[Carry]</color> {_character?.CharacterName} porte {item.ItemSO.ItemName}.");
@@ -251,6 +261,7 @@ public class HandsController : MonoBehaviour, ICharacterSaveData<HandsSaveData>
 
         ItemInstance dropped = _carriedItem;
         _carriedItem = null;
+        OnCarriedItemChanged?.Invoke(null);
 
         if (_carriedVisual != null)
         {
@@ -472,6 +483,7 @@ public class HandsController : MonoBehaviour, ICharacterSaveData<HandsSaveData>
         if (item == null) return;
 
         _carriedItem = item;
+        OnCarriedItemChanged?.Invoke(_carriedItem);
         AttachVisualToHand(item);
 
         if (_debugMode)
