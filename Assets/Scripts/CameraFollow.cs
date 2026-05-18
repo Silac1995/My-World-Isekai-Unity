@@ -177,8 +177,16 @@ public class CameraFollow : MonoBehaviour
                 HandleBuildingStateChanged(character.IsBuilding);
             }
             
-            CharacterEquipmentUI uiEquip = Object.FindFirstObjectByType<CharacterEquipmentUI>();
-            if (uiEquip != null) uiEquip.SetupUI(character);
+            // Equipment window now lives at PlayerUI._equipmentUI as a UI_CharacterEquipment
+            // variant of UI_WindowBase. Initialization happens lazily when the user opens it
+            // via the HUD button (PlayerUI.OpenEquipmentWindow) — no eager Initialize needed here.
+            var playerUI = PlayerUI.Instance;
+            if (playerUI != null && character != null)
+            {
+                // Open/close is user-driven; we just ensure the window will bind to the
+                // right character on next open. No call needed — PlayerUI passes
+                // characterComponent which is set elsewhere in the camera-target flow.
+            }
         }
         else
         {
