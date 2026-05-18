@@ -92,7 +92,42 @@ public sealed class CharacterCityFoundingSubTab : CharacterSubTab
         BuildBanner();
         BuildRefreshButton();
         BuildStatusHeader(_bound);
+        BuildCreateCommunitySection(_bound);
         // Feature sections land here in subsequent commits.
+    }
+
+    // ─── Feature 1: Create Community ─────────────────────────────────────
+
+    /// <summary>
+    /// Shows a "Create Community" button when the target character is not currently
+    /// a member of any community. Server-side path is
+    /// <see cref="CharacterCommunity.CreateCommunity(string)"/> — same call the
+    /// production <c>Task_CreateCommunity</c> uses, so the founder auto-receives the
+    /// AdministrativeBuilding blueprint (Plan 4a). Dev mode is host-only, so we are
+    /// always on the server when this button fires.
+    /// </summary>
+    private void BuildCreateCommunitySection(Character c)
+    {
+        if (c == null || c.CharacterCommunity == null) return;
+        if (c.CharacterCommunity.CurrentCommunity != null) return;
+
+        MakeHeader("Create Community");
+        MakeLabel("<color=grey>Founds a new SmallGroup community led by this character. Auto-grants the AdministrativeBuilding blueprint to the founder.</color>");
+
+        var row = MakeRow();
+        var nameInput = MakeInput("community name", "DebugCity", row.transform, minWidth: 160);
+        MakeButton("[DEV] Create Community", () =>
+        {
+            if (c == null || c.CharacterCommunity == null) return;
+            string communityName = string.IsNullOrWhiteSpace(nameInput.text) ? "DebugCity" : nameInput.text.Trim();
+            try
+            {
+                c.CharacterCommunity.CreateCommunity(communityName);
+                Debug.Log($"<color=magenta>[DevMode]</color> CreateCommunity('{communityName}') invoked on '{c.CharacterName}'.");
+            }
+            catch (Exception e) { Debug.LogException(e); }
+            RebuildAll();
+        }, row.transform);
     }
 
     // ─── Sections ────────────────────────────────────────────────────────
