@@ -370,21 +370,44 @@ public class GoapAction_FulfillAmbitionConstruction : GoapAction
         return YieldMode.None;
     }
 
+    /// <summary>
+    /// Returns the first carried <see cref="ItemInstance"/> matching a missing material.
+    /// Looks at BOTH the bag inventory (when one is equipped) AND the actor's
+    /// HandsController — see <see cref="CharacterEquipment.PickUpItem"/> which falls back
+    /// to <see cref="CharacterEquipment.CarryItemInHand"/> when no bag is equipped (the
+    /// typical NPC case). Skipping the hand check made the founder pick up wood, fail to
+    /// recognise it as carried, fall through to the loose-item scan, walk to the next wood
+    /// on the ground, and loop because hands were already full (PickUpItem rejects).
+    /// </summary>
     private static ItemInstance FindCarriedRelevantItem(Character self, Dictionary<ItemSO, int> missing)
     {
+        // 1. Bag inventory (if equipped).
         var equipment = self.CharacterEquipment;
-        if (equipment == null || !equipment.HaveInventory()) return null;
-        var inv = equipment.GetInventory();
-        if (inv == null) return null;
-        var slots = inv.ItemSlots;
-        if (slots == null) return null;
-        for (int i = 0; i < slots.Count; i++)
+        if (equipment != null && equipment.HaveInventory())
         {
-            var s = slots[i];
-            if (s == null || s.IsEmpty()) continue;
-            var inst = s.ItemInstance;
-            if (inst == null || inst.ItemSO == null) continue;
-            if (missing.ContainsKey(inst.ItemSO)) return inst;
+            var inv = equipment.GetInventory();
+            if (inv != null && inv.ItemSlots != null)
+            {
+                for (int i = 0; i < inv.ItemSlots.Count; i++)
+                {
+                    var s = inv.ItemSlots[i];
+                    if (s == null || s.IsEmpty()) continue;
+                    var inst = s.ItemInstance;
+                    if (inst == null || inst.ItemSO == null) continue;
+                    if (missing.ContainsKey(inst.ItemSO)) return inst;
+                }
+            }
+        }
+
+        // 2. Hand-held item. CharacterDropItem.OnApplyEffect already drops from hand when
+        // the item isn't found in the bag inventory, so the drop side handles both paths
+        // — we just have to surface the hand item here so Step 1 of the orchestrator can
+        // trigger the walk-to-zone-and-drop branch.
+        var hands = self.CharacterVisual?.BodyPartsController?.HandsController;
+        if (hands != null && hands.CarriedItem != null)
+        {
+            var carried = hands.CarriedItem;
+            if (carried.ItemSO != null && missing.ContainsKey(carried.ItemSO)) return carried;
         }
         return null;
     }
