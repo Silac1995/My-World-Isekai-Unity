@@ -10,8 +10,14 @@ public abstract class CharacterSubTab : MonoBehaviour
 {
     [SerializeField] protected TMP_Text _content;
 
-    /// <summary>Refresh the sub-tab with the given character. Safe to call every frame.</summary>
-    public void Refresh(Character c)
+    /// <summary>
+    /// Refresh the sub-tab with the given character. Safe to call every frame.
+    /// Virtual so widget-based sub-tabs (e.g. <c>CharacterCityFoundingSubTab</c>) can
+    /// bypass the text-only contract and render UGUI widgets directly under their
+    /// own transform. The default implementation is text-only (TMP_Text via
+    /// <c>RenderContent</c>); the 10 stock sub-tabs all rely on it.
+    /// </summary>
+    public virtual void Refresh(Character c)
     {
         if (_content == null) return;
 
