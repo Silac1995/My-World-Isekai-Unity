@@ -17,8 +17,14 @@ public class CharacterAction_FinishConstruction : CharacterAction_Continuous
     /// <summary>Skill formula denominator (Phase 1 unused — actor.GetSkillLevelOrZero == 0).</summary>
     public const int SkillBudgetDivisor = 5;
 
-    /// <summary>Auto-exit after this many no-consume ticks (~5s at 1 Hz default).</summary>
-    public const int MaxStallTicks = 5;
+    /// <summary>Auto-exit after this many no-consume ticks (1s at 1 Hz default).
+    /// Reduced from 5 → 1 on 2026-05-18: autonomous gather loops (NPC delivers AND
+    /// consumes via BTAction_PursueAmbition → GoapAction_FulfillAmbitionConstruction)
+    /// pay this entire stall window between every delivery, since the BT re-queues a
+    /// fresh consume action the moment the next drop lands. For the player hold-E
+    /// case, the action ending after one stall tick just means the human keeps holding
+    /// E — that's the normal hold-button rhythm, not a regression.</summary>
+    public const int MaxStallTicks = 1;
 
     private readonly Building _target;
     private int _stallTicks;
