@@ -22,7 +22,13 @@ public class CharacterProfileSaveData
     // archetype default" (false) from "use the per-character override" (true) so a
     // future tweak to the archetype's default is NOT silently masked by every saved
     // character. See Task 6 of the speech-bubble rework plan.
-    public Color accentColorOverride;
+    //
+    // Stored as Color32 (4 bytes) — Newtonsoft.Json walks UnityEngine.Color's public
+    // properties (linear/gamma return a new Color which has the same properties,
+    // forming an infinite self-referencing loop the serializer rejects). Color32 is
+    // a plain byte struct with no such properties, matches the server's
+    // NetworkVariable<Color32> byte-precision, and converts to/from Color implicitly.
+    public Color32 accentColorOverride;
     public bool hasAccentColorOverride;
 
     public string timestamp;

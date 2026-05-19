@@ -55,7 +55,9 @@ public class CharacterDataCoordinator : NetworkBehaviour
             // override flag stays false when SetAccentColor was never called, so saved
             // characters keep tracking their archetype's default if the archetype is
             // re-tuned later. See CharacterProfileSaveData.hasAccentColorOverride.
-            accentColorOverride = _character.AccentColorOverrideValue,
+            // Cast Color -> Color32 at the save boundary; saved as bytes to dodge
+            // Newtonsoft.Json's self-referencing-loop trap on UnityEngine.Color.
+            accentColorOverride = (Color32)_character.AccentColorOverrideValue,
             hasAccentColorOverride = _character.HasAccentColorOverride,
             timestamp = DateTime.UtcNow.ToString("o")
         };
@@ -165,7 +167,10 @@ public class CharacterDataCoordinator : NetworkBehaviour
         // archetype default stamped during OnNetworkSpawn stands; we leave it alone.
         if (IsServer && data.hasAccentColorOverride)
         {
-            _character.SetAccentColor(data.accentColorOverride);
+            // Color32 -> Color conversion: explicit cast keeps the byte-precision
+            // round-trip readable. Unity also provides an implicit operator so the
+            // cast is documentation, not necessity.
+            _character.SetAccentColor((Color)data.accentColorOverride);
         }
 
         // Override the NetworkCharacterId so the character keeps its persistent GUID
