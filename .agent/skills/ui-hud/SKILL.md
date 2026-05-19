@@ -315,3 +315,60 @@ Lift the popup component to a more general location if a third user appears.
 - `UI_EquipmentBagCell.cs` — leaf, bag-grid cell.
 - `UI_EquipmentSpecialSlotCard.cs` — leaf, top-row Weapon/Hands/Bag card.
 - `UI_CharacterEquipment.cs` — window root.
+
+
+---
+
+## UGUI gotchas surfaced 2026-05-19 (Equipment UI rework)
+
+Documented from playtest-driven debugging during the equipment UI rework. Apply these to any new closable window authored programmatically.
+
+### 1. `Panel_Main_Background` inherits 50%-alpha black
+
+The base `UI_WindowBase.prefab` ships with `Panel_Main_Background.Image.color = RGBA(0, 0, 0, 0.5)`. Variants that author content under it WITHOUT overriding the color end up with a semi-transparent panel — content with brighter colors looks "detached" / "floating" because the panel chrome barely registers visually.
+
+**Fix at variant authoring time**: set `panelImg.color = new Color(0.08f, 0.10f, 0.14f, 1f)` (or another opaque dark) on `Panel_Main_Background`. The whole panel area then reads as one coherent surface.
+
+### 2. `LayoutGroup.childControl*` defaults IGNORE `LayoutElement`
+
+New `HorizontalLayoutGroup` / `VerticalLayoutGroup` instances default to `childControlWidth=false` and `childControlHeight=false`. With these off, the layout group **does not apply `LayoutElement.preferredWidth/Height`** — children render at their RectTransform `sizeDelta`. For runtime-instantiated GameObjects via `new GameObject(...)`, that `sizeDelta` defaults to `(100, 100)`.
+
+The symptom is "I set `LayoutElement.preferredHeight = 24` but the cell renders at 100×100". Verify with: `cell.GetComponent<LayoutElement>().preferredHeight` vs `cell.GetComponent<RectTransform>().rect.size` — if they disagree, the layout group is ignoring the LayoutElement.
+
+**Fix**: explicitly set `layoutGroup.childControlWidth = true; layoutGroup.childControlHeight = true;` on any layout group authored programmatically. Belt-and-suspenders: also set the children's `RectTransform.sizeDelta` directly to the desired values so they default-correctly even if a future edit flips the layout flag.
+
+### 3. Card-label overflow into adjacent regions
+
+When a card (with its own `VerticalLayoutGroup` for stacked labels) is itself constrained to a small height by a parent layout group (e.g. 48px row), but the card's own VerticalLayoutGroup has `childControlHeight = false`, the labels keep their `sizeDelta=(100,100)` default and OVERFLOW the card DOWNWARD into whatever sits below (in our case the body region). Visually it looks like the cards "go under the next frame".
+
+**Fix**: card VerticalLayoutGroup needs `childControlHeight = true + childForceExpandHeight = true` (labels share parent height equally) OR `childControlHeight = true` with explicit `LayoutElement.preferredHeight` per label.
+
+### 4. `Button_Close` is a canvas-center sibling of Panel_Main_Background
+
+The inherited `Button_Close` lives at Canvas level (sibling of `Panel_Main_Background`), not inside the panel. Its `anchoredPosition` is in canvas-center coordinates and must be computed per variant to land on the panel's top-right corner. For a centered panel of size W×H + button size S + margin M:
+
+```
+anchoredPosition = (W/2 - S/2 - M, H/2 - S/2 - M)
+```
+
+Reference values:
+- UI_SafePanel (~560-wide panel): `(268, 228)`
+- UI_CharacterEquipment (720×520 panel): `(338, 238)`
+
+Reparenting Button_Close UNDER Panel_Main_Background is also valid (anchored top-right of the panel rect) but requires `btnClose.SetAsLastSibling()` so it renders on top of authored content.
+
+### 5. `RectangleContainsScreenPoint(rt, mouse, null)` mis-computes under ScreenSpaceCamera
+
+The `null` camera argument only works correctly for `ScreenSpaceOverlay`. Under `ScreenSpaceCamera` (the project convention per rule #39), passing null produces wrong results — any click is reported as "outside the rect".
+
+The equipment popup's click-outside-to-dismiss originally used this signature → popup hid on EVERY click → popup buttons never registered because `Hide()` ran in `Update()` BEFORE the EventSystem could route the click to the button.
+
+**Fix**: use `EventSystem.current.IsPointerOverGameObject()` instead. Works in any canvas mode without needing a camera reference.
+
+### 6. Scene + UI_PlayerHUD.prefab nesting + dedupe
+
+`UI_PlayerHUD.prefab` nests each panel (UI_CharacterEquipment, UI_SafePanel, UI_StorageFurniturePanel, etc.) as a child INSIDE the prefab. When the scene loads its UI_PlayerHUD instance, the nested children come with it automatically.
+
+If a scene-wire script then does `PrefabUtility.InstantiatePrefab(panelPrefab, playerUI.transform)`, it creates a SECOND copy of the panel as a direct PlayerUI child — duplicate. The scene-wire script must dedupe (check `PrefabUtility.IsAnyPrefabInstanceRoot` + `GetOutermostPrefabInstanceRoot` to distinguish nested vs added-root) OR not add a new instance at all (just re-point `_xxxPanel` to the existing nested one).
+
+Also: deleting + recreating a nested panel prefab WITHOUT updating UI_PlayerHUD.prefab leaves the nested reference broken (missing-GUID warning). Either preserve the .meta file when re-authoring, or open UI_PlayerHUD.prefab via `PrefabUtility.LoadPrefabContents` + replace the broken nested child with the new prefab.
