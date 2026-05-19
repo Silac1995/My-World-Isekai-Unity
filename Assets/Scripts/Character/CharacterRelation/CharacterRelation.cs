@@ -116,6 +116,7 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
                 {
                     var rel = new Relationship(_character, spawnedCharacter, dormant.relationValue, (RelationshipType)dormant.relationshipType);
                     if (dormant.hasMet) rel.SetAsMet();
+                    rel.SetKnowsName(dormant.knowsName);
                     _relationships.Add(rel);
 
                     if (IsServer)
@@ -374,7 +375,8 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
                 targetWorldGuid = rel.RelatedCharacter.OriginWorldGuid ?? "",
                 relationshipType = (int)rel.RelationType,
                 relationValue = rel.RelationValue,
-                hasMet = rel.HasMet
+                hasMet = rel.HasMet,
+                knowsName = rel.KnowsName
             };
             data.relationships.Add(entry);
         }
@@ -412,6 +414,7 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
                 {
                     var rel = new Relationship(_character, target, entry.relationValue, (RelationshipType)entry.relationshipType);
                     if (entry.hasMet) rel.SetAsMet();
+                    rel.SetKnowsName(entry.knowsName);
                     _relationships.Add(rel);
                 }
                 else
@@ -420,6 +423,7 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
                     existing.SetRelationshipType((RelationshipType)entry.relationshipType);
                     if (entry.hasMet) existing.SetAsMet();
                     else existing.SetAsNotMet();
+                    existing.SetKnowsName(entry.knowsName);
                 }
             }
             else
