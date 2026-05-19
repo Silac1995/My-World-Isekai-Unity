@@ -258,6 +258,13 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     public static event Action<Character> OnCharacterSpawned;
 
     /// <summary>
+    /// Fires on every peer (server + clients) when a Character's NetworkObject
+    /// is despawned (player disconnect, NPC hibernation, scene unload). Mirrors
+    /// the spawn event so HUD/registry consumers can clean up per-character state.
+    /// </summary>
+    public static event Action<Character> OnCharacterDespawned;
+
+    /// <summary>
     /// Fires on the server when a Character's persistent <see cref="CharacterId"/> is
     /// (re)assigned via <see cref="CharacterDataCoordinator.ImportProfile"/>.
     /// Distinct from <see cref="OnCharacterSpawned"/> — the spawn event fires once with
@@ -595,6 +602,9 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
         NetworkCharacterName.OnValueChanged -= OnNetworkNameChanged;
         NetworkIsSleeping.OnValueChanged -= HandleSleepStateChanged;
         NetworkOccupyingFurnitureNetId.OnValueChanged -= OnNetworkOccupyingFurnitureNetIdChanged;
+
+        try { OnCharacterDespawned?.Invoke(this); }
+        catch (Exception e) { Debug.LogException(e); }
     }
 
     private void OnNetworkNameChanged(Unity.Collections.FixedString64Bytes previous, Unity.Collections.FixedString64Bytes current)
