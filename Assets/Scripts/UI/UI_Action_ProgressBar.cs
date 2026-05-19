@@ -70,24 +70,33 @@ public class UI_Action_ProgressBar : MonoBehaviour
         if (_canvasRect != null)
             _canvas = _canvasRect.GetComponentInParent<Canvas>();
 
-        // Force expected anchor configuration on the rects we drive each frame.
-        // Stale scene-instance overrides (anchors (0.5, 0.5) from the old prefab)
-        // would otherwise corrupt the screen-pixel → anchoredPosition mapping,
-        // and the bar would either sit in the canvas's centre or fly off-screen.
-        ForceBottomLeftAnchor(_progressBarRect);
-        ForceBottomLeftAnchor(_textRect);
-
         if (_progressBarRect == null || _canvasRect == null)
         {
             Debug.LogWarning("<color=orange>[UI_Action_ProgressBar]</color> Could not auto-discover required RectTransforms — bar will not follow the player. Expected prefab hierarchy: Canvas/ProgressBar + Canvas/Text_CurrentAction. Re-import Assets/UI/Player HUD/UI_Action_ProgressBar.prefab and reopen the scene.");
         }
     }
 
-    private static void ForceBottomLeftAnchor(RectTransform rt)
+    private bool _anchorsCalibrated;
+
+    /// <summary>
+    /// One-shot runtime alignment: the bar/text rects' point-anchors must match the
+    /// parent canvas's pivot. ScreenPointToLocalPointInRectangle returns coords in
+    /// the canvas's local space (origin at canvas pivot). When the child's anchor
+    /// also lives at the canvas pivot, `child.anchoredPosition = lp` puts the child
+    /// at the exact screen point — no offset math.
+    ///
+    /// Deferred to runtime because Unity normalises a ScreenSpaceOverlay canvas's
+    /// pivot to (0.5, 0.5) at startup regardless of the authored value, so anchors
+    /// pinned in YAML would mismatch. Runs once after first FollowAnchor where
+    /// the canvas pivot is stable.
+    /// </summary>
+    private void CalibrateAnchorsIfNeeded()
     {
-        if (rt == null) return;
-        rt.anchorMin = Vector2.zero;
-        rt.anchorMax = Vector2.zero;
+        if (_anchorsCalibrated || _canvasRect == null) return;
+        Vector2 p = _canvasRect.pivot;
+        if (_progressBarRect != null) { _progressBarRect.anchorMin = p; _progressBarRect.anchorMax = p; }
+        if (_textRect != null)        { _textRect.anchorMin = p;        _textRect.anchorMax = p;        }
+        _anchorsCalibrated = true;
     }
 
     /// <summary>
@@ -130,6 +139,8 @@ public class UI_Action_ProgressBar : MonoBehaviour
             _camera = Camera.main;
             if (_camera == null) return;
         }
+
+        CalibrateAnchorsIfNeeded();
 
         Vector3 worldPos = _anchor.position + Vector3.up * _worldHeadOffset;
         Vector3 sp = _camera.WorldToScreenPoint(worldPos);
