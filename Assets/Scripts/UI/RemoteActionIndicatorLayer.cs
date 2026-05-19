@@ -5,19 +5,20 @@ using UnityEngine;
 
 /// <summary>
 /// Singleton HUD layer that spawns one <see cref="UI_RemoteActionIndicator"/>
-/// per remote Character (every Character except the local player) and toggles
-/// visibility based on a PlayerPrefs-backed setting.
+/// per live Character — including the local player. The local player's
+/// indicator is always visible (no distance-fade, ignores the global toggle).
+/// Remote character indicators are gated by a PlayerPrefs-backed bool
+/// (see <see cref="PlayerPrefsKey"/>), flipped via the /togglebars chat command.
+///
+/// Both indicators (player + remote) share the same prefab, so the HUD reads
+/// consistently across all characters: circular badge + Radial360 progress arc
+/// + short action-name label above the badge.
 ///
 /// Lifecycle:
 /// - <see cref="Local"/> registers in <c>OnEnable</c>, clears in <c>OnDisable</c>.
-/// - Subscribes to <c>Character.OnCharacterSpawned</c> + <c>OnCharacterDespawned</c>
-///   so new arrivals get an indicator immediately and disconnects clean up.
-/// - <see cref="SetEnabled"/> flips the runtime + persists to PlayerPrefs.
-/// - Default off. The setting is keyed by <see cref="PlayerPrefsKey"/>.
-///
-/// The local player is intentionally skipped — the labeled
-/// <c>UI_Action_ProgressBar</c> serves the local player; this layer is for
-/// ambient awareness of others.
+/// - Subscribes to <c>Character.OnCharacterSpawned</c> + <c>OnCharacterDespawned</c>.
+/// - <see cref="SetEnabled"/> toggles only the REMOTE indicators' alpha; the
+///   local player's indicator stays visible regardless.
 /// </summary>
 public class RemoteActionIndicatorLayer : MonoBehaviour
 {
@@ -33,14 +34,14 @@ public class RemoteActionIndicatorLayer : MonoBehaviour
     [SerializeField] private UI_RemoteActionIndicator _indicatorPrefab;
 
     [Header("Defaults")]
-    [Tooltip("Initial enabled state when no PlayerPrefs value has been saved yet.")]
+    [Tooltip("Initial enabled state for REMOTE indicators when no PlayerPrefs value has been saved yet. The local player's indicator is always shown regardless.")]
     [SerializeField] private bool _defaultEnabled = false;
 
     private readonly Dictionary<Character, UI_RemoteActionIndicator> _indicators = new();
     private Transform _cachedLocalPlayerAnchor;
-    private bool _isEnabled;
+    private bool _remoteEnabled;
 
-    public bool IsEnabled => _isEnabled;
+    public bool IsEnabled => _remoteEnabled;
     public RectTransform ContentRoot => _contentRoot;
 
     private void OnEnable()
@@ -49,7 +50,7 @@ public class RemoteActionIndicatorLayer : MonoBehaviour
             Debug.LogWarning($"[RemoteActionIndicatorLayer] A second instance enabled on '{gameObject.name}'. Replacing previous.");
         Local = this;
 
-        _isEnabled = ReadEnabledPref();
+        _remoteEnabled = ReadEnabledPref();
 
         Character.OnCharacterSpawned += HandleCharacterSpawned;
         Character.OnCharacterDespawned += HandleCharacterDespawned;
@@ -72,23 +73,26 @@ public class RemoteActionIndicatorLayer : MonoBehaviour
     }
 
     /// <summary>
-    /// Public setter for runtime toggle (chat command, dev panel, future settings UI).
+    /// Public setter for the REMOTE-indicator toggle. The local player's
+    /// indicator is unaffected — it stays visible regardless of this value.
     /// Persists to PlayerPrefs.
     /// </summary>
     public void SetEnabled(bool enabled)
     {
-        if (_isEnabled == enabled) return;
-        _isEnabled = enabled;
+        if (_remoteEnabled == enabled) return;
+        _remoteEnabled = enabled;
         PlayerPrefs.SetInt(PlayerPrefsKey, enabled ? 1 : 0);
         PlayerPrefs.Save();
 
-        if (_isEnabled)
-            BackfillExistingCharacters();
-        else
-            ClearAll();
+        // Apply visibility flip to existing remote indicators without re-spawning.
+        foreach (var kv in _indicators)
+        {
+            if (kv.Value == null || kv.Value.IsLocalPlayer) continue;
+            kv.Value.gameObject.SetActive(_remoteEnabled);
+        }
     }
 
-    public void Toggle() => SetEnabled(!_isEnabled);
+    public void Toggle() => SetEnabled(!_remoteEnabled);
 
     private bool ReadEnabledPref()
     {
@@ -98,8 +102,7 @@ public class RemoteActionIndicatorLayer : MonoBehaviour
 
     private void HandleCharacterSpawned(Character c)
     {
-        if (!_isEnabled || c == null) return;
-        if (IsLocalPlayer(c)) return;
+        if (c == null) return;
         SpawnIndicatorFor(c);
     }
 
@@ -116,13 +119,10 @@ public class RemoteActionIndicatorLayer : MonoBehaviour
 
     private void BackfillExistingCharacters()
     {
-        if (!_isEnabled) return;
-        // Include inactive — hibernation can leave a Character disabled but valid.
         var all = FindObjectsByType<Character>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         foreach (var c in all)
         {
             if (c == null) continue;
-            if (IsLocalPlayer(c)) continue;
             if (_indicators.ContainsKey(c)) continue;
             SpawnIndicatorFor(c);
         }
@@ -142,9 +142,15 @@ public class RemoteActionIndicatorLayer : MonoBehaviour
         }
         if (_indicators.ContainsKey(c)) return;
 
+        bool isLocalPlayer = IsLocalPlayer(c);
         var ind = Instantiate(_indicatorPrefab, _contentRoot, false);
-        ind.gameObject.name = $"UI_RemoteActionIndicator [{c.CharacterName}]";
-        ind.Bind(c, _contentRoot, ResolveLocalPlayerAnchor());
+        ind.gameObject.name = $"UI_RemoteActionIndicator [{c.CharacterName}{(isLocalPlayer ? " — local" : "")}]";
+        ind.Bind(c, _contentRoot, ResolveLocalPlayerAnchor(), isLocalPlayer);
+
+        // Remote indicators respect the toggle; local player's indicator is always active.
+        if (!isLocalPlayer && !_remoteEnabled)
+            ind.gameObject.SetActive(false);
+
         _indicators[c] = ind;
     }
 

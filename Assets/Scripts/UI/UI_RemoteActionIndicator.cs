@@ -1,20 +1,23 @@
+using System.Text;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Per-remote-character action indicator — a compact circular badge with a
-/// radial progress arc that floats above an NPC / remote player's head.
-/// Local-player parity for the labeled action bar; this one is intentionally
-/// minimal (no text) for ambient awareness without competing with the
-/// player's own bar.
+/// Per-character action indicator — a compact circular badge with a Radial360
+/// progress arc + an action-name label above it. Used for BOTH the local
+/// player and remote characters (NPC + remote players), instantiated by
+/// <see cref="RemoteActionIndicatorLayer"/>. The local player's instance
+/// receives <see cref="Bind"/> with <c>isLocalPlayer = true</c>, which
+/// disables the distance-fade pass and keeps the indicator at full opacity
+/// regardless of the global remote-bars toggle.
 ///
-/// Lifecycle: instantiated by <see cref="RemoteActionIndicatorLayer"/> for each
-/// non-local Character. <see cref="Bind"/> wires the target Character; the
-/// indicator subscribes to that Character's <c>CharacterActions</c>
-/// OnActionStarted / OnActionFinished, drives the radial fill from
-/// GetActionProgress, follows the head world-position via
-/// Camera.WorldToScreenPoint each frame, and fades opacity with distance to
-/// the local player (speech-bubble convention).
+/// Lifecycle: <see cref="Bind"/> wires a target Character; the indicator
+/// subscribes to that Character's CharacterActions OnActionStarted /
+/// OnActionFinished, drives the radial fill from GetActionProgress, follows
+/// the head world-position via Camera.WorldToScreenPoint each frame, and
+/// fades opacity with distance to the local player (speech-bubble pattern,
+/// skipped for the local player itself).
 /// </summary>
 [RequireComponent(typeof(RectTransform))]
 [RequireComponent(typeof(CanvasGroup))]
@@ -23,8 +26,8 @@ public class UI_RemoteActionIndicator : MonoBehaviour
     [Header("UI references")]
     [Tooltip("Radial-fill Image (Image.Type=Filled, FillMethod=Radial360, Origin=Top) that visualises the action progress around the badge edge.")]
     [SerializeField] private Image _progressArc;
-    [Tooltip("Optional inner icon Image — left null for the V1 generic-glyph treatment.")]
-    [SerializeField] private Image _iconImage;
+    [Tooltip("Action-name label rendered above the badge. Leave null to hide the label.")]
+    [SerializeField] private TextMeshProUGUI _actionNameText;
 
     [Header("World anchor")]
     [Tooltip("World-space Y offset added to the target Character's transform.position. 12 ≈ slightly above an 11-unit-tall character's head per rule #32.")]
@@ -34,8 +37,8 @@ public class UI_RemoteActionIndicator : MonoBehaviour
     [Tooltip("Position lerp speed — uses unscaledDeltaTime so the indicator stays smooth at any GameSpeedController scale.")]
     [SerializeField] private float _positionLerpSpeed = 14f;
 
-    [Header("Distance fade")]
-    [Tooltip("World units between the local player and the target. ≤ FadeStart → full opacity; ≥ FadeEnd → invisible.")]
+    [Header("Distance fade (remote only)")]
+    [Tooltip("World units between the local player and the target. ≤ FadeStart → full opacity; ≥ FadeEnd → invisible. Skipped when _isLocalPlayer is true.")]
     [SerializeField, Range(0f, 50f)] private float _fadeStartDistance = 12f;
     [SerializeField, Range(1f, 200f)] private float _fadeEndDistance = 30f;
 
@@ -49,27 +52,31 @@ public class UI_RemoteActionIndicator : MonoBehaviour
     private Transform _localPlayerAnchor;
     private bool _anchorCalibrated;
     private bool _hasActiveAction;
+    private bool _isLocalPlayer;
 
     public Character Target => _target;
+    public bool IsLocalPlayer => _isLocalPlayer;
 
     private void Awake()
     {
         _rect = GetComponent<RectTransform>();
         _canvasGroup = GetComponent<CanvasGroup>();
+        if (_canvasGroup != null) _canvasGroup.alpha = 0f;
     }
 
     /// <summary>
-    /// Wire the indicator to a target Character + parent canvas. Resolves the
-    /// local-player anchor lazily because the local player can spawn after
-    /// this indicator does on a freshly-joined client.
+    /// Wire the indicator to a target Character + parent canvas.
+    /// <paramref name="isLocalPlayer"/>=true skips the distance-fade pass —
+    /// the local player's own indicator always reads at full opacity.
     /// </summary>
-    public void Bind(Character target, RectTransform canvasRect, Transform localPlayerAnchor)
+    public void Bind(Character target, RectTransform canvasRect, Transform localPlayerAnchor, bool isLocalPlayer)
     {
         Unbind();
 
         _target = target;
         _canvasRect = canvasRect;
         _localPlayerAnchor = localPlayerAnchor;
+        _isLocalPlayer = isLocalPlayer;
         if (_canvasRect != null) _canvas = _canvasRect.GetComponentInParent<Canvas>();
 
         if (_target != null)
@@ -123,6 +130,7 @@ public class UI_RemoteActionIndicator : MonoBehaviour
     {
         if (action == null) { Deactivate(); return; }
         _hasActiveAction = true;
+        if (_actionNameText != null) _actionNameText.text = PrettifyActionName(action.ActionName);
         if (_canvasGroup != null) _canvasGroup.alpha = 1f;
         gameObject.SetActive(true);
         FollowAnchor(snap: true);
@@ -185,6 +193,7 @@ public class UI_RemoteActionIndicator : MonoBehaviour
     private void ApplyDistanceFade()
     {
         if (_canvasGroup == null) return;
+        if (_isLocalPlayer) { _canvasGroup.alpha = 1f; return; }
         if (_localPlayerAnchor == null || _target == null) { _canvasGroup.alpha = 1f; return; }
 
         // 2D world distance (X/Z plane) — Y doesn't matter for "is the other character close to me".
@@ -198,6 +207,36 @@ public class UI_RemoteActionIndicator : MonoBehaviour
         else                              alpha = 1f - (d - _fadeStartDistance) / Mathf.Max(0.001f, _fadeEndDistance - _fadeStartDistance);
 
         _canvasGroup.alpha = alpha;
+    }
+
+    /// <summary>
+    /// Convert raw action class names (e.g. "CharacterMeleeAttackAction") into the
+    /// short, human-readable form for the HUD ("Melee Attack"): drops the
+    /// "Character" prefix + "Action" suffix and inserts spaces before interior
+    /// uppercase letters. Runs once per action start — not in a hot path.
+    /// </summary>
+    public static string PrettifyActionName(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return string.Empty;
+
+        string s = raw;
+        const string prefix = "Character";
+        const string suffix = "Action";
+        if (s.StartsWith(prefix)) s = s.Substring(prefix.Length);
+        if (s.EndsWith(suffix) && s.Length > suffix.Length) s = s.Substring(0, s.Length - suffix.Length);
+
+        if (s.Length <= 1) return s;
+
+        var sb = new StringBuilder(s.Length + 4);
+        sb.Append(s[0]);
+        for (int i = 1; i < s.Length; i++)
+        {
+            char c = s[i];
+            if (char.IsUpper(c) && !char.IsUpper(s[i - 1]))
+                sb.Append(' ');
+            sb.Append(c);
+        }
+        return sb.ToString();
     }
 
     private void OnDestroy()

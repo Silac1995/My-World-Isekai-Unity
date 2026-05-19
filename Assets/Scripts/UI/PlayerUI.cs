@@ -28,9 +28,6 @@ public class PlayerUI : MonoBehaviour
     [SerializeField] private MWI.UI.Notifications.NotificationChannel _relationsChannel;
     [SerializeField] private MWI.UI.Notifications.ToastNotificationChannel _toastChannel;
 
-    // The only link required for the action bar
-    [SerializeField] private UI_Action_ProgressBar _actionProgressBar;
-    
     [Header("Combat UI")]
     [SerializeField] private UI_CombatActionMenu _combatActionMenu;
     [SerializeField] private UI_PlayerTargeting _playerTargeting;
@@ -120,15 +117,10 @@ public class PlayerUI : MonoBehaviour
             _timeUI.SetTargetCharacter(characterComponent);
         }
 
-        // Delegate the entire action-bar management to the specialized script.
-        // Pass the Character.transform so the bar can follow the player on-screen
-        // (world→HUD projection, mirroring the SpeechBubbleInstance pattern).
-        if (_actionProgressBar != null)
-        {
-            _actionProgressBar.InitializeCharacterActions(
-                characterComponent.CharacterActions,
-                characterComponent.transform);
-        }
+        // Action progress is now driven for every character (local + remote)
+        // by the scene-resident RemoteActionIndicatorLayer (see the unified
+        // UI_RemoteActionIndicator system, 2026-05-19). No per-character
+        // wiring needed here.
 
         if (_playerInfo != null)
         {
