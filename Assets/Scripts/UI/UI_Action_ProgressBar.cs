@@ -38,6 +38,10 @@ public class UI_Action_ProgressBar : MonoBehaviour
     [Tooltip("Position lerp speed (uses unscaledDeltaTime so the bar stays smooth even at high GameSpeedController scales / pause). 0 = snap instantly.")]
     [SerializeField] private float _positionLerpSpeed = 14f;
 
+    [Header("UI Scale")]
+    [Tooltip("Uniform scale applied to the bar + text rects and to the screen-space offsets. 1 = native (the values shipped in the prefab); 0.5 = half. Use this to shrink/grow the whole HUD element without touching individual fields.")]
+    [SerializeField, Range(0.1f, 2f)] private float _uiScale = 1f;
+
     private CharacterActions _characterActions;
     private Transform _anchor;
     private Camera _camera;
@@ -94,8 +98,9 @@ public class UI_Action_ProgressBar : MonoBehaviour
     {
         if (_anchorsCalibrated || _canvasRect == null) return;
         Vector2 p = _canvasRect.pivot;
-        if (_progressBarRect != null) { _progressBarRect.anchorMin = p; _progressBarRect.anchorMax = p; }
-        if (_textRect != null)        { _textRect.anchorMin = p;        _textRect.anchorMax = p;        }
+        Vector3 s = Vector3.one * _uiScale;
+        if (_progressBarRect != null) { _progressBarRect.anchorMin = p; _progressBarRect.anchorMax = p; _progressBarRect.localScale = s; }
+        if (_textRect != null)        { _textRect.anchorMin = p;        _textRect.anchorMax = p;        _textRect.localScale = s;        }
         _anchorsCalibrated = true;
     }
 
@@ -155,7 +160,7 @@ public class UI_Action_ProgressBar : MonoBehaviour
                 _canvasRect, sp, uiCam, out Vector2 lp))
             return;
 
-        Vector2 barTarget = lp + _barScreenOffsetPx;
+        Vector2 barTarget = lp + _barScreenOffsetPx * _uiScale;
         _progressBarRect.anchoredPosition = (snap || _positionLerpSpeed <= 0f)
             ? barTarget
             : Vector2.Lerp(_progressBarRect.anchoredPosition, barTarget,
@@ -163,7 +168,7 @@ public class UI_Action_ProgressBar : MonoBehaviour
 
         if (_textRect != null)
         {
-            Vector2 textTarget = lp + _textScreenOffsetPx;
+            Vector2 textTarget = lp + _textScreenOffsetPx * _uiScale;
             _textRect.anchoredPosition = (snap || _positionLerpSpeed <= 0f)
                 ? textTarget
                 : Vector2.Lerp(_textRect.anchoredPosition, textTarget,
