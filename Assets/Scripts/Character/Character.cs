@@ -334,11 +334,36 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     /// <summary>
     /// Speech-bubble accent colour for this character. Replicated server-authoritatively
     /// to all clients via <see cref="_accentColorNet"/> (<c>NetworkVariable&lt;Color32&gt;</c>).
-    /// Initialised from <see cref="CharacterArchetype.AccentColor"/> on spawn; can be
-    /// overridden via <see cref="SetAccentColor"/> (server-only). Per-character override
-    /// persists via CharacterProfileSaveData (Task 6 of the speech-bubble rework plan).
+    /// On fresh spawn the server picks a deterministic colour from the character's GUID
+    /// via <see cref="ComputeStableAccentFromId"/> (so two characters look distinct + the
+    /// same character always picks the same colour); save-data round-trip stores it via
+    /// the <see cref="_hasAccentOverride"/> flag. Per-character override via
+    /// <see cref="SetAccentColor"/> (server-only) replaces the random value.
     /// </summary>
     public Color AccentColor => (Color)_accentColorNet.Value;
+
+    /// <summary>
+    /// Maps a character's stable id (<see cref="CharacterId"/>) to a visually-distinct
+    /// HSV colour. Uses a hand-rolled FNV-1a hash instead of <c>string.GetHashCode()</c>
+    /// because the .NET runtime randomises string hashes per process — host and client
+    /// would otherwise compute different colours for the same character. Fixed saturation
+    /// (0.55) and value (0.75) keep the name strip legible against the dark body Image
+    /// regardless of which hue the hash lands on.
+    /// </summary>
+    public static Color ComputeStableAccentFromId(string characterId)
+    {
+        if (string.IsNullOrEmpty(characterId)) characterId = "default";
+        const uint FnvOffset = 2166136261u;
+        const uint FnvPrime = 16777619u;
+        uint hash = FnvOffset;
+        for (int i = 0; i < characterId.Length; i++)
+        {
+            hash ^= characterId[i];
+            hash *= FnvPrime;
+        }
+        float hue = (hash % 360u) / 360f;
+        return Color.HSVToRGB(hue, 0.55f, 0.75f);
+    }
 
     /// <summary>
     /// Server-side state. True when <see cref="SetAccentColor"/> has overridden the
@@ -594,15 +619,20 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
             }
         }
 
-        // Stamp the replicated accent colour from the archetype's default on spawn so every
-        // peer sees the archetype-correct colour from frame 1. Task 6 will overwrite this
-        // via SetAccentColor when CharacterProfileSaveData restores a per-character override,
-        // AFTER OnNetworkSpawn (CharacterDataCoordinator.Deserialize fires later in the boot
-        // sequence). The override fields stay false/default here — only an explicit
-        // SetAccentColor call flips _hasAccentOverride to true.
-        if (IsServer && _archetype != null)
+        // On fresh spawn (no save-data override loaded yet), pick a deterministic accent
+        // colour from the character's GUID so each character looks distinct from the others
+        // and the colour stays stable across save/load. The override flag is set so the
+        // value persists through CharacterProfileSaveData — without this every save round
+        // trip would recompute the colour (still deterministic, but susceptible to a future
+        // tweak of the hue picker silently changing every saved character at once).
+        // CharacterDataCoordinator.ImportProfile fires LATER in the boot sequence and
+        // overwrites this via SetAccentColor when the save carries a real override.
+        if (IsServer && !_hasAccentOverride)
         {
-            _accentColorNet.Value = (Color32)_archetype.AccentColor;
+            Color randomAccent = ComputeStableAccentFromId(CharacterId);
+            _hasAccentOverride = true;
+            _accentOverride = randomAccent;
+            _accentColorNet.Value = (Color32)randomAccent;
         }
 
         // Very important: IsOwner is true for the Host for ALL NPCs in the scene.
