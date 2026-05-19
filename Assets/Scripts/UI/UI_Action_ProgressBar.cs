@@ -1,3 +1,4 @@
+using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -20,16 +21,16 @@ public class UI_Action_ProgressBar : MonoBehaviour
     [Header("UI References")]
     [SerializeField] private Image _fillImage;
     [SerializeField] private TextMeshProUGUI _actionNameText;
-    [Tooltip("Bar RectTransform repositioned each frame to follow the anchor on-screen.")]
+    [Tooltip("Bar RectTransform repositioned each frame to follow the anchor on-screen. Auto-discovered as Canvas/ProgressBar if left empty.")]
     [SerializeField] private RectTransform _progressBarRect;
-    [Tooltip("Optional action-name text RectTransform. Tracks the same anchor with its own offset. Leave null to keep the text static.")]
+    [Tooltip("Action-name text RectTransform. Tracks the same anchor with its own offset. Auto-discovered as Canvas/Text_CurrentAction if left empty.")]
     [SerializeField] private RectTransform _textRect;
-    [Tooltip("RectTransform of the Canvas this bar lives under — used as the parent rect for the screen→canvas conversion. Auto-resolved from _progressBarRect.parent if left null.")]
+    [Tooltip("RectTransform of the Canvas this bar lives under — used as the parent rect for the screen→canvas conversion. Auto-discovered as the child Canvas if left empty.")]
     [SerializeField] private RectTransform _canvasRect;
 
     [Header("World Anchor")]
-    [Tooltip("World-space Y offset added to the anchor position, in Unity units. Defaults to 12 (~1.82m — slightly above an 11-unit-tall character's head per rule #32).")]
-    [SerializeField] private float _worldHeadOffset = 12f;
+    [Tooltip("World-space Y offset added to the anchor position, in Unity units. Defaults to 22 (~3.3m — well above the head of a typical character). Rule #32: 11 units ≈ 1.67m.")]
+    [SerializeField] private float _worldHeadOffset = 22f;
     [Tooltip("Canvas-local pixel offset applied on top of the projected screen position, for the bar.")]
     [SerializeField] private Vector2 _barScreenOffsetPx = Vector2.zero;
     [Tooltip("Canvas-local pixel offset for the action-name text, relative to the same projected screen position as the bar.")]
@@ -44,12 +45,49 @@ public class UI_Action_ProgressBar : MonoBehaviour
 
     private void Awake()
     {
-        // Fallback wiring so the script still works if _canvasRect is left empty.
+        // Defensive auto-wiring: if the scene's prefab instance was authored before
+        // these SerializeFields existed, they may serialize as null even though the
+        // prefab asset wires them. Discover by canonical hierarchy as a fallback so
+        // the bar still works without manual scene re-wiring.
+        if (_progressBarRect == null)
+        {
+            var t = transform.Find("Canvas/ProgressBar");
+            if (t != null) _progressBarRect = t as RectTransform;
+        }
+        if (_textRect == null)
+        {
+            var t = transform.Find("Canvas/Text_CurrentAction");
+            if (t != null) _textRect = t as RectTransform;
+        }
+        if (_canvasRect == null)
+        {
+            var t = transform.Find("Canvas");
+            if (t != null) _canvasRect = t as RectTransform;
+        }
         if (_canvasRect == null && _progressBarRect != null)
             _canvasRect = _progressBarRect.parent as RectTransform;
 
         if (_canvasRect != null)
             _canvas = _canvasRect.GetComponentInParent<Canvas>();
+
+        // Force expected anchor configuration on the rects we drive each frame.
+        // Stale scene-instance overrides (anchors (0.5, 0.5) from the old prefab)
+        // would otherwise corrupt the screen-pixel → anchoredPosition mapping,
+        // and the bar would either sit in the canvas's centre or fly off-screen.
+        ForceBottomLeftAnchor(_progressBarRect);
+        ForceBottomLeftAnchor(_textRect);
+
+        if (_progressBarRect == null || _canvasRect == null)
+        {
+            Debug.LogWarning("<color=orange>[UI_Action_ProgressBar]</color> Could not auto-discover required RectTransforms — bar will not follow the player. Expected prefab hierarchy: Canvas/ProgressBar + Canvas/Text_CurrentAction. Re-import Assets/UI/Player HUD/UI_Action_ProgressBar.prefab and reopen the scene.");
+        }
+    }
+
+    private static void ForceBottomLeftAnchor(RectTransform rt)
+    {
+        if (rt == null) return;
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.zero;
     }
 
     /// <summary>
@@ -70,7 +108,6 @@ public class UI_Action_ProgressBar : MonoBehaviour
             _characterActions.OnActionFinished += HandleActionEnded;
         }
 
-        // Hidden by default at startup; HandleActionStarted re-enables.
         gameObject.SetActive(false);
     }
 
@@ -134,11 +171,39 @@ public class UI_Action_ProgressBar : MonoBehaviour
         gameObject.SetActive(true);
 
         if (_actionNameText != null)
-            _actionNameText.text = action.ActionName.Replace("Character", "");
+            _actionNameText.text = PrettifyActionName(action.ActionName);
 
-        // Snap to the player's current screen position so the bar doesn't lerp
-        // in from its last-known location after being disabled.
         FollowAnchor(snap: true);
+    }
+
+    /// <summary>
+    /// Convert raw action class names (e.g. "CharacterMeleeAttackAction") into the
+    /// short, human-readable form for the HUD ("Melee Attack"): drops the
+    /// "Character" prefix + "Action" suffix and inserts spaces before interior
+    /// uppercase letters. Runs once per action start — not in a hot path.
+    /// </summary>
+    private static string PrettifyActionName(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return string.Empty;
+
+        string s = raw;
+        const string prefix = "Character";
+        const string suffix = "Action";
+        if (s.StartsWith(prefix)) s = s.Substring(prefix.Length);
+        if (s.EndsWith(suffix) && s.Length > suffix.Length) s = s.Substring(0, s.Length - suffix.Length);
+
+        if (s.Length <= 1) return s;
+
+        var sb = new StringBuilder(s.Length + 4);
+        sb.Append(s[0]);
+        for (int i = 1; i < s.Length; i++)
+        {
+            char c = s[i];
+            if (char.IsUpper(c) && !char.IsUpper(s[i - 1]))
+                sb.Append(' ');
+            sb.Append(c);
+        }
+        return sb.ToString();
     }
 
     private void HandleActionEnded()
