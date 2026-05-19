@@ -391,24 +391,42 @@ This split is **the project-specific interpretation of CLAUDE.md rule 26** for t
 
 ## Prefab Structure: `SpeechBubbleInstance_Prefab`
 
-> **Note (2026-05-19):** Script-side already exposes `_nameStripBackground` / `_nameText` / `_tailRoot` SerializeFields (Task 9 of the speech-bubble rework). The prefab restructure that authors these children + wires them through SerializeFields is **deferred to Task 8 / Task 9 step 4** — the Unity Editor is currently bound to the main repo, not the worktree; do the prefab work in the Editor session once it is pointed at this branch.
-
 ```
-SpeechBubbleInstance (Root)
+SpeechBubbleInstance (Root) — RectTransform anchors (0,0)-(0,0), sizeDelta DRIVEN BY SCRIPT
 ├── CanvasGroup              (alpha for fade animation)
-├── SpeechBubbleInstance.cs  (script component)
-├── NameStripBackground      (Image — tinted by Character.AccentColor via SetSpeakerDisplay)
-│   └── NameText             (TextMeshProUGUI — "???" when KnowsName == false, else DisplayName)
-├── TailRoot                 (GameObject — toggled by SetIsNewest; shown only on index 0)
-└── Canvas (ScreenSpace / HUD, ~300x70)
-    ├── CanvasScaler (800x600 reference)
-    └── Text_Speech (TextMeshProUGUI)
-        ├── ContentSizeFitter (VerticalFit: PreferredSize)
-        ├── Font: Default TMP, 36pt, white, center-aligned
-        └── Word wrap enabled
+├── SpeechBubbleInstance.cs  (script component, sets root sizeDelta via ApplyAdaptiveSize)
+├── SortingGroup             (disabled — leftover from the WorldSpace era)
+├── NameStrip — top-stretched (0,1)-(1,1), pivot (0.5,1), sizeDelta (0,22), anchoredPosition (0,0)
+│   ├── Image (background — tinted by Character.AccentColor via SetSpeakerDisplay)
+│   ├── LayoutElement (preferredHeight ≈ 22)
+│   └── Text_Name (TextMeshProUGUI — "???" when KnowsName == false, else CharacterName)
+└── BodyPanel — full-stretched (0,0)-(1,1), pivot (0.5,0.5), sizeDelta (0,-22), anchoredPosition (0,-11)
+    ├── Image (translucent dark body background)
+    ├── Text_Speech (TextMeshProUGUI, anchors (0,1)-(1,1), sizeDelta (0,0))
+    │   ├── ContentSizeFitter (VerticalFit: PreferredSize) — drives Text_Speech height from text
+    │   ├── Font: Default TMP, white, centred
+    │   └── Word wrap enabled (TMP wraps to whatever the BodyPanel's resolved width is)
+    └── Tail (RectTransform anchored bottom-centre, w16/h12, Image — toggled by SetIsNewest)
 ```
 
-The `ContentSizeFitter` on `Text_Speech` is used for layout calculation. The actual reveal is done via `maxVisibleCharacters` — the full text and final height are established at frame 0 of typing so that push height calculations are accurate.
+**Layout rules (post-2026-05-20 fix):**
+- **No `VerticalLayoutGroup` or `ContentSizeFitter` on the root.** An earlier iteration of the rework added them and the layout collapsed to zero width (children had stretched anchors with no `LayoutElement`-declared preferred size → CSF resolved root height to 0 → text rendered vertically, one character per line). The fix mirrors [[runtime-uichildren-collapse-under-prefab-vlg]]: bypass the parent VLG, use direct anchor-based positioning.
+- The root's sizeDelta is **driven by the script's `ApplyAdaptiveSize`** (see below), NOT by a layout system. Setting authoring-time sizeDelta on the prefab is harmless — `ApplyAdaptiveSize` overwrites it the moment a message lands.
+- BodyPanel uses `offsetMax.y = -22` (encoded as sizeDelta.y = -22, anchoredPosition.y = -11 because anchors are full-stretched) so it fills the area below the NameStrip. Change `_nameStripHeight` on the script and the prefab's BodyPanel offsets must move with it.
+- The `ContentSizeFitter` on `Text_Speech` is preserved for layout calculation — the actual reveal is done via `maxVisibleCharacters` so the full text and final height are established at frame 0 of typing.
+
+**Adaptive sizing (`ApplyAdaptiveSize` on `SpeechBubbleInstance`):** called once inside `TypeMessage` right after `_textElement.text = _fullMessage; ForceMeshUpdate();`. Uses `TMP_Text.GetPreferredValues(_fullMessage)` to measure the natural single-line width.
+
+- If natural width ≤ `_maxBubbleWidth − _bodyHorizontalPadding`: bubble width = `clamp(natural + padding, _minBubbleWidth, _maxBubbleWidth)`, height = natural text height + paddings.
+- Otherwise: bubble width = `_maxBubbleWidth`, text wraps; height = re-measured wrapped text height + paddings.
+- Final root sizeDelta = `(bubbleWidth, _nameStripHeight + textHeight + _bodyVerticalPadding)`.
+
+Designer-tunable on the SerializeField block of `SpeechBubbleInstance` (defaults shown):
+- `_minBubbleWidth = 180`
+- `_maxBubbleWidth = 320`
+- `_bodyHorizontalPadding = 16` (sum left+right)
+- `_nameStripHeight = 22`
+- `_bodyVerticalPadding = 12` (sum top+bottom)
 
 ---
 
