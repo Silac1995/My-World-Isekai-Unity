@@ -47,6 +47,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: '::'
   _fillImage: {fileID: 4569827802119366626}
   _actionNameText: {fileID: 6222488864354237541}
+  _progressBarRect: {fileID: 4828393328829599264}
+  _textRect: {fileID: 7310882610719905945}
+  _canvasRect: {fileID: 398141203196899656}
+  _worldHeadOffset: 12
+  _barScreenOffsetPx: {x: 0, y: 0}
+  _textScreenOffsetPx: {x: 0, y: 40}
+  _positionLerpSpeed: 14
 --- !u!1 &1585477730301641787
 GameObject:
   m_ObjectHideFlags: 0
@@ -215,9 +222,9 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 398141203196899656}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -271.59875}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 265, y: 89}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &2608479560779860444
@@ -352,9 +359,9 @@ RectTransform:
   - {fileID: 1838002575407011796}
   m_Father: {fileID: 398141203196899656}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -334.90125}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 200, y: 20}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &6799246792182900267
