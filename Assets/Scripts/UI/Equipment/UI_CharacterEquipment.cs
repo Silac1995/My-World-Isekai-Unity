@@ -197,6 +197,22 @@ namespace MWI.UI.Equipment
         private void OnHandsCarryChanged(ItemInstance _) => RepaintAll();
 
         // -------------------------------------------------------------
+        // Bag-cell hover hook (clear inventory notification badge).
+        // Called by UI_EquipmentBagCell.OnPointerEnter after it clears
+        // an item's IsNewlyAdded flag. Mirrors UI_ItemSlot's pattern.
+        // -------------------------------------------------------------
+        public void OnBagItemHovered()
+        {
+            if (_character == null) return;
+            var equip = _character.CharacterEquipment;
+            if (equip == null || !equip.HaveInventory()) return;
+            if (!equip.GetInventory().HasNewItems())
+            {
+                equip.ClearInventoryNotification();
+            }
+        }
+
+        // -------------------------------------------------------------
         // Popup entry points called by leaf cells.
         // -------------------------------------------------------------
         public void OpenPopupForBagCell(UI_EquipmentBagCell cell)

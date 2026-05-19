@@ -18,6 +18,7 @@ namespace MWI.UI.Equipment
         [Header("Visual")]
         [SerializeField] private Image _iconImage;
         [SerializeField] private TextMeshProUGUI _layerTag;
+        [SerializeField] private TextMeshProUGUI _fallbackLabel;
         [SerializeField] private Button _clickButton;
 
         private UI_CharacterEquipment _window;
@@ -42,10 +43,23 @@ namespace MWI.UI.Equipment
         public void Refresh(EquipmentInstance instance)
         {
             bool filled = instance != null && instance.ItemSO != null;
+            bool hasIcon = filled && instance.ItemSO.Icon != null;
+
             if (_iconImage != null)
             {
-                _iconImage.enabled = filled;
-                if (filled) _iconImage.sprite = instance.ItemSO.Icon;
+                _iconImage.enabled = hasIcon;
+                if (hasIcon) _iconImage.sprite = instance.ItemSO.Icon;
+            }
+            // Text fallback when no icon — shows first 3 chars of item name so the player
+            // can still see SOMETHING is equipped even on items without authored icons.
+            if (_fallbackLabel != null)
+            {
+                _fallbackLabel.gameObject.SetActive(filled && !hasIcon);
+                if (filled && !hasIcon)
+                {
+                    string n = instance.ItemSO.ItemName ?? "?";
+                    _fallbackLabel.text = n.Length > 3 ? n.Substring(0, 3) : n;
+                }
             }
             if (_clickButton != null) _clickButton.interactable = filled;
         }
