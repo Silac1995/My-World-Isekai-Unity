@@ -51,6 +51,12 @@ public class CharacterDataCoordinator : NetworkBehaviour
             originWorldGuid = _character.OriginWorldGuid,
             characterName = _character.CharacterName,
             archetypeId = _character.Archetype != null ? _character.Archetype.ArchetypeName : "",
+            // Round-trip the per-character speech-bubble accent override (Task 6). The
+            // override flag stays false when SetAccentColor was never called, so saved
+            // characters keep tracking their archetype's default if the archetype is
+            // re-tuned later. See CharacterProfileSaveData.HasAccentColorOverride.
+            AccentColorOverride = _character.AccentColorOverrideValue,
+            HasAccentColorOverride = _character.HasAccentColorOverride,
             timestamp = DateTime.UtcNow.ToString("o")
         };
 
@@ -150,6 +156,16 @@ public class CharacterDataCoordinator : NetworkBehaviour
         {
             _character.NetworkCharacterName.Value =
                 new Unity.Collections.FixedString64Bytes(data.characterName);
+        }
+
+        // Restore the speech-bubble accent override (Task 6 of the speech-bubble rework
+        // plan). Server-only path — SetAccentColor flips _hasAccentOverride to true and
+        // writes the replicated NetworkVariable so every peer (including late-joiners)
+        // sees the per-character colour. When the saved profile carries no override the
+        // archetype default stamped during OnNetworkSpawn stands; we leave it alone.
+        if (IsServer && data.HasAccentColorOverride)
+        {
+            _character.SetAccentColor(data.AccentColorOverride);
         }
 
         // Override the NetworkCharacterId so the character keeps its persistent GUID

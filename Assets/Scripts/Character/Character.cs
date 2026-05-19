@@ -339,6 +339,23 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     /// persists via CharacterProfileSaveData (Task 6 of the speech-bubble rework plan).
     /// </summary>
     public Color AccentColor => (Color)_accentColorNet.Value;
+
+    /// <summary>
+    /// Server-side state. True when <see cref="SetAccentColor"/> has overridden the
+    /// archetype default — read by the save layer to decide whether to persist
+    /// <see cref="AccentColorOverrideValue"/> into <see cref="CharacterProfileSaveData"/>.
+    /// Clients always see false here (no replication); they read the effective colour
+    /// through <see cref="AccentColor"/> instead.
+    /// </summary>
+    public bool HasAccentColorOverride => _hasAccentOverride;
+
+    /// <summary>
+    /// Server-side state. The explicit override colour set via <see cref="SetAccentColor"/>;
+    /// only meaningful when <see cref="HasAccentColorOverride"/> is true. Used by the save
+    /// layer to round-trip the per-character override; clients should read
+    /// <see cref="AccentColor"/> for the displayed colour.
+    /// </summary>
+    public Color AccentColorOverrideValue => _accentOverride;
     public string CharacterName { get => _characterName; set => _characterName = value; }
     public CharacterBio CharacterBio => _characterBio;
     public CharacterStats Stats { get { var s = TryGet<CharacterStats>(out var reg) ? reg : _stats; return s ?? throw new NullReferenceException($"Stats manquantes sur {gameObject.name}"); } }
