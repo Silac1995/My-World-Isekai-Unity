@@ -50,7 +50,7 @@ MonoBehaviour:
   _progressBarRect: {fileID: 4828393328829599264}
   _textRect: {fileID: 7310882610719905945}
   _canvasRect: {fileID: 398141203196899656}
-  _worldHeadOffset: 22
+  _worldHeadOffset: 12
   _barScreenOffsetPx: {x: 0, y: 0}
   _textScreenOffsetPx: {x: 0, y: 40}
   _positionLerpSpeed: 14
