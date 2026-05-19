@@ -153,6 +153,11 @@ public class SpeechBubbleInstance : MonoBehaviour
             _onExpiredCallback = onExpired;
             _isScripted = false;
 
+            // Lock the final bubble size BEFORE the entrance animation runs so the
+            // bubble fades in at its real size — not the prefab's authored default.
+            // Without this the user sees a brief flash of the big default rect during
+            // the 0.3s entrance fade-in before TypeMessage resizes it down.
+            PrepareTextAndApplySize();
             _cachedHeight = _rect.rect.height;
 
             if (_animRoutine != null) StopCoroutine(_animRoutine);
@@ -185,6 +190,7 @@ public class SpeechBubbleInstance : MonoBehaviour
             _onTypingFinishedCallback = onTypingFinished;
             _isScripted = true;
 
+            PrepareTextAndApplySize();
             _cachedHeight = _rect.rect.height;
 
             if (_animRoutine != null) StopCoroutine(_animRoutine);
@@ -201,6 +207,22 @@ public class SpeechBubbleInstance : MonoBehaviour
         {
             Debug.LogError($"[SpeechBubbleInstance] Exception in SetupScripted: {e.Message}\n{e.StackTrace}");
         }
+    }
+
+    /// <summary>
+    /// Assigns the full message to the TMP, hides it via maxVisibleCharacters = 0,
+    /// forces a mesh update so GetPreferredValues has a current layout to measure,
+    /// then resizes the bubble. Runs synchronously inside Setup / SetupScripted so
+    /// the Habbo push height (via GetHeightPx) is accurate from frame 0 and the
+    /// entrance animation fades in at the final size.
+    /// </summary>
+    private void PrepareTextAndApplySize()
+    {
+        if (_textElement == null) return;
+        _textElement.text = _fullMessage ?? string.Empty;
+        _textElement.maxVisibleCharacters = 0;
+        _textElement.ForceMeshUpdate();
+        ApplyAdaptiveSize();
     }
 
     public void CompleteTypingImmediately()
