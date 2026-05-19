@@ -332,20 +332,6 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
     private Color _accentOverride;
 
     /// <summary>
-    /// True iff <see cref="SetAccentColor"/> has been called on this character (i.e. the
-    /// current accent is an explicit override, not the archetype default). Server-side
-    /// only; consumed by Task 6's save export to decide whether to write the colour.
-    /// </summary>
-    public bool HasAccentOverride => _hasAccentOverride;
-
-    /// <summary>
-    /// Server-side explicit override colour, valid only when <see cref="HasAccentOverride"/>
-    /// is true. Reading this on a client is meaningless — always read <see cref="AccentColor"/>
-    /// instead for gameplay/UI.
-    /// </summary>
-    public Color AccentOverride => _accentOverride;
-
-    /// <summary>
     /// Speech-bubble accent colour for this character. Replicated server-authoritatively
     /// to all clients via <see cref="_accentColorNet"/> (<c>NetworkVariable&lt;Color32&gt;</c>).
     /// Initialised from <see cref="CharacterArchetype.AccentColor"/> on spawn; can be
