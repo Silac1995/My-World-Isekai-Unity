@@ -18,6 +18,13 @@ public class CharacterArchetype : ScriptableObject
     public BodyType BodyType => _bodyType;
     public FootSurfaceType DefaultFootSurface => _defaultFootSurface;
 
+    // ── Visual identity ─────────────────────────────────────────────
+    [Header("Visual identity")]
+    [Tooltip("Default accent colour for this archetype — used as the name-strip background on speech bubbles. Per-character override via CharacterProfileSaveData.")]
+    [SerializeField] private Color _accentColor = new Color(0.78f, 0.48f, 0.23f);  // warm orange fallback
+
+    public Color AccentColor => _accentColor;
+
     // ── Capability Flags (editor validation only) ─────────────────
     [Header("Capabilities (Validation Only — Registry is Runtime Truth)")]
     [SerializeField] private bool _canEnterCombat = true;
