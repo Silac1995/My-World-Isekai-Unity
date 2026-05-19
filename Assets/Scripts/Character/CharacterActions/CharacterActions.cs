@@ -199,8 +199,21 @@ public class CharacterActions : CharacterSystem
                 break;
 
             case EQUIP_VERB_USE:
-                ExecuteAction(new CharacterAction_UseItem(_character, source));
+            {
+                // Route through the existing CharacterUseConsumableAction (1.5s duration +
+                // Trigger_Consume animation + Character.UseConsumable on end which handles
+                // ApplyEffect + removal from hands/inventory). Resolve the source to a
+                // ConsumableInstance — the action wrapper doesn't care which slot it's in.
+                ItemInstance instance = ResolveSourceInstance(source);
+                if (!(instance is ConsumableInstance consumable))
+                {
+                    if (NPCDebug.VerboseActions)
+                        Debug.LogWarning($"<color=orange>[CharacterActions]</color> Use verb: source {source} resolved to non-consumable {instance?.ItemSO?.ItemName ?? "null"}.");
+                    return;
+                }
+                ExecuteAction(new CharacterUseConsumableAction(_character, consumable));
                 break;
+            }
 
             case EQUIP_VERB_UNEQUIP_BAG:
                 // No CharacterAction wrapper today — direct call preserves existing UnequipBag
