@@ -29,6 +29,10 @@ public static class DevChatCommands
             case "timeskip":
                 HandleTimeSkip(parts);
                 break;
+            case "togglebars":
+            case "showbars":
+                HandleToggleBars(parts);
+                break;
             default:
                 Debug.LogWarning($"<color=orange>[DevChat]</color> Unknown command: /{cmd}");
                 break;
@@ -70,6 +74,38 @@ public static class DevChatCommands
                 Debug.Log("<color=magenta>[DevChat]</color> Usage: /devmode on | off");
                 break;
         }
+    }
+
+    /// <summary>
+    /// /togglebars [on|off]  — toggles remote-character action indicators (NPC + remote player
+    /// progress arcs above their heads). No-arg flips the current state. Persists via PlayerPrefs
+    /// (key RemoteActionIndicatorLayer.PlayerPrefsKey) so the choice survives restarts.
+    /// Client-side: each peer toggles its own HUD layer; not host-gated.
+    /// </summary>
+    private static void HandleToggleBars(string[] parts)
+    {
+        var layer = RemoteActionIndicatorLayer.Local;
+        if (layer == null)
+        {
+            Debug.LogWarning("<color=orange>[DevChat]</color> RemoteActionIndicatorLayer.Local is null — author UI_RemoteActionIndicatorLayer under UI_PlayerHUD's Canvas in the scene.");
+            return;
+        }
+
+        bool target;
+        if (parts.Length >= 2)
+        {
+            string arg = parts[1].ToLowerInvariant();
+            if (arg == "on" || arg == "true" || arg == "1") target = true;
+            else if (arg == "off" || arg == "false" || arg == "0") target = false;
+            else { Debug.Log("<color=magenta>[DevChat]</color> Usage: /togglebars [on|off]"); return; }
+        }
+        else
+        {
+            target = !layer.IsEnabled;
+        }
+
+        layer.SetEnabled(target);
+        Debug.Log($"<color=magenta>[DevChat]</color> Remote action bars: {(target ? "ON" : "OFF")} (persisted).");
     }
 
     private static void HandleTimeSkip(string[] parts)
