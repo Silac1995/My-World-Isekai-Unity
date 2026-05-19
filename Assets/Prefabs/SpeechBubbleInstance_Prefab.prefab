@@ -87,13 +87,13 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 11
-  m_fontSizeBase: 11
+  m_fontSize: 16
+  m_fontSizeBase: 16
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -211,6 +211,11 @@ MonoBehaviour:
   _exitDuration: 0.5
   _exitSlideDistance: 0.3
   _positionLerpSpeed: 8
+  _minBubbleWidth: 180
+  _maxBubbleWidth: 320
+  _bodyHorizontalPadding: 16
+  _nameStripHeight: 22
+  _bodyVerticalPadding: 12
 --- !u!210 &3890644606930742312
 SortingGroup:
   m_ObjectHideFlags: 0
@@ -328,8 +333,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 28
-  m_fontSizeBase: 28
+  m_fontSize: 17
+  m_fontSizeBase: 17
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
