@@ -192,7 +192,7 @@ through one server-authoritative surface (rule #22):
 - `CharacterAction_UnequipWearable(layer, slot)` — worn → bag, fallback ground.
 - `CharacterAction_CarryInHand(EquipmentSourceRef)` — smart-swap with current hand.
 - `CharacterAction_StashInBag(EquipmentSourceRef)` — hand/worn/weapon → bag.
-- `CharacterAction_UseItem(EquipmentSourceRef)` — consumable dispatch via `ConsumableInstance.ApplyEffect`.
+- ~~`CharacterAction_UseItem(EquipmentSourceRef)`~~ — **DELETED 2026-05-19 post-playtest**. The Use verb now routes through the existing `CharacterUseConsumableAction(character, ConsumableInstance)` instead — 1.5s duration, `Trigger_Consume` animator trigger, `Character.UseConsumable` on apply which handles `ApplyEffect` + removal from hands/inventory. `CharacterActions.RequestEquipmentVerbServerRpc` EQUIP_VERB_USE case resolves the source to a `ConsumableInstance` (non-detaching read) and queues `CharacterUseConsumableAction` server-side. The originally-planned wrapper was redundant — the canonical consumable-use action already existed.
 
 `EquipmentSourceRef` is the shared discriminator: `BagSlot(int)` / `WornSlot(layer,slot)` /
 `ActiveWeapon` / `HandsCarry`. Smart-swap algorithm captured in the [design spec](../../docs/superpowers/specs/2026-05-19-character-equipment-ui-rework-design.md) §6.
