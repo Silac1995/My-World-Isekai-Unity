@@ -10,6 +10,7 @@ public struct RelationSyncData : INetworkSerializable, IEquatable<RelationSyncDa
     public int RelationValue;
     public RelationshipType RelationType;
     public bool HasMet;
+    public bool KnowsName;
 
     public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
     {
@@ -17,14 +18,16 @@ public struct RelationSyncData : INetworkSerializable, IEquatable<RelationSyncDa
         serializer.SerializeValue(ref RelationValue);
         serializer.SerializeValue(ref RelationType);
         serializer.SerializeValue(ref HasMet);
+        serializer.SerializeValue(ref KnowsName);
     }
 
-    public bool Equals(RelationSyncData other) 
+    public bool Equals(RelationSyncData other)
     {
-        return TargetId == other.TargetId && 
-               RelationValue == other.RelationValue && 
-               RelationType == other.RelationType && 
-               HasMet == other.HasMet;
+        return TargetId == other.TargetId &&
+               RelationValue == other.RelationValue &&
+               RelationType == other.RelationType &&
+               HasMet == other.HasMet &&
+               KnowsName == other.KnowsName;
     }
 }
 
@@ -113,6 +116,7 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
                 {
                     var rel = new Relationship(_character, spawnedCharacter, dormant.relationValue, (RelationshipType)dormant.relationshipType);
                     if (dormant.hasMet) rel.SetAsMet();
+                    rel.SetKnowsName(dormant.knowsName);
                     _relationships.Add(rel);
 
                     if (IsServer)
@@ -152,7 +156,8 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
             {
                 existing = new Relationship(Character, target, syncData.RelationValue, syncData.RelationType);
                 if (syncData.HasMet) existing.SetAsMet();
-                
+                existing.SetKnowsName(syncData.KnowsName);
+
                 if (!isInitialSync)
                 {
                     existing.IsNewlyAdded = true;
@@ -189,10 +194,11 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
                 }
                 
                 existing.SetRelationshipType(syncData.RelationType);
-                
+
                 if (syncData.HasMet) existing.SetAsMet();
                 else existing.SetAsNotMet();
-                
+                existing.SetKnowsName(syncData.KnowsName);
+
                 OnRelationsUpdated?.Invoke();
             }
         }
@@ -208,16 +214,18 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
             TargetId = targetId,
             RelationValue = rel.RelationValue,
             RelationType = rel.RelationType,
-            HasMet = rel.HasMet
+            HasMet = rel.HasMet,
+            KnowsName = rel.KnowsName
         };
 
         for (int i = 0; i < _networkRelations.Count; i++)
         {
             if (_networkRelations[i].TargetId == targetId)
             {
-                if (_networkRelations[i].RelationValue != syncData.RelationValue || 
-                    _networkRelations[i].RelationType != syncData.RelationType || 
-                    _networkRelations[i].HasMet != syncData.HasMet)
+                if (_networkRelations[i].RelationValue != syncData.RelationValue ||
+                    _networkRelations[i].RelationType != syncData.RelationType ||
+                    _networkRelations[i].HasMet != syncData.HasMet ||
+                    _networkRelations[i].KnowsName != syncData.KnowsName)
                 {
                     _networkRelations[i] = syncData;
                 }
@@ -250,6 +258,7 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
                 {
                     rel = new Relationship(Character, otherCharacter, syncData.RelationValue, syncData.RelationType);
                     if (syncData.HasMet) rel.SetAsMet();
+                    rel.SetKnowsName(syncData.KnowsName);
                     _relationships.Add(rel);
                     break;
                 }
@@ -366,7 +375,8 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
                 targetWorldGuid = rel.RelatedCharacter.OriginWorldGuid ?? "",
                 relationshipType = (int)rel.RelationType,
                 relationValue = rel.RelationValue,
-                hasMet = rel.HasMet
+                hasMet = rel.HasMet,
+                knowsName = rel.KnowsName
             };
             data.relationships.Add(entry);
         }
@@ -404,6 +414,7 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
                 {
                     var rel = new Relationship(_character, target, entry.relationValue, (RelationshipType)entry.relationshipType);
                     if (entry.hasMet) rel.SetAsMet();
+                    rel.SetKnowsName(entry.knowsName);
                     _relationships.Add(rel);
                 }
                 else
@@ -412,6 +423,7 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
                     existing.SetRelationshipType((RelationshipType)entry.relationshipType);
                     if (entry.hasMet) existing.SetAsMet();
                     else existing.SetAsNotMet();
+                    existing.SetKnowsName(entry.knowsName);
                 }
             }
             else

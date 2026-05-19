@@ -14,4 +14,5 @@ public class RelationshipSaveEntry
     public int relationshipType;
     public int relationValue;
     public bool hasMet;
+    public bool knowsName;
 }

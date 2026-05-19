@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -9,8 +10,12 @@ using UnityEngine;
 /// ref count.
 ///
 /// HUD rewrite: bubbles are instantiated as children of a per-stack CanvasGroup
-/// wrapper under HUDSpeechBubbleLayer.Local.ContentRoot (screen-space). Proximity
-/// to the local player character and on-screen status drive a fade on the wrapper.
+/// wrapper under HUDSpeechBubbleLayer.Local.ContentRoot (screen-space). The
+/// wrapper's alpha is driven each frame by a linear X-Z distance fade between
+/// <see cref="_fadeStartDistance"/> and <see cref="_fadeEndDistance"/>, gated
+/// further by an on-screen check. The local player's own stack skips both
+/// gates and stays fully opaque — mirrors <see cref="UI_RemoteActionIndicator"/>'s
+/// _isLocalPlayer fast path so the two HUD layers read the same way.
 ///
 /// Cross-character detection (Habbo style):
 /// - SphereCollider trigger on the SpeechZone physics layer (radius 25)
@@ -28,7 +33,10 @@ public class SpeechBubbleStack : MonoBehaviour
     [SerializeField] private int _maxBubbles = 5;
     [SerializeField] private float _separatorSpacingPx = 4f;
     [SerializeField] private float _speechZoneRadius = 25f;
-    [SerializeField] private float _proximityRadius = 25f;
+    [Header("Distance fade (matches UI_RemoteActionIndicator)")]
+    [Tooltip("World units. <= FadeStart = full opacity. Local-player stack skips this entirely.")]
+    [SerializeField, Range(0f, 50f)] private float _fadeStartDistance = 12f;
+    [SerializeField, Range(1f, 200f)] private float _fadeEndDistance = 30f;
     [SerializeField] private float _fadeSpeed = 4f;
 
     // ── Private Fields ─────────────────────────────────────────────────
@@ -41,6 +49,10 @@ public class SpeechBubbleStack : MonoBehaviour
     private GameObject _wrapperGO;
     private CanvasGroup _wrapperGroup;
     private RectTransform _wrapperRect;
+
+    // Local-player detection — cached on first successful resolve. Tri-state via the resolved flag.
+    private bool _isLocalPlayer;
+    private bool _isLocalPlayerResolved;
 
     // ── Public Properties ──────────────────────────────────────────────
     public Transform OwnerRoot { get; private set; }
@@ -85,6 +97,13 @@ public class SpeechBubbleStack : MonoBehaviour
 
             if (_wrapperGroup == null || _bubbles.Count == 0) return;
 
+            // Local-player stack: always fully opaque — skip distance + on-screen gates.
+            if (IsLocalPlayerStack())
+            {
+                _wrapperGroup.alpha = Mathf.MoveTowards(_wrapperGroup.alpha, 1f, _fadeSpeed * Time.unscaledDeltaTime);
+                return;
+            }
+
             var local = HUDSpeechBubbleLayer.Local;
             if (local == null || local.LocalPlayerAnchor == null)
             {
@@ -92,13 +111,16 @@ public class SpeechBubbleStack : MonoBehaviour
                 return;
             }
 
-            // Measure feet-to-feet (root-to-root). The stack's transform is the speech
-            // anchor at +9u above the character's feet; using OwnerRoot keeps proximity
-            // grounded so a "25u hearing range" matches player intuition about distance
-            // to the character, not to their head.
+            // 2D X-Z distance — Y doesn't matter for "is the other character close to me".
             Vector3 speakerPos = OwnerRoot != null ? OwnerRoot.position : transform.position;
-            float distSq = (local.LocalPlayerAnchor.position - speakerPos).sqrMagnitude;
-            bool inRange = distSq <= _proximityRadius * _proximityRadius;
+            Vector3 a = local.LocalPlayerAnchor.position; a.y = 0f;
+            Vector3 b = speakerPos; b.y = 0f;
+            float d = Vector3.Distance(a, b);
+
+            float distanceAlpha;
+            if (d <= _fadeStartDistance)      distanceAlpha = 1f;
+            else if (d >= _fadeEndDistance)   distanceAlpha = 0f;
+            else                              distanceAlpha = 1f - (d - _fadeStartDistance) / Mathf.Max(0.001f, _fadeEndDistance - _fadeStartDistance);
 
             bool anyOnScreen = false;
             for (int i = 0; i < _bubbles.Count; i++)
@@ -106,7 +128,7 @@ public class SpeechBubbleStack : MonoBehaviour
                 if (_bubbles[i] != null && !_bubbles[i].IsOffScreen) { anyOnScreen = true; break; }
             }
 
-            float targetAlpha = (inRange && anyOnScreen) ? 1f : 0f;
+            float targetAlpha = anyOnScreen ? distanceAlpha : 0f;
             _wrapperGroup.alpha = Mathf.MoveTowards(_wrapperGroup.alpha, targetAlpha, _fadeSpeed * Time.unscaledDeltaTime);
         }
         catch (Exception e)
@@ -153,6 +175,79 @@ public class SpeechBubbleStack : MonoBehaviour
         }
     }
 
+    // ── Local-Player / Display Resolution ──────────────────────────────
+
+    /// <summary>
+    /// Lazy-resolves whether this stack belongs to the local player's Character.
+    /// Returns false while NetworkManager / LocalClient / PlayerObject aren't ready yet;
+    /// re-tries each call until it can answer once, then caches the resolved value.
+    /// Mirrors RemoteActionIndicatorLayer.IsLocalPlayer.
+    /// </summary>
+    private bool IsLocalPlayerStack()
+    {
+        if (_isLocalPlayerResolved) return _isLocalPlayer;
+        try
+        {
+            var nm = NetworkManager.Singleton;
+            if (nm == null || nm.LocalClient == null) return false;
+            var localObj = nm.LocalClient.PlayerObject;
+            if (localObj == null) return false;
+            if (OwnerRoot == null) return false;
+            var ownerChar = OwnerRoot.GetComponent<Character>();
+            if (ownerChar == null) ownerChar = OwnerRoot.GetComponentInParent<Character>();
+            _isLocalPlayer = ownerChar != null && ownerChar.NetworkObject == localObj;
+            _isLocalPlayerResolved = true;
+            return _isLocalPlayer;
+        }
+        catch (Exception e)
+        {
+            Debug.LogException(e);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Computes the (accent colour, display name) pair for this stack's speaker.
+    /// Display name resolves via local player's CharacterRelation.GetRelationshipWith(speaker).KnowsName,
+    /// falling back to "???" when KnowsName is false (or no relationship entry exists).
+    /// </summary>
+    private (Color accent, string displayName) ResolveSpeakerDisplay()
+    {
+        var speaker = OwnerRoot != null ? OwnerRoot.GetComponent<Character>() : null;
+        if (speaker == null && OwnerRoot != null) speaker = OwnerRoot.GetComponentInParent<Character>();
+
+        Color accent = speaker != null ? speaker.AccentColor : new Color(0.78f, 0.48f, 0.23f);
+
+        string displayName = "???";
+        if (speaker != null)
+        {
+            bool isLocalPlayer = IsLocalPlayerStack();
+            if (isLocalPlayer)
+            {
+                displayName = speaker.CharacterName;
+            }
+            else
+            {
+                try
+                {
+                    var nm = NetworkManager.Singleton;
+                    var localObj = nm?.LocalClient?.PlayerObject;
+                    var localChar = localObj != null ? localObj.GetComponent<Character>() : null;
+                    var relSys = localChar != null ? localChar.GetComponentInChildren<CharacterRelation>() : null;
+                    var rel = relSys != null ? relSys.GetRelationshipWith(speaker) : null;
+                    if (rel != null && rel.KnowsName)
+                        displayName = speaker.CharacterName;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogException(e);
+                }
+            }
+        }
+
+        return (accent, displayName);
+    }
+
     // ── Public API ─────────────────────────────────────────────────────
 
     public void PushBubble(string message, float duration, float typingSpeed,
@@ -169,6 +264,12 @@ public class SpeechBubbleStack : MonoBehaviour
             instance.SetSpeakerAnchor(transform);
             instance.SetCamera(HUDSpeechBubbleLayer.Local?.Camera);
 
+            var (accent, displayName) = ResolveSpeakerDisplay();
+            instance.SetSpeakerDisplay(accent, displayName);
+
+            // Tail handover: previously-newest (index 0 of the soon-to-grow list) loses its tail.
+            if (_bubbles.Count > 0) _bubbles[0].SetIsNewest(false);
+
             instance.Setup(message, audioSource, voiceSO, pitch, typingSpeed, duration,
                 onExpired: () => OnBubbleExpired(instance));
 
@@ -176,11 +277,10 @@ public class SpeechBubbleStack : MonoBehaviour
             instance.SetStackOffsetPx(Vector2.zero);
 
             _bubbles.Insert(0, instance);
+            instance.SetIsNewest(true);
 
             float pushHeightPx = instance.GetHeightPx() + _separatorSpacingPx;
             PushAllBubblesUp(pushHeightPx, instance);
-
-            UpdateSeparatorVisibility();
         }
         catch (Exception e)
         {
@@ -202,17 +302,22 @@ public class SpeechBubbleStack : MonoBehaviour
             instance.SetSpeakerAnchor(transform);
             instance.SetCamera(HUDSpeechBubbleLayer.Local?.Camera);
 
+            var (accent, displayName) = ResolveSpeakerDisplay();
+            instance.SetSpeakerDisplay(accent, displayName);
+
+            // Tail handover: previously-newest (index 0 of the soon-to-grow list) loses its tail.
+            if (_bubbles.Count > 0) _bubbles[0].SetIsNewest(false);
+
             instance.SetupScripted(message, audioSource, voiceSO, pitch, typingSpeed, onTypingFinished);
 
             instance.OnTypingStateChanged += OnTypingStateChanged;
             instance.SetStackOffsetPx(Vector2.zero);
 
             _bubbles.Insert(0, instance);
+            instance.SetIsNewest(true);
 
             float pushHeightPx = instance.GetHeightPx() + _separatorSpacingPx;
             PushAllBubblesUp(pushHeightPx, instance);
-
-            UpdateSeparatorVisibility();
         }
         catch (Exception e)
         {
@@ -366,7 +471,7 @@ public class SpeechBubbleStack : MonoBehaviour
 
         UnsubscribeEvents(instance);
         _bubbles.Remove(instance);
-        UpdateSeparatorVisibility();
+        if (_bubbles.Count > 0) _bubbles[0].SetIsNewest(true);
     }
 
     private void OnTypingStateChanged(bool isTyping)
@@ -384,15 +489,6 @@ public class SpeechBubbleStack : MonoBehaviour
                 _typingCount = 0;
                 _mouthController?.StopTalking();
             }
-        }
-    }
-
-    private void UpdateSeparatorVisibility()
-    {
-        for (int i = 0; i < _bubbles.Count; i++)
-        {
-            if (_bubbles[i] != null)
-                _bubbles[i].SetSeparatorVisible(i > 0);
         }
     }
 

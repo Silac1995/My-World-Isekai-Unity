@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
 using System;
 using System.Collections;
@@ -19,7 +20,9 @@ public class SpeechBubbleInstance : MonoBehaviour
 {
     // ── Serialized Fields ──────────────────────────────────────────────
     [SerializeField] private TextMeshProUGUI _textElement;
-    [SerializeField] private GameObject _separatorLine;
+    [SerializeField] private TextMeshProUGUI _nameText;
+    [SerializeField] private Image _nameStripBackground;
+    [SerializeField] private GameObject _tailRoot;
 
     [Header("Animation (reference-resolution pixels)")]
     [SerializeField] private float _entranceDuration = 0.3f;
@@ -254,10 +257,23 @@ public class SpeechBubbleInstance : MonoBehaviour
         return _rect.rect.height;
     }
 
-    public void SetSeparatorVisible(bool visible)
+    /// <summary>
+    /// Sets the speaker-specific visuals: accent colour on the name strip + display name.
+    /// Called by SpeechBubbleStack right after Setup/SetupScripted.
+    /// </summary>
+    public void SetSpeakerDisplay(Color accent, string displayName)
     {
-        if (_separatorLine != null)
-            _separatorLine.SetActive(visible);
+        if (_nameStripBackground != null) _nameStripBackground.color = accent;
+        if (_nameText != null) _nameText.text = displayName;
+    }
+
+    /// <summary>
+    /// Toggles the tail visibility. Only the newest bubble in a stack should have its tail visible.
+    /// Called by SpeechBubbleStack on push (new bubble = true, previously-newest = false) and on remove.
+    /// </summary>
+    public void SetIsNewest(bool isNewest)
+    {
+        if (_tailRoot != null) _tailRoot.SetActive(isNewest);
     }
 
     // ── Coroutines ─────────────────────────────────────────────────────

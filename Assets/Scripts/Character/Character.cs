@@ -229,6 +229,22 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
         NetworkVariableReadPermission.Everyone,
         NetworkVariableWritePermission.Server
     );
+
+    // ── Visual identity ─────────────────────────────────────────────
+    /// <summary>
+    /// Speech-bubble accent colour for this character. Server-authoritative; replicates to
+    /// every peer so client-side bubble UI can read it via <see cref="AccentColor"/>.
+    /// Initialised from <see cref="CharacterArchetype.AccentColor"/> on spawn; can be
+    /// overridden server-side via <see cref="SetAccentColor"/>. Per-character override
+    /// persists via CharacterProfileSaveData (Task 6 of the speech-bubble rework plan).
+    /// Default (199, 122, 58) mirrors CharacterArchetype's warm-orange default — both
+    /// must stay in sync so a character with no archetype still falls back to a sensible
+    /// colour on late-join before OnNetworkSpawn re-stamps the archetype value.
+    /// </summary>
+    private readonly NetworkVariable<Color32> _accentColorNet = new NetworkVariable<Color32>(
+        new Color32(199, 122, 58, 255),
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server);
     #endregion
 
     #region Private Fields
@@ -305,6 +321,41 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
 
     #region Properties
     public CharacterArchetype Archetype => _archetype;
+
+    // ── Visual identity (accent colour) ─────────────────────────────
+    // _hasAccentOverride distinguishes "archetype default" from "explicit per-character
+    // override" so the save layer (Task 6) can skip writing the default into save data
+    // — otherwise a future tweak to the archetype's default would be silently overridden
+    // by every saved character ever exported. Server-only state; clients always read
+    // the replicated NetworkVariable through AccentColor.
+    private bool _hasAccentOverride;
+    private Color _accentOverride;
+
+    /// <summary>
+    /// Speech-bubble accent colour for this character. Replicated server-authoritatively
+    /// to all clients via <see cref="_accentColorNet"/> (<c>NetworkVariable&lt;Color32&gt;</c>).
+    /// Initialised from <see cref="CharacterArchetype.AccentColor"/> on spawn; can be
+    /// overridden via <see cref="SetAccentColor"/> (server-only). Per-character override
+    /// persists via CharacterProfileSaveData (Task 6 of the speech-bubble rework plan).
+    /// </summary>
+    public Color AccentColor => (Color)_accentColorNet.Value;
+
+    /// <summary>
+    /// Server-side state. True when <see cref="SetAccentColor"/> has overridden the
+    /// archetype default — read by the save layer to decide whether to persist
+    /// <see cref="AccentColorOverrideValue"/> into <see cref="CharacterProfileSaveData"/>.
+    /// Clients always see false here (no replication); they read the effective colour
+    /// through <see cref="AccentColor"/> instead.
+    /// </summary>
+    public bool HasAccentColorOverride => _hasAccentOverride;
+
+    /// <summary>
+    /// Server-side state. The explicit override colour set via <see cref="SetAccentColor"/>;
+    /// only meaningful when <see cref="HasAccentColorOverride"/> is true. Used by the save
+    /// layer to round-trip the per-character override; clients should read
+    /// <see cref="AccentColor"/> for the displayed colour.
+    /// </summary>
+    public Color AccentColorOverrideValue => _accentOverride;
     public string CharacterName { get => _characterName; set => _characterName = value; }
     public CharacterBio CharacterBio => _characterBio;
     public CharacterStats Stats { get { var s = TryGet<CharacterStats>(out var reg) ? reg : _stats; return s ?? throw new NullReferenceException($"Stats manquantes sur {gameObject.name}"); } }
@@ -541,6 +592,17 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
             {
                 _originWorldGuid = currentWorld;
             }
+        }
+
+        // Stamp the replicated accent colour from the archetype's default on spawn so every
+        // peer sees the archetype-correct colour from frame 1. Task 6 will overwrite this
+        // via SetAccentColor when CharacterProfileSaveData restores a per-character override,
+        // AFTER OnNetworkSpawn (CharacterDataCoordinator.Deserialize fires later in the boot
+        // sequence). The override fields stay false/default here — only an explicit
+        // SetAccentColor call flips _hasAccentOverride to true.
+        if (IsServer && _archetype != null)
+        {
+            _accentColorNet.Value = (Color32)_archetype.AccentColor;
         }
 
         // Very important: IsOwner is true for the Host for ALL NPCs in the scene.
@@ -1360,6 +1422,25 @@ public class Character : NetworkBehaviour, MWI.Orders.IOrderIssuer
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         Debug.Log($"<color=cyan>[Character]</color> {CharacterName} ExitSleep.");
 #endif
+    }
+
+    /// <summary>
+    /// Server-only. Overwrites the replicated accent colour and flags the override so
+    /// the save layer (Task 6) knows this is an explicit per-character choice, not the
+    /// archetype default. Per-character cosmetic UIs must route through a ServerRpc that
+    /// calls this on the server side — calling from a non-server peer is a no-op with
+    /// a warning. Replicates to every peer via <see cref="_accentColorNet"/>.
+    /// </summary>
+    public void SetAccentColor(Color color)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"<color=orange>[Character]</color> SetAccentColor called on non-server peer for '{CharacterName}'. Ignored.");
+            return;
+        }
+        _hasAccentOverride = true;
+        _accentOverride = color;
+        _accentColorNet.Value = (Color32)color;
     }
 
     /// <summary>

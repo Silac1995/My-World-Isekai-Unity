@@ -1,5 +1,6 @@
 // Assets/Scripts/Core/SaveLoad/CharacterProfileSaveData.cs
 using System.Collections.Generic;
+using UnityEngine;
 
 /// <summary>
 /// Portable character profile — the "cartridge" that travels across worlds.
@@ -16,6 +17,13 @@ public class CharacterProfileSaveData
     public string originWorldGuid;
     public string characterName;
     public string archetypeId;
+
+    // Speech-bubble accent colour. hasAccentColorOverride distinguishes "use the
+    // archetype default" (false) from "use the per-character override" (true) so a
+    // future tweak to the archetype's default is NOT silently masked by every saved
+    // character. See Task 6 of the speech-bubble rework plan.
+    public Color accentColorOverride;
+    public bool hasAccentColorOverride;
 
     public string timestamp;
 

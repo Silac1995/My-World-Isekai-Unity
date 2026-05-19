@@ -109,6 +109,8 @@ Lives on the speech anchor child GameObject (local position 0, 9, 0). Manages th
 | `_maxBubbles` | `int` | 5 | Maximum simultaneous visible bubbles |
 | `_separatorSpacing` | `float` | 0.03 | Extra vertical gap (world units) added between stacked bubbles |
 | `_speechZoneRadius` | `float` | 15 | World-space radius of the trigger sphere for cross-character detection |
+| `_fadeStartDistance` | `float` | 12 | Linear-fade start (X-Z plane, feet-to-feet). Bubbles are fully opaque ≤ this distance. Mirrors `UI_RemoteActionIndicator`. |
+| `_fadeEndDistance` | `float` | 30 | Linear-fade end. Bubbles are fully transparent ≥ this distance. The **local player's own stack is exempt** from the fade and stays at full opacity regardless of camera distance. |
 
 **Public Properties:**
 | Property | Returns | Description |
@@ -147,8 +149,8 @@ Immediately `Destroy()`s all bubble GameObjects with no animation. Stops mouth a
 **Bubble list convention:**
 - Index 0 = newest bubble, positioned at the base (Y=0, closest to the character head).
 - Index `Count - 1` = oldest bubble, at the highest Y position.
-- The bottom bubble (index 0) never shows a separator line. All others do.
-- When a bubble is removed (expired or dismissed), the remaining bubbles do **not** reposition — each bubble stays at its absolute Y.
+- Only the newest bubble (index 0) shows its tail (`_tailRoot`). All others hide it via `SetIsNewest(false)`.
+- When a bubble is removed (expired or dismissed), the remaining bubbles do **not** reposition — each bubble stays at its absolute Y. If index 0 is removed, the promoted new index-0 bubble has its tail re-shown.
 
 **Mouth controller management:**
 The stack tracks `_typingCount` — a reference count of how many bubbles are actively typing. `MouthController.StartTalking()` is called when count rises from 0 to 1. `StopTalking()` is called when it falls back to 0. Individual `SpeechBubbleInstance` objects never call the mouth controller directly.
@@ -167,8 +169,10 @@ Spawned as a child of `SpeechBubbleStack`. Each instance is an independent prefa
 **Serialized Fields:**
 | Field | Type | Default | Purpose |
 |---|---|---|---|
-| `_textElement` | `TextMeshProUGUI` | — | Text display |
-| `_separatorLine` | `GameObject` | — | White horizontal rule shown between stacked bubbles |
+| `_textElement` | `TextMeshProUGUI` | — | Body text display |
+| `_nameStripBackground` | `Image` | — | Name strip background panel (top of bubble). Tint comes from `Character.AccentColor` via `SetSpeakerDisplay`. |
+| `_nameText` | `TextMeshProUGUI` | — | Speaker display-name label on the name strip. `"???"` when the local player's `Relationship.KnowsName == false`. |
+| `_tailRoot` | `GameObject` | — | Bubble tail / pointer; toggled by `SetIsNewest` so only the newest bubble in the stack shows its tail. |
 | `_entranceDuration` | `float` | 0.3s | Duration of fade-in + slide-up entrance |
 | `_entranceSlideDistance` | `float` | 15 | How far below base position the bubble starts (slides UP to reach base) |
 | `_exitDuration` | `float` | 0.3s | Duration of fade-out + slide-up exit |
@@ -215,8 +219,11 @@ Updates `_targetPosition`. The `Update()` loop lerps `transform.localPosition` t
 `Vector3 GetTargetPosition()`
 Returns the current `_targetPosition` the bubble is lerping toward. Used by `SpeechBubbleStack.PushAllBubblesUpBy()` to compute the new pushed position.
 
-`void SetSeparatorVisible(bool visible)`
-Shows or hides the `_separatorLine` GameObject. Controlled entirely by `SpeechBubbleStack.UpdateSeparatorVisibility()`.
+`void SetSpeakerDisplay(Color accent, string displayName)`
+Applies the speaker's accent color to `_nameStripBackground` and writes `displayName` into `_nameText`. Called by `SpeechBubbleStack.PushBubble` / `PushScriptedBubble` after the bubble is instantiated. The `displayName` is `"???"` when the local player's `CharacterRelation.GetRelationshipWith(speaker)?.KnowsName` is `false`; otherwise it is the speaker's `Character.DisplayName`.
+
+`void SetIsNewest(bool isNewest)`
+Toggles `_tailRoot.SetActive(isNewest)` so only the bubble at index 0 (the newest bubble, closest to the head) displays its tail. Called by `SpeechBubbleStack.PushBubble` / `PushScriptedBubble` on the new bubble (true) and on the previous index-0 bubble (false), and by `RemoveBubble` to promote the new index-0 bubble.
 
 **Typing implementation:**
 The full message string is assigned to `_textElement.text` immediately at typing start, and `_textElement.ForceMeshUpdate()` is called so `ContentSizeFitter` computes the final frame size right away. Characters are revealed progressively via `maxVisibleCharacters`. This ensures the bubble occupies its full final height from the first frame, so the push height calculation is accurate.
@@ -243,7 +250,11 @@ The full message string is assigned to `_textElement.text` immediately at typing
 10.    → PushAllBubblesUp(pushHeight, instance):
           - shifts all own existing bubbles (index 1+) upward
           - calls PushAllBubblesUpBy(pushHeight) on every nearby stack with active bubbles
-11.    → UpdateSeparatorVisibility()
+11.    → ResolveSpeakerDisplay():
+          - accent = Character.AccentColor (replicated NetworkVariable<Color32> sourced from CharacterArchetype.AccentColor + per-character override)
+          - displayName = localPlayer.CharacterRelation.GetRelationshipWith(speaker)?.KnowsName ? speaker.DisplayName : "???"
+          → instance.SetSpeakerDisplay(accent, displayName)
+          → instance.SetIsNewest(true); previous index-0 bubble (if any) gets SetIsNewest(false)
 12.    → SpeechBubbleInstance plays entrance animation (fade in + slide UP from below)
 13.    → TypeMessage coroutine runs:
           - assigns full text, calls ForceMeshUpdate (sets final size immediately)
@@ -253,7 +264,7 @@ The full message string is assigned to `_textElement.text` immediately at typing
 15.    → WaitForSecondsRealtime(duration)
 16.    → Dismiss(): exit animation (fade out + slide up), then Destroy(gameObject)
 17.    → OnExpired / _onExpiredCallback fires → RemoveBubble()
-18.    → RemoveBubble: removes from list, calls UpdateSeparatorVisibility()
+18.    → RemoveBubble: removes from list; if the removed bubble was index 0, the new index-0 bubble is promoted via SetIsNewest(true) (tail re-shown).
          NOTE: No RecalculatePositions — remaining bubbles stay at their current Y positions
 ```
 
@@ -325,7 +336,7 @@ Time semantics are **split** between the simulation-event side of speech and the
 | Entrance fade-in (`EntranceAnimation`) | `Time.unscaledDeltaTime` | Quick visual transition — must complete reliably and never freeze mid-fade during pause. |
 | Exit fade-out (`ExitAnimation`) | `Time.unscaledDeltaTime` | Same reasoning as entrance — bubble dismissal must always finish. |
 | Position lerp (`SpeechBubbleInstance.Update`) | `Time.unscaledDeltaTime` | Pure HUD tracking of the speaker's screen-space position — should stay smooth regardless of game speed. |
-| Wrapper proximity-fade (`SpeechBubbleStack.Update`) | `Time.unscaledDeltaTime` | Pure HUD visibility gating — must stay responsive during pause. |
+| Wrapper distance-fade (`SpeechBubbleStack.Update`) | `Time.unscaledDeltaTime` | Pure HUD visibility gating — must stay responsive during pause. Linear fade between `_fadeStartDistance` and `_fadeEndDistance` (X-Z plane, feet-to-feet). Local player's own stack is exempt. |
 
 This split is **the project-specific interpretation of CLAUDE.md rule 26** for this system: the rule says "UI elements should not be affected by GameSpeedController." Speech is HUD-rendered but its *content* (typing duration + bubble lifetime) is a simulation event being displayed on the HUD — those phases scale with game speed. Pure HUD transitions (fade in/out, position tracking, proximity alpha) stay unscaled so they remain reliable across pause / fast-forward.
 
@@ -339,7 +350,7 @@ This split is **the project-specific interpretation of CLAUDE.md rule 26** for t
 
 **Reposition:** Runs in `SpeechBubbleInstance.Update()`. The lerp coefficient (8) produces a fast initial snap with smooth deceleration. Convergence threshold is `sqrMagnitude < 0.001f` to stop updating once settled.
 
-**Separator line:** A white horizontal `Image`, ~60% of parent width. Shown on all bubbles except index 0 (the bottom/newest). Visibility is re-evaluated on every `PushBubble`, `RemoveBubble`, and `UpdateSeparatorVisibility()` call.
+**Name strip + tail:** Each bubble has a colored name strip (`_nameStripBackground` tinted with `Character.AccentColor`) and a tail/pointer (`_tailRoot`). The tail is shown only on the newest bubble (index 0); when a new bubble pushes in, the previous index-0 bubble has its tail hidden via `SetIsNewest(false)`. On removal of index 0, the promoted new index-0 bubble has its tail re-shown via `SetIsNewest(true)`.
 
 ---
 
@@ -380,12 +391,16 @@ This split is **the project-specific interpretation of CLAUDE.md rule 26** for t
 
 ## Prefab Structure: `SpeechBubbleInstance_Prefab`
 
+> **Note (2026-05-19):** Script-side already exposes `_nameStripBackground` / `_nameText` / `_tailRoot` SerializeFields (Task 9 of the speech-bubble rework). The prefab restructure that authors these children + wires them through SerializeFields is **deferred to Task 8 / Task 9 step 4** — the Unity Editor is currently bound to the main repo, not the worktree; do the prefab work in the Editor session once it is pointed at this branch.
+
 ```
 SpeechBubbleInstance (Root)
 ├── CanvasGroup              (alpha for fade animation)
 ├── SpeechBubbleInstance.cs  (script component)
-├── SeparatorLine            (Image, white, ~60% width, 1px height — disabled by default)
-└── Canvas (WorldSpace, 300x70)
+├── NameStripBackground      (Image — tinted by Character.AccentColor via SetSpeakerDisplay)
+│   └── NameText             (TextMeshProUGUI — "???" when KnowsName == false, else DisplayName)
+├── TailRoot                 (GameObject — toggled by SetIsNewest; shown only on index 0)
+└── Canvas (ScreenSpace / HUD, ~300x70)
     ├── CanvasScaler (800x600 reference)
     └── Text_Speech (TextMeshProUGUI)
         ├── ContentSizeFitter (VerticalFit: PreferredSize)

@@ -68,9 +68,13 @@ public class CharacterArchetype : ScriptableObject
     [SerializeField] private AnimationProfile _animationProfile;
     [Tooltip("Prefab containing the visual child GO with ICharacterVisual implementation")]
     [SerializeField] private GameObject _visualPrefab;
+    [Tooltip("Default accent colour for this archetype — used as the name-strip background on speech bubbles. Per-character override via CharacterProfileSaveData.")]
+    [ColorUsage(showAlpha: false, hdr: false)]
+    [SerializeField] private Color _accentColor = new Color(0.78f, 0.48f, 0.23f);
 
     public AnimationProfile AnimationProfile => _animationProfile;
     public GameObject VisualPrefab => _visualPrefab;
+    public Color AccentColor => _accentColor;
 
     // ── Interaction ───────────────────────────────────────────────
     [Header("Interaction")]
