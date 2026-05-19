@@ -34,8 +34,8 @@ public class RemoteActionIndicatorLayer : MonoBehaviour
     [SerializeField] private UI_RemoteActionIndicator _indicatorPrefab;
 
     [Header("Defaults")]
-    [Tooltip("Initial enabled state for REMOTE indicators when no PlayerPrefs value has been saved yet. The local player's indicator is always shown regardless.")]
-    [SerializeField] private bool _defaultEnabled = false;
+    [Tooltip("Initial enabled state for REMOTE indicators when no PlayerPrefs value has been saved yet. Default true — players see NPCs' action progress out of the box; flip via /togglebars. The local player's indicator is always shown regardless.")]
+    [SerializeField] private bool _defaultEnabled = true;
 
     private readonly Dictionary<Character, UI_RemoteActionIndicator> _indicators = new();
     private Transform _cachedLocalPlayerAnchor;
