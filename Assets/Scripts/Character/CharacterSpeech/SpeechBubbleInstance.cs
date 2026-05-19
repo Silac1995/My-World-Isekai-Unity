@@ -31,6 +31,18 @@ public class SpeechBubbleInstance : MonoBehaviour
     [SerializeField] private float _exitSlideDistance = 25f;
     [SerializeField] private float _positionLerpSpeed = 8f;
 
+    [Header("Adaptive size (HUD pixels — bubble grows with text, wraps at max)")]
+    [Tooltip("Minimum bubble width. Short messages stretch to at least this width so the name strip remains readable.")]
+    [SerializeField] private float _minBubbleWidth = 180f;
+    [Tooltip("Maximum bubble width before the body text wraps to a new line.")]
+    [SerializeField] private float _maxBubbleWidth = 320f;
+    [Tooltip("Total horizontal padding inside the BodyPanel (sum of left + right inner margins). Subtracted from bubble width to get available text width.")]
+    [SerializeField] private float _bodyHorizontalPadding = 16f;
+    [Tooltip("Height of the NameStrip at the top of the bubble. Used to inset BodyPanel and to add to the final bubble height.")]
+    [SerializeField] private float _nameStripHeight = 22f;
+    [Tooltip("Total vertical padding around the body text (sum of top + bottom inner margins).")]
+    [SerializeField] private float _bodyVerticalPadding = 12f;
+
     // ── Events ─────────────────────────────────────────────────────────
     public Action OnExpired;
     public Action OnHeightChanged;
@@ -276,6 +288,44 @@ public class SpeechBubbleInstance : MonoBehaviour
         if (_tailRoot != null) _tailRoot.SetActive(isNewest);
     }
 
+    /// <summary>
+    /// Resizes the bubble's RectTransform to fit the current text:
+    /// - Width = max(_minBubbleWidth, naturalTextWidth + _bodyHorizontalPadding), clamped to _maxBubbleWidth.
+    /// - When the text's natural single-line width exceeds the available area, the bubble pegs to
+    ///   _maxBubbleWidth and the text wraps; the bubble grows taller to fit the wrapped height.
+    /// - Height = _nameStripHeight + wrapped text height + _bodyVerticalPadding.
+    /// The full message is laid out via <c>TMP_Text.GetPreferredValues</c> so the size is stable
+    /// throughout the typewriter reveal — the bubble doesn't grow while characters appear.
+    /// </summary>
+    private void ApplyAdaptiveSize()
+    {
+        if (_textElement == null || _rect == null) return;
+        if (string.IsNullOrEmpty(_fullMessage)) return;
+
+        // Measure the full text's natural (unwrapped) preferred size — uses TMP's font / size / settings.
+        Vector2 natural = _textElement.GetPreferredValues(_fullMessage);
+        float availableWidth = Mathf.Max(1f, _maxBubbleWidth - _bodyHorizontalPadding);
+
+        float bubbleWidth;
+        float textHeight;
+        if (natural.x <= availableWidth)
+        {
+            // Fits on one line — bubble width follows the text, clamped to the minimum.
+            bubbleWidth = Mathf.Clamp(natural.x + _bodyHorizontalPadding, _minBubbleWidth, _maxBubbleWidth);
+            textHeight = natural.y;
+        }
+        else
+        {
+            // Text would overflow the max width — peg to max and wrap. Re-measure at the wrapped width.
+            bubbleWidth = _maxBubbleWidth;
+            Vector2 wrapped = _textElement.GetPreferredValues(_fullMessage, availableWidth, 0f);
+            textHeight = wrapped.y;
+        }
+
+        float bubbleHeight = _nameStripHeight + textHeight + _bodyVerticalPadding;
+        _rect.sizeDelta = new Vector2(bubbleWidth, bubbleHeight);
+    }
+
     // ── Coroutines ─────────────────────────────────────────────────────
 
     private IEnumerator TypeMessage(Action onComplete)
@@ -286,6 +336,7 @@ public class SpeechBubbleInstance : MonoBehaviour
         _textElement.maxVisibleCharacters = 0;
 
         _textElement.ForceMeshUpdate();
+        ApplyAdaptiveSize();
         CheckHeightChanged();
 
         float currentSpeed = _typingSpeed > 0f ? _typingSpeed : 0.04f;
