@@ -29,8 +29,8 @@ public class UI_Action_ProgressBar : MonoBehaviour
     [SerializeField] private RectTransform _canvasRect;
 
     [Header("World Anchor")]
-    [Tooltip("World-space Y offset added to the anchor position, in Unity units. Defaults to 22 (~3.3m — well above the head of a typical character). Rule #32: 11 units ≈ 1.67m.")]
-    [SerializeField] private float _worldHeadOffset = 22f;
+    [Tooltip("World-space Y offset added to the anchor position, in Unity units. Default 12 sits the bar a small margin above the head of an 11-unit-tall character (rule #32). Tweak live in the Inspector with the slider.")]
+    [SerializeField, Range(0f, 30f)] private float _worldHeadOffset = 12f;
     [Tooltip("Canvas-local pixel offset applied on top of the projected screen position, for the bar.")]
     [SerializeField] private Vector2 _barScreenOffsetPx = Vector2.zero;
     [Tooltip("Canvas-local pixel offset for the action-name text, relative to the same projected screen position as the bar.")]
