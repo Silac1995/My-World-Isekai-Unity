@@ -398,3 +398,111 @@ A HUD leaf that needs to follow a world-space entity (the local player, a target
 - Use for any HUD element that semantically "belongs to" a specific world entity and must show in HUD space (action progress, casting cast bar, status icons, damage flash). Local-player-only versions can use a single scene-resident GameObject SerializeField on `PlayerUI` (current pattern of `UI_Action_ProgressBar`); per-character versions (NPC casting bars, party-member overhead UI) need a per-character instance manager mirroring `SpeechBubbleStack`.
 - Do NOT use for elements that don't need to track any world entity (fixed quest log, fixed minimap, fixed inventory bar). Those are static HUD leaves anchored to a screen corner.
 - Do NOT use for elements that ARE world-space objects (overhead nameplate sprites baked into the character, world-space damage text). Those skip the canvas entirely and use a world-space Canvas or a particle system.
+
+
+---
+
+## Extended lessons — 2026-05-19 Equipment UI playtest cycle
+
+These add to the 6 gotchas above and capture process-level mistakes from a multi-iteration rework. Read before starting any new prefab work via MCP Roslyn.
+
+### 7. Verify Application.dataPath = your git working tree BEFORE any MCP scene/prefab op
+
+Unity's MCP-Roslyn tooling reads files from `Application.dataPath` (the project the running Editor opened). Your git operations may target a worktree at a different path. The two CAN drift — bad symptoms:
+
+- `assets-refresh` reports success but your changes don't appear in the Editor.
+- `script-execute` reports "no UI_CharacterEquipment instances found" when there clearly are in your branch.
+- `Type.GetType("Your.New.Type, Assembly-CSharp")` returns null even though the .cs is committed.
+
+**Diagnostic at start of any MCP session that will touch scenes/prefabs:**
+
+```csharp
+Debug.Log($"Unity dataPath: {Application.dataPath}");
+// Compare to your git worktree path. If they differ, MCP changes won't land where your git work is.
+```
+
+If they differ: stop, decide whether to (a) merge your branch into the branch Unity is on, (b) close Unity and reopen on the right path, or (c) do destructive prefab work directly in Unity's tree and commit there.
+
+### 8. Verify the active scene is the right one
+
+Unity remembers the last-active scene per Editor session. If the user pressed Play and then Stop, the active scene may have switched back to whatever opened first (often MainMenuScene), not the scene you were editing. Scripts that do `SceneManager.GetActiveScene()` then find no PlayerUI / no nothing because they're looking at the wrong scene.
+
+**Always log the active scene + open the expected one explicitly:**
+
+```csharp
+Scene scene = SceneManager.GetActiveScene();
+Debug.Log($"Active scene: {scene.name} at {scene.path}");
+if (scene.name != "GameScene")
+    scene = EditorSceneManager.OpenScene("Assets/Scenes/GameScene.unity", OpenSceneMode.Single);
+```
+
+### 9. Grep for existing implementations before authoring new
+
+Before adding `CharacterAction_X`, `UI_X`, `IX` — grep the codebase for related verbs/nouns. The project may already have the action under a slightly different name. The 2026-05-19 rework planned `CharacterAction_UseItem` but `CharacterUseConsumableAction` already existed with the correct duration + animator trigger + removal flow. Reinvention wasted authoring + delete + commit cycles.
+
+Pattern: `grep -rn "<verb>" Assets/Scripts/Character/CharacterActions/` before authoring any new action.
+
+### 10. Initialize must NOT auto-open
+
+UI scripts often expose `Initialize(target)` for data binding. PlayerUI calls `Initialize` during character setup. If `Initialize` also calls `OpenWindow()`, the window pops at game start.
+
+**Pattern**: split into two methods:
+- `Initialize(target)` — bind data, subscribe events, paint initial state. Does NOT change visibility.
+- `InitializeAndOpen(target)` — convenience wrapper for user-driven open paths (`PlayerUI.OpenXxxWindow`). Calls `Initialize` then `OpenWindow`.
+
+PlayerUI's character-setup pass calls `Initialize`. User-driven open paths call `InitializeAndOpen`.
+
+### 11. `CharacterAction.Duration = 0` means "instant, no feedback"
+
+Zero-duration actions run `OnApplyEffect` in the same frame as `OnStart`. No animator trigger window, no progress bar visibility. For actions the player intuitively expects to "take time" (eat, drink, use potion, equip, swap), set `Duration` to 1.0–2.0 seconds and trigger an animator state in `OnStart`. The progress bar will engage automatically because `CharacterActions.GetActionProgress()` reads `Duration` for non-Continuous actions.
+
+Reference: `CharacterUseConsumableAction(character, item) : base(character, 1.5f)` + `animator.SetTrigger("Trigger_Consume")` in `OnStart`.
+
+### 12. Don't assume a hotkey is wired to a window without reading `PlayerController`
+
+Spec / plan / agent description may CLAIM "Tab opens equipment" but the PlayerController source may use Tab for something else (targeting, focus cycle, etc.). Always read `PlayerController.cs` and look for the actual `Input.GetKeyDown(KeyCode.Xxx)` calls before claiming a window has a hotkey. If the keybind doesn't exist, the window opens only via its HUD button.
+
+### 13. Prefab GUID stability when re-authoring
+
+`AssetDatabase.DeleteAsset(path)` + `SaveAsPrefabAsset(go, path)` creates a NEW prefab with a NEW GUID. Any other prefab that nested the old one (e.g. `UI_PlayerHUD.prefab` nesting `UI_CharacterEquipment.prefab`) now has a broken nested reference (missing-GUID warning on Editor load, no instance at runtime).
+
+**Two options to preserve GUID:**
+
+1. **Overwrite without delete** — call `PrefabUtility.SaveAsPrefabAsset(newRoot, path)` on a path that already exists. Unity preserves the .meta file → same GUID → nested references resolve. This is the default behavior when the path is already occupied.
+2. **Repoint nesters explicitly** — after delete+recreate, open each prefab that nested the old one via `PrefabUtility.LoadPrefabContents`, find the broken nested child, replace with new `PrefabUtility.InstantiatePrefab(newPrefab, parent)`, `SaveAsPrefabAsset` the nester.
+
+For routine prefab edits that don't restructure the hierarchy, prefer Option 1 — open, modify, save. Only delete-recreate when the structure needs a full rebuild AND you commit to repointing all nesters.
+
+### 14. Stop Play mode before any prefab/scene MCP op
+
+Most MCP scripts that edit prefabs or scenes have `if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isPlaying) return BLOCKED`. The Editor console may be FLOODED with game logs at play time, hiding your "[ScriptName] BLOCKED" message.
+
+**Diagnostic**: if `git status` shows clean working tree after a "[Saved]" Debug.Log claim, the script aborted before the SaveAsPrefabAsset call. Check play mode state first.
+
+### 15. Two derived UI_WindowBase components on the same GameObject
+
+When you author a Variant of UI_WindowBase.prefab and `AddComponent<YourWindow>()` (where YourWindow inherits UI_WindowBase), the GameObject now has TWO UI_WindowBase-derived components: the base's own instance AND your derived one. Both call `Awake()` (your derived calls `base.Awake()`). Both have `_buttonClose` SerializeField — the base's is wired (inherited from prefab), yours is null.
+
+Behavior: close button works (the base instance's wiring fires). Inspector shows two "Window Base" headers — confusing but not broken.
+
+**If this matters for clarity**: remove the base UI_WindowBase component from the variant before adding the derived one (`Object.DestroyImmediate(root.GetComponent<UI_WindowBase>())` before `root.AddComponent<YourWindow>()`). But this loses the wired `_buttonClose` — you must re-wire it on the derived component via reflection.
+
+### 16. Working-tree-clean diagnostic for MCP write ops
+
+After running an MCP script that claims to have modified a file (saved prefab, edited scene), run `git status --short`. If the tree is clean despite the [Saved] log, the script aborted before the write — most commonly because of the play-mode gate (#14) or a wrong-active-scene issue (#8).
+
+### Programmatic prefab authoring pre-flight checklist
+
+Before running a new "author prefab via Roslyn" script:
+
+1. **Active scene right?** `Debug.Log(SceneManager.GetActiveScene().name)` first; open the correct scene if not.
+2. **Editor in Edit mode?** First line of script: `if (EditorApplication.isPlaying) { LogError + return; }`.
+3. **dataPath = git worktree?** `Debug.Log(Application.dataPath)` early on; bail if mismatched.
+4. **Existing classes exist?** Grep for similar verbs/nouns in the relevant folder before authoring a new MonoBehaviour or CharacterAction.
+5. **Existing prefab in `UI_PlayerHUD.prefab`?** If you're adding a new window panel, check whether it's already nested there (don't double-instantiate in the scene).
+6. **`childControlWidth + childControlHeight = true`** on every LayoutGroup you create programmatically, OR set children's `RectTransform.sizeDelta` explicitly. Never trust `LayoutElement.preferredWidth/Height` alone without `childControl*` enabled on the parent.
+7. **Set Image.color explicitly on Panel_Main_Background** — default inherited alpha is 0.5.
+8. **Compute `Button_Close.anchoredPosition`** = `(panelW/2 - btnW/2 - margin, panelH/2 - btnH/2 - margin)` if you keep it at canvas level.
+9. **Initialize ≠ Open** — two separate entry points for "bind data" vs "show window".
+10. **Don't use `RectangleContainsScreenPoint(..., null)`** under ScreenSpaceCamera — use `EventSystem.IsPointerOverGameObject()`.
+11. **Test path**: stop play → run script → check console for `[ScriptName] DONE` → check `git status --short` shows the expected files modified → press Play to verify.
