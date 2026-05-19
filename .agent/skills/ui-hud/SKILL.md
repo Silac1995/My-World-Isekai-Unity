@@ -315,3 +315,30 @@ Lift the popup component to a more general location if a third user appears.
 - `UI_EquipmentBagCell.cs` — leaf, bag-grid cell.
 - `UI_EquipmentSpecialSlotCard.cs` — leaf, top-row Weapon/Hands/Bag card.
 - `UI_CharacterEquipment.cs` — window root.
+
+
+---
+
+## World-anchored HUD leaf pattern (2026-05-19)
+
+A HUD leaf that needs to follow a world-space entity (the local player, a target NPC, a quest marker, …) on-screen — staying in HUD space rather than world-space rendering. Canonical pattern: `Camera.WorldToScreenPoint(anchor.position + worldOffset)` each frame, then `RectTransformUtility.ScreenPointToLocalPointInRectangle(parentCanvasRect, sp, uiCam, out lp)` to convert to canvas-local coords, then `anchoredPosition = Vector2.Lerp(current, lp + screenOffsetPx, lerpSpeed * Time.unscaledDeltaTime)`.
+
+**Canonical implementations:**
+- `SpeechBubbleInstance` — bubbles parented under `HUDSpeechBubbleLayer.Local.ContentRoot`, lerped with `_positionLerpSpeed * Time.unscaledDeltaTime`.
+- `QuestWorldMarkerRenderer` — quest icons clamped to screen edges; the canonical robust version that handles all three Canvas render modes (`Overlay` → null uiCam; `ScreenSpaceCamera` / `WorldSpace` → `canvas.worldCamera`).
+- `UI_Action_ProgressBar` — local player's action progress bar (reworked 2026-05-19 from a fixed bottom-of-screen bar to a head-anchored bar that follows the player; both the bar and the action-name text move together using shared world projection).
+
+**Rules of the pattern:**
+
+1. **`unscaledDeltaTime` for the lerp**, always. HUD position is real-time, not simulation-time. At `GameSpeedController = 0x` (pause) the position must still smoothly catch up; at `5x` it must not whiplash.
+2. **Lazy-resolve `Camera.main`.** Cache null-check on first miss and try again next frame — the local player's camera can be momentarily absent during portal-gate return, character respawn, or first-frame initialization on a freshly-joined client. Mirror `SpeechBubbleInstance.Update`'s pattern.
+3. **`uiCam` depends on Canvas renderMode.** `Overlay` → pass null. `ScreenSpaceCamera` / `WorldSpace` → pass `canvas.worldCamera`. Either branch produces incorrect coordinates if you swap them. Use the QuestWorldMarkerRenderer one-liner: `(canvas.renderMode == RenderMode.ScreenSpaceOverlay) ? null : canvas.worldCamera`.
+4. **Snap on (re-)activation.** When the leaf transitions from inactive → active (e.g. `OnActionStarted` enables the bar after `OnActionFinished` disabled it last action), call the projection once with the lerp bypassed — otherwise it lerps in from its last-known on-screen position, which may be far from the new anchor.
+5. **Off-screen sentinel.** If `sp.z < 0` (anchor behind camera), skip the update — don't try to project. Decide explicitly whether to hide the leaf (CanvasGroup alpha to 0), let it sit at its last position, or clamp to a screen edge (QuestWorldMarkerRenderer chose the last).
+6. **Anchors of the leaf RectTransform** should be `(0,0)`/`(0,0)` so `anchoredPosition` is in canvas-local pixels from the parent rect's pivot. If the parent rect's pivot is `(0,0)`, then `anchoredPosition` is directly the screen-pixel-equivalent position — and `ScreenPointToLocalPointInRectangle` returns that value directly. Pivot of the leaf itself controls where the leaf sits relative to the projected world point (e.g. pivot `(0.5, 0)` puts the leaf's bottom-center on the projected point — useful for bars that should sit ABOVE the head).
+7. **`worldOffset`** (in Unity units) lets you target a body part above the character's root — head, shoulder, weapon tip. Rule #32: 11 Unity units ≈ 1.67m, so head-level is ~`Vector3.up * 12`.
+
+**When to use vs not:**
+- Use for any HUD element that semantically "belongs to" a specific world entity and must show in HUD space (action progress, casting cast bar, status icons, damage flash). Local-player-only versions can use a single scene-resident GameObject SerializeField on `PlayerUI` (current pattern of `UI_Action_ProgressBar`); per-character versions (NPC casting bars, party-member overhead UI) need a per-character instance manager mirroring `SpeechBubbleStack`.
+- Do NOT use for elements that don't need to track any world entity (fixed quest log, fixed minimap, fixed inventory bar). Those are static HUD leaves anchored to a screen corner.
+- Do NOT use for elements that ARE world-space objects (overhead nameplate sprites baked into the character, world-space damage text). Those skip the canvas entirely and use a world-space Canvas or a particle system.

@@ -120,10 +120,14 @@ public class PlayerUI : MonoBehaviour
             _timeUI.SetTargetCharacter(characterComponent);
         }
 
-        // Delegate the entire action-bar management to the specialized script
+        // Delegate the entire action-bar management to the specialized script.
+        // Pass the Character.transform so the bar can follow the player on-screen
+        // (world→HUD projection, mirroring the SpeechBubbleInstance pattern).
         if (_actionProgressBar != null)
         {
-            _actionProgressBar.InitializeCharacterActions(characterComponent.CharacterActions);
+            _actionProgressBar.InitializeCharacterActions(
+                characterComponent.CharacterActions,
+                characterComponent.transform);
         }
 
         if (_playerInfo != null)
