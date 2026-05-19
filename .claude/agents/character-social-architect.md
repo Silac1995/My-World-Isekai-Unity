@@ -25,6 +25,7 @@ You own deep expertise in **how characters perceive, remember, and interact with
 _relationValue: int [-100, 100]
 _relationshipType: RelationshipType (auto-updated from value)
 _hasMet: bool
+KnowsName: bool   // separate from _hasMet — drives speech-bubble "???" display in [[character-speech]] when the local player hasn't been told the speaker's name
 IsNewlyAdded: bool
 ```
 
@@ -48,7 +49,7 @@ Compatibility is determined by `CharacterProfile.GetCompatibilityWith()`.
 
 **Bilateral principle**: When A adds B, code automatically creates B→A relationship too. They may differ in value.
 
-**Network sync**: `NetworkList<RelationSyncData>` containing `TargetId`, `RelationValue`, `RelationType`, `HasMet`.
+**Network sync**: `NetworkList<RelationSyncData>` containing `TargetId`, `RelationValue`, `RelationType`, `HasMet`, `KnowsName`.
 
 **Key APIs**: `GetRelationshipWith()`, `AddRelationship()`, `UpdateRelation()`, `IsFriend()`, `IsEnemy()`, `GetFriendCount()`
 

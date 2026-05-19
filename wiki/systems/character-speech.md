@@ -3,14 +3,14 @@ type: system
 title: "Character Speech"
 tags: [character, speech, dialogue, ui, hud, tier-2]
 created: 2026-04-19
-updated: 2026-05-02
+updated: 2026-05-19
 sources: []
 related: ["[[character]]", "[[dialogue]]", "[[social]]", "[[visuals]]", "[[kevin]]"]
 status: stable
 confidence: high
 primary_agent: character-system-specialist
 owner_code_path: "Assets/Scripts/Character/CharacterSpeech/"
-depends_on: ["[[character]]"]
+depends_on: ["[[character]]", "[[character-relation]]"]
 depended_on_by: ["[[dialogue]]", "[[social]]"]
 ---
 
@@ -52,8 +52,9 @@ Full behavioural contract and edge cases: [.agent/skills/speech-system/SKILL.md]
 2. Each client independently executes `_speechBubbleStack.PushBubble(...)`.
 3. `PushBubble` enforces the cap (force-dismiss oldest), lazily creates a HUD wrapper under `HUDSpeechBubbleLayer.Local.ContentRoot`, instantiates a `SpeechBubbleInstance` inside the wrapper, binds `_speakerAnchor` to the stack's own transform (the +9 speech anchor), and inserts the bubble at index 0.
 4. Habbo push: all older bubbles on this stack and all bubbles on every stack in `_nearbyStacks` (populated by a SphereCollider trigger on the SpeechZone physics layer, radius 25) are shifted up by `newBubble.GetHeightPx() + _separatorSpacingPx`. Each pushed bubble has its expiration timer reset so the older line doesn't silently time out mid-conversation.
-5. Per-frame `SpeechBubbleInstance.Update`: computes screen point of speaker, OR's `IsOffScreen` against screen-rect bounds, then lerps `anchoredPosition` toward `screenPos + _stackOffsetPx + _animationBiasPx`.
-6. Per-frame `SpeechBubbleStack.Update`: reads `HUDSpeechBubbleLayer.Local.LocalPlayerAnchor.position` and `OwnerRoot.position` (character root, not the +9 head), compares `sqrMagnitude` to `25²`, aggregates any-on-screen across the bubbles, and lerps `wrapper.alpha` toward 1 (in-range + on-screen) or 0 (otherwise).
+5. `ResolveSpeakerDisplay` resolves the speaker's `Character.AccentColor` (a replicated `NetworkVariable<Color32>` seeded from `CharacterArchetype.AccentColor` and overridable per character) and the display name: `localPlayer.CharacterRelation.GetRelationshipWith(speaker)?.KnowsName ? speaker.DisplayName : "???"`. The result is applied to the bubble via `SpeechBubbleInstance.SetSpeakerDisplay(accent, displayName)`; the new bubble is marked `SetIsNewest(true)` and the previous index-0 bubble is demoted to `SetIsNewest(false)` (its tail hides).
+6. Per-frame `SpeechBubbleInstance.Update`: computes screen point of speaker, OR's `IsOffScreen` against screen-rect bounds, then lerps `anchoredPosition` toward `screenPos + _stackOffsetPx + _animationBiasPx`.
+7. Per-frame `SpeechBubbleStack.Update`: reads `HUDSpeechBubbleLayer.Local.LocalPlayerAnchor.position` and `OwnerRoot.position` (character root, not the +9 head), measures X-Z (feet-to-feet) distance, and runs a **linear distance fade** between `_fadeStartDistance = 12u` (full opacity) and `_fadeEndDistance = 30u` (transparent) — mirroring `UI_RemoteActionIndicator`. **Local-player exemption**: when `IsLocalPlayerStack()` (lazy-resolved via `NetworkManager.Singleton.LocalClient.PlayerObject`) returns true, the fade pass is skipped and the wrapper alpha is held at 1. The stack still ORs `any-on-screen` across the bubbles and lerps `wrapper.alpha` toward the fade target (or 0 if entirely off-screen).
 
 ## Dependencies
 
@@ -88,12 +89,13 @@ Full behavioural contract and edge cases: [.agent/skills/speech-system/SKILL.md]
 - **`SortingGroup` on the bubble prefab root.** Leftover from the WorldSpace era; currently disabled. Could be fully removed.
 - **HUD layer GameObject layer.** `HUDSpeechBubbleLayer` and `ContentRoot` were created on Layer 0 (Default) rather than Layer 5 (UI) by the MCP tool. Functionally harmless but inconsistent with sibling HUD elements.
 - **Off-screen edge indicator.** Speakers off-screen currently just fade to 0. A future enhancement could clamp the bubble to the screen edge with an arrow — explicitly deferred in the design spec.
-- **Per-archetype proximity radius.** Currently one global `_proximityRadius = 25f`. NPCs with loud/quiet personalities might want overrides.
+- ~~**Per-archetype proximity radius.** Currently one global `_proximityRadius = 25f`. NPCs with loud/quiet personalities might want overrides.~~ — Resolved 2026-05-19: global hard-gate replaced with a linear distance fade (`_fadeStartDistance = 12u`, `_fadeEndDistance = 30u`) mirroring `UI_RemoteActionIndicator`. Per-archetype overrides may still be added later, but the binary "audible / inaudible" surprise is gone.
 - **Bubble pooling.** Instantiate/Destroy per bubble. Acceptable in practice; add a pool if GC pressure shows up in crowded towns.
 - **Humanoid prefab stale overrides.** `_maxCrossCharacterOffset` and the renamed `_separatorSpacing` still appear as variant overrides in `Character_Default_Humanoid.prefab`. Unity silently drops them (no `[FormerlySerializedAs]` bridge) but they're visual noise in the YAML.
 - **Time-scaling split (CLAUDE.md rule 26 interpretation).** Typing speed (`TypeMessage`) and bubble lifetime (`ExpirationTimer`) use *scaled* time — they are simulation events (NPC speaking) that happen to render on the HUD, so they react to `GameSpeedController` (5× speed → 5× faster typing + 5× shorter lifetime; pause → typing freezes mid-word + bubble persists). Entrance/exit fades, per-frame position lerp, and the wrapper proximity-fade use *unscaled* time — they are pure HUD transitions that must stay smooth and never freeze mid-fade. Full table in [.agent/skills/speech-system/SKILL.md § Animation Details](../../.agent/skills/speech-system/SKILL.md).
 
 ## Change log
+- 2026-05-19 — Refined-Habbo visuals (name strip + tail), linear distance fade matching action-indicator, KnowsName-aware name display, dead-code sweep. — claude
 - 2026-05-02 — Time-scaling split applied to bubble coroutines. `TypeMessage` switched to `Time.deltaTime` and `ExpirationTimer` switched to `WaitForSeconds` so typing pace and bubble lifetime now react to `GameSpeedController`. Entrance/exit fades, per-frame position lerp, and the wrapper proximity-fade kept on unscaled time so HUD transitions never freeze mid-fade. — Claude / [[kevin]]
 - 2026-04-20 — HUD screen-space rewrite. World-space bubbles replaced by HUD-parented bubbles via `HUDSpeechBubbleLayer`. Added 25u proximity gate, `_animationBiasPx` separation (fix entrance-vs-push race), removed `HandleDeath` / `HandleIncapacitated` overrides, Billboard removed from speech anchor, SphereCollider radius 15→25, bubble prefab restructured (WorldSpace Canvas gone), black translucent background restored after prefab restructure lost it. — Claude / [[kevin]]
 - 2026-04-19 — Stub created. — Claude / [[kevin]]

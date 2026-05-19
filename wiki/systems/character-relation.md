@@ -3,7 +3,7 @@ type: system
 title: "Character Relation"
 tags: [character, social, relationship, compatibility, tier-2]
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-05-19
 sources: []
 related:
   - "[[character]]"
@@ -25,6 +25,7 @@ depended_on_by:
   - "[[world]]"
   - "[[party]]"
   - "[[jobs-and-logistics]]"
+  - "[[character-speech]]"
 ---
 
 # Character Relation
@@ -60,6 +61,16 @@ Make social interactions **matter** over the long run. The same "+10 friendly ge
 - `character.CharacterRelation.UpdateRelation(other, delta)` — filtered opinion delta.
 - `character.CharacterRelation.GetOpinion(other)` — current numeric value.
 - `character.CharacterRelation.GetFriendCount()` — count of entries above a friendship threshold.
+- `character.CharacterRelation.GetRelationshipWith(other)` — returns the `Relationship` entry (or null if none), used by consumers that need `KnowsName` / `HasMet` / opinion in one call.
+
+### `Relationship` state
+
+| Field | Type | Semantics |
+|---|---|---|
+| `Opinion` / `_relationValue` | `int` [-100, 100] | Compatibility-filtered numeric opinion. |
+| `RelationshipType` | enum | Auto-derived from `Opinion`. |
+| `HasMet` | `bool` | True once the two characters have been formally acknowledged via `SetAsMet`. Used for first-meeting gates and dialogue. |
+| `KnowsName` | `bool` | **Separate from `HasMet`.** True once the local character has been told the other's name (introductions, signage, NPC dialogue). Drives the display-name fallback in [[character-speech]]: when a remote speaker's `KnowsName == false` for the local player, their speech bubble's name strip shows `"???"` instead of `Character.DisplayName`. Replicated via the existing `CharacterRelationSyncData` `NetworkList` path and persisted via the existing `RelationshipSaveEntry` save round-trip (with a dormant-resurrection path that also threads it). |
 
 ## Data flow — compatibility filter
 
@@ -110,6 +121,7 @@ B._relationships[A.Id].opinion += filteredDelta
 - [ ] Is there a hard cap on opinion magnitude? Needs confirmation.
 
 ## Change log
+- 2026-05-19 — Added KnowsName bool (separate from HasMet) — drives speech-bubble "???" display when local player hasn't been told the speaker's name. — claude
 - 2026-04-18 — Initial pass. — Claude / [[kevin]]
 
 ## Sources
