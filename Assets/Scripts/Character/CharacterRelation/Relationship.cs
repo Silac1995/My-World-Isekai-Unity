@@ -8,6 +8,7 @@ public class Relationship
     [SerializeField] private int _relationValue;
     [SerializeField] private RelationshipType _relationshipType = RelationshipType.Stranger;
     [SerializeField] private bool _hasMet = false;
+    [SerializeField] private bool _knowsName = false;
     public bool IsNewlyAdded { get; set; } = false;
 
     // Constructeur mis à jour avec le propriétaire
@@ -26,6 +27,7 @@ public class Relationship
     public Character RelatedCharacter => _relatedCharacter;
     public RelationshipType RelationType => _relationshipType;
     public bool HasMet => _hasMet;
+    public bool KnowsName => _knowsName;
 
     public int RelationValue
     {
@@ -68,6 +70,14 @@ public class Relationship
     public void SetAsMet() => _hasMet = true;
     public void SetAsNotMet() => _hasMet = false;
     public void ToggleMetStatus() => _hasMet = !_hasMet;
+
+    public void SetKnowsName(bool value)
+    {
+        if (_knowsName == value) return;
+        _knowsName = value;
+        if (_character != null && _relatedCharacter != null)
+            Debug.Log($"<color=cyan>[Relation KnowsName]</color> {_character.CharacterName} -> {_relatedCharacter.CharacterName} : KnowsName = {value}");
+    }
 
     // --- Évolution de la valeur ---
 
