@@ -500,4 +500,68 @@ public class CharacterRelation : CharacterSystem, ICharacterSaveData<RelationSav
 
         UpdateNetworkList(rel);
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    // ── DEV-only mutators ────────────────────────────────────────────────
+    // Dev-mode CharacterInspectorView (Relations sub-tab) routes here. Each
+    // mutator (a) is server-only because dev mode is host-only, (b) writes
+    // through the same RelationSyncData → NetworkList path that production
+    // social code uses, so the visible state stays consistent across peers
+    // and propagates to late-joiners via the NetworkList replay.
+
+    /// <summary>
+    /// Server-only dev override: flips <c>HasMet</c> on a relationship and re-syncs.
+    /// </summary>
+    public void DevForceSetHasMet(Relationship rel, bool value)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning("<color=orange>[CharacterRelation]</color> DevForceSetHasMet called on non-server peer. Ignored.");
+            return;
+        }
+        if (rel == null) return;
+        if (value) rel.SetAsMet(); else rel.SetAsNotMet();
+        UpdateNetworkList(rel);
+        Debug.Log($"<color=magenta>[DevMode]</color> SetHasMet({rel.RelatedCharacter?.CharacterName ?? "<null>"}, {value}) on '{_character?.CharacterName ?? "<null>"}'.");
+        OnRelationsUpdated?.Invoke();
+    }
+
+    /// <summary>
+    /// Server-only dev override: flips <c>KnowsName</c> on a relationship and re-syncs.
+    /// Drives the <c>???</c>/real-name flip on the speaker's bubble for everyone.
+    /// </summary>
+    public void DevForceSetKnowsName(Relationship rel, bool value)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning("<color=orange>[CharacterRelation]</color> DevForceSetKnowsName called on non-server peer. Ignored.");
+            return;
+        }
+        if (rel == null) return;
+        rel.SetKnowsName(value);
+        UpdateNetworkList(rel);
+        Debug.Log($"<color=magenta>[DevMode]</color> SetKnowsName({rel.RelatedCharacter?.CharacterName ?? "<null>"}, {value}) on '{_character?.CharacterName ?? "<null>"}'.");
+        OnRelationsUpdated?.Invoke();
+    }
+
+    /// <summary>
+    /// Server-only dev override: bumps <c>RelationValue</c> by <paramref name="delta"/>
+    /// (positive or negative) and re-syncs. Bypasses the personality-compatibility
+    /// filter that production <c>UpdateRelation</c> applies.
+    /// </summary>
+    public void DevForceAdjustRelationValue(Relationship rel, int delta)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning("<color=orange>[CharacterRelation]</color> DevForceAdjustRelationValue called on non-server peer. Ignored.");
+            return;
+        }
+        if (rel == null || delta == 0) return;
+        int before = rel.RelationValue;
+        rel.RelationValue = before + delta; // setter clamps to [-100, 100] + updates RelationType.
+        UpdateNetworkList(rel);
+        Debug.Log($"<color=magenta>[DevMode]</color> AdjustRelationValue({rel.RelatedCharacter?.CharacterName ?? "<null>"}, {delta:+#;-#;0}) on '{_character?.CharacterName ?? "<null>"}': {before} → {rel.RelationValue}.");
+        OnRelationsUpdated?.Invoke();
+    }
+#endif
 }
