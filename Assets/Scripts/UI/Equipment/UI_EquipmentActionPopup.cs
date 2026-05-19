@@ -112,12 +112,22 @@ namespace MWI.UI.Equipment
         {
             if (!IsOpen) return;
 
+            // ESC dismisses.
             if (Input.GetKeyDown(KeyCode.Escape)) { Hide(); return; }
 
+            // Click-outside-to-dismiss: only when the click lands OUTSIDE any UI element
+            // (i.e. on the game world). Uses EventSystem.IsPointerOverGameObject — works in
+            // ScreenSpaceCamera mode without needing a camera reference. The earlier
+            // RectangleContainsScreenPoint(_root, mouse, null) variant mis-computed under
+            // ScreenSpaceCamera and dismissed the popup BEFORE the EventSystem could route
+            // the click to a popup button, so buttons were unclickable.
             if (Input.GetMouseButtonDown(0))
             {
-                if (!RectTransformUtility.RectangleContainsScreenPoint(_root, Input.mousePosition, null))
+                var es = UnityEngine.EventSystems.EventSystem.current;
+                if (es != null && !es.IsPointerOverGameObject())
+                {
                     Hide();
+                }
             }
         }
 
