@@ -586,11 +586,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3839890907379753655, guid: c98ddfc5c952a1f469db6e4df50cdeeb, type: 3}
       propertyPath: m_Center.y
-      value: 7.7345505
+      value: 7.5
       objectReference: {fileID: 0}
     - target: {fileID: 3839890907379753655, guid: c98ddfc5c952a1f469db6e4df50cdeeb, type: 3}
       propertyPath: m_Center.z
       value: 6.404274
+      objectReference: {fileID: 0}
+    - target: {fileID: 3839890907379753655, guid: c98ddfc5c952a1f469db6e4df50cdeeb, type: 3}
+      propertyPath: m_IsTrigger
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 3913342359560180987, guid: c98ddfc5c952a1f469db6e4df50cdeeb, type: 3}
       propertyPath: GlobalObjectIdHash
@@ -8222,8 +8226,32 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4069263860401560783, guid: c98ddfc5c952a1f469db6e4df50cdeeb, type: 3}
       insertIndex: -1
       addedObject: {fileID: 8363512588770478199}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 4260897135377657532, guid: c98ddfc5c952a1f469db6e4df50cdeeb, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7224387115463488277}
   m_SourcePrefab: {fileID: 100100000, guid: c98ddfc5c952a1f469db6e4df50cdeeb, type: 3}
+--- !u!1 &411597335569631323 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4260897135377657532, guid: c98ddfc5c952a1f469db6e4df50cdeeb, type: 3}
+  m_PrefabInstance: {fileID: 4510344882158184167}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &7224387115463488277
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 411597335569631323}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b17d8b701323d194488a8bd70d19c955, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingInteractable
+  interactionPrompt: Press E to interact
+  _interactionZone: {fileID: 0}
+  _rootgameObject: {fileID: 0}
+  _rigidbody: {fileID: 0}
 --- !u!4 &499647967290718760 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4069263860401560783, guid: c98ddfc5c952a1f469db6e4df50cdeeb, type: 3}

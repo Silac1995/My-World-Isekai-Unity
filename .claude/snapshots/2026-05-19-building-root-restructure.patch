@@ -1,0 +1,366 @@
+diff --git a/Assets/Prefabs/Building/Building_prefab.prefab b/Assets/Prefabs/Building/Building_prefab.prefab
+index 126bd75a..bf25f40a 100644
+--- a/Assets/Prefabs/Building/Building_prefab.prefab
++++ b/Assets/Prefabs/Building/Building_prefab.prefab
+@@ -134,6 +134,12 @@ GameObject:
+   - component: {fileID: 1412560922656767116}
+   - component: {fileID: -5282540861618954625}
+   - component: {fileID: 6345648512130737783}
++  - component: {fileID: 7410606456549052459}
++  - component: {fileID: 1019903589571635701}
++  - component: {fileID: 7027119771013799904}
++  - component: {fileID: 7211302049902027767}
++  - component: {fileID: 1728111816053438538}
++  - component: {fileID: 959864383813182380}
+   m_Layer: 12
+   m_Name: Building_prefab
+   m_TagString: Untagged
+@@ -247,6 +253,267 @@ MonoBehaviour:
+   m_Name: 
+   m_EditorClassIdentifier: Assembly-CSharp::BuildingConstructionOutline
+   _settings: {fileID: 11400000, guid: 7e2fae298ef275e40b31292bcb71f85d, type: 2}
++--- !u!114 &7410606456549052459
++MonoBehaviour:
++  m_ObjectHideFlags: 0
++  m_CorrespondingSourceObject: {fileID: 0}
++  m_PrefabInstance: {fileID: 0}
++  m_PrefabAsset: {fileID: 0}
++  m_GameObject: {fileID: 3315547130765415992}
++  m_Enabled: 1
++  m_EditorHideFlags: 0
++  m_Script: {fileID: 11500000, guid: 4b43482cfd5435e4da940cd87d30dcad, type: 3}
++  m_Name: 
++  m_EditorClassIdentifier: Assembly-CSharp::FurnitureGrid
++  _cellSize: 1
++  _floorRenderers: []
++  _autoSizeSource: {fileID: 0}
++  _gridWidth: 0
++  _gridDepth: 0
++  _gridOrigin: {x: 0, y: 0, z: 0}
++  _cells: []
++--- !u!114 &1019903589571635701
++MonoBehaviour:
++  m_ObjectHideFlags: 0
++  m_CorrespondingSourceObject: {fileID: 0}
++  m_PrefabInstance: {fileID: 0}
++  m_PrefabAsset: {fileID: 0}
++  m_GameObject: {fileID: 3315547130765415992}
++  m_Enabled: 1
++  m_EditorHideFlags: 0
++  m_Script: {fileID: 11500000, guid: f8991b0a5a5d6bd4fa27c3f81306cf5c, type: 3}
++  m_Name: 
++  m_EditorClassIdentifier: Assembly-CSharp::FurnitureManager
++  _furnitures: []
++--- !u!114 &7027119771013799904
++MonoBehaviour:
++  m_ObjectHideFlags: 0
++  m_CorrespondingSourceObject: {fileID: 0}
++  m_PrefabInstance: {fileID: 0}
++  m_PrefabAsset: {fileID: 0}
++  m_GameObject: {fileID: 3315547130765415992}
++  m_Enabled: 1
++  m_EditorHideFlags: 0
++  m_Script: {fileID: 11500000, guid: 35e95dc5ff2b64380880dd7ac5922847, type: 3}
++  m_Name: 
++  m_EditorClassIdentifier: Unity.AI.Navigation::Unity.AI.Navigation.NavMeshModifierVolume
++  m_SerializedVersion: 0
++  m_Size: {x: 4, y: 3, z: 4}
++  m_Center: {x: 0, y: 1, z: 0}
++  m_Area: 0
++  m_AffectedAgents: ffffffff
++--- !u!114 &7211302049902027767
++MonoBehaviour:
++  m_ObjectHideFlags: 0
++  m_CorrespondingSourceObject: {fileID: 0}
++  m_PrefabInstance: {fileID: 0}
++  m_PrefabAsset: {fileID: 0}
++  m_GameObject: {fileID: 3315547130765415992}
++  m_Enabled: 1
++  m_EditorHideFlags: 0
++  m_Script: {fileID: 11500000, guid: 96a9b3de77d981840b0559ffe5ff65e4, type: 3}
++  m_Name: 
++  m_EditorClassIdentifier: Assembly-CSharp::Building
++  ShowTopMostFoldoutHeaderGroup: 1
++  zoneType: 0
++  zoneName: 
++  _boundsTarget: {fileID: 0}
++  _boundsTargets: []
++  _roomName: 
++  _floorTerrainType: {fileID: 0}
++  _isExposed: 0
++  _subRooms: []
++  _blueprint: {fileID: 0}
++  _isPublicLocation: 0
++  _buildingZone: {fileID: 0}
++  _deliveryZone: {fileID: 0}
++  _spawnAsComplete: 0
++  _constructionVisualRoot: {fileID: 0}
++  _completedVisualRoot: {fileID: 0}
++  _constructionFootprintMaterial: {fileID: 0}
++  _constructionCurtainMaterial: {fileID: 0}
++  ConstructionProgress:
++    UpdateTraits:
++      MinSecondsBetweenUpdates: 0
++      MaxSecondsBetweenUpdates: 0
++    m_InternalValue: 0
++  DeliveredMaterials:
++    UpdateTraits:
++      MinSecondsBetweenUpdates: 0
++      MaxSecondsBetweenUpdates: 0
++  NetworkBuildingId:
++    UpdateTraits:
++      MinSecondsBetweenUpdates: 0
++      MaxSecondsBetweenUpdates: 0
++    m_InternalValue:
++      utf8LengthInBytes: 0
++      bytes:
++        offset0000:
++          byte0000: 0
++          byte0001: 0
++          byte0002: 0
++          byte0003: 0
++          byte0004: 0
++          byte0005: 0
++          byte0006: 0
++          byte0007: 0
++          byte0008: 0
++          byte0009: 0
++          byte0010: 0
++          byte0011: 0
++          byte0012: 0
++          byte0013: 0
++          byte0014: 0
++          byte0015: 0
++        offset0016:
++          byte0000: 0
++          byte0001: 0
++          byte0002: 0
++          byte0003: 0
++          byte0004: 0
++          byte0005: 0
++          byte0006: 0
++          byte0007: 0
++          byte0008: 0
++          byte0009: 0
++          byte0010: 0
++          byte0011: 0
++          byte0012: 0
++          byte0013: 0
++          byte0014: 0
++          byte0015: 0
++        offset0032:
++          byte0000: 0
++          byte0001: 0
++          byte0002: 0
++          byte0003: 0
++          byte0004: 0
++          byte0005: 0
++          byte0006: 0
++          byte0007: 0
++          byte0008: 0
++          byte0009: 0
++          byte0010: 0
++          byte0011: 0
++          byte0012: 0
++          byte0013: 0
++          byte0014: 0
++          byte0015: 0
++        byte0048: 0
++        byte0049: 0
++        byte0050: 0
++        byte0051: 0
++        byte0052: 0
++        byte0053: 0
++        byte0054: 0
++        byte0055: 0
++        byte0056: 0
++        byte0057: 0
++        byte0058: 0
++        byte0059: 0
++        byte0060: 0
++        byte0061: 0
++  PlacedByCharacterId:
++    UpdateTraits:
++      MinSecondsBetweenUpdates: 0
++      MaxSecondsBetweenUpdates: 0
++    m_InternalValue:
++      utf8LengthInBytes: 0
++      bytes:
++        offset0000:
++          byte0000: 0
++          byte0001: 0
++          byte0002: 0
++          byte0003: 0
++          byte0004: 0
++          byte0005: 0
++          byte0006: 0
++          byte0007: 0
++          byte0008: 0
++          byte0009: 0
++          byte0010: 0
++          byte0011: 0
++          byte0012: 0
++          byte0013: 0
++          byte0014: 0
++          byte0015: 0
++        offset0016:
++          byte0000: 0
++          byte0001: 0
++          byte0002: 0
++          byte0003: 0
++          byte0004: 0
++          byte0005: 0
++          byte0006: 0
++          byte0007: 0
++          byte0008: 0
++          byte0009: 0
++          byte0010: 0
++          byte0011: 0
++          byte0012: 0
++          byte0013: 0
++          byte0014: 0
++          byte0015: 0
++        offset0032:
++          byte0000: 0
++          byte0001: 0
++          byte0002: 0
++          byte0003: 0
++          byte0004: 0
++          byte0005: 0
++          byte0006: 0
++          byte0007: 0
++          byte0008: 0
++          byte0009: 0
++          byte0010: 0
++          byte0011: 0
++          byte0012: 0
++          byte0013: 0
++          byte0014: 0
++          byte0015: 0
++        byte0048: 0
++        byte0049: 0
++        byte0050: 0
++        byte0051: 0
++        byte0052: 0
++        byte0053: 0
++        byte0054: 0
++        byte0055: 0
++        byte0056: 0
++        byte0057: 0
++        byte0058: 0
++        byte0059: 0
++        byte0060: 0
++        byte0061: 0
++--- !u!114 &1728111816053438538
++MonoBehaviour:
++  m_ObjectHideFlags: 0
++  m_CorrespondingSourceObject: {fileID: 0}
++  m_PrefabInstance: {fileID: 0}
++  m_PrefabAsset: {fileID: 0}
++  m_GameObject: {fileID: 3315547130765415992}
++  m_Enabled: 1
++  m_EditorHideFlags: 0
++  m_Script: {fileID: 11500000, guid: b17d8b701323d194488a8bd70d19c955, type: 3}
++  m_Name: 
++  m_EditorClassIdentifier: Assembly-CSharp::BuildingInteractable
++  interactionPrompt: Press E to interact
++  _interactionZone: {fileID: -6888106381805364685}
++  _rootgameObject: {fileID: 0}
++  _rigidbody: {fileID: 0}
++--- !u!114 &959864383813182380
++MonoBehaviour:
++  m_ObjectHideFlags: 0
++  m_CorrespondingSourceObject: {fileID: 0}
++  m_PrefabInstance: {fileID: 0}
++  m_PrefabAsset: {fileID: 0}
++  m_GameObject: {fileID: 3315547130765415992}
++  m_Enabled: 1
++  m_EditorHideFlags: 0
++  m_Script: {fileID: 11500000, guid: aab98f41b969a91488cae6ae727331c0, type: 3}
++  m_Name: 
++  m_EditorClassIdentifier: Assembly-CSharp::ConstructionSiteScanner
++  _tickIntervalSeconds: 0.5
+ --- !u!1 &3574699337066169987
+ GameObject:
+   m_ObjectHideFlags: 0
+diff --git a/Assets/Prefabs/Building/House/House prefab.prefab b/Assets/Prefabs/Building/House/House prefab.prefab
+index 6364384f..3577bd76 100644
+--- a/Assets/Prefabs/Building/House/House prefab.prefab	
++++ b/Assets/Prefabs/Building/House/House prefab.prefab	
+@@ -54,30 +54,24 @@ PrefabInstance:
+       objectReference: {fileID: 0}
+     - target: {fileID: 7551676047501188179, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+       propertyPath: GlobalObjectIdHash
+-      value: 2816032000
++      value: 1558853029
+       objectReference: {fileID: 0}
+     m_RemovedComponents: []
+     m_RemovedGameObjects: []
+     m_AddedGameObjects: []
+     m_AddedComponents:
+     - targetCorrespondingSourceObject: {fileID: 3315547130765415992, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+-      insertIndex: -1
++      insertIndex: 11
+       addedObject: {fileID: 8314213771132895732}
+     - targetCorrespondingSourceObject: {fileID: 3315547130765415992, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+-      insertIndex: -1
++      insertIndex: 12
+       addedObject: {fileID: 8247785854825345565}
+     - targetCorrespondingSourceObject: {fileID: 3315547130765415992, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+-      insertIndex: -1
++      insertIndex: 13
+       addedObject: {fileID: 3418388474065431567}
+     - targetCorrespondingSourceObject: {fileID: 3315547130765415992, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+-      insertIndex: -1
++      insertIndex: 14
+       addedObject: {fileID: 7957207800943456863}
+-    - targetCorrespondingSourceObject: {fileID: 3315547130765415992, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+-      insertIndex: -1
+-      addedObject: {fileID: 6394753226109727132}
+-    - targetCorrespondingSourceObject: {fileID: 3315547130765415992, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+-      insertIndex: -1
+-      addedObject: {fileID: 3179942169526424239}
+   m_SourcePrefab: {fileID: 100100000, guid: 3912e32b2a079d942b67533a34636010, type: 3}
+ --- !u!1 &7239333697559794867 stripped
+ GameObject:
+@@ -114,6 +108,7 @@ MonoBehaviour:
+   m_EditorClassIdentifier: Assembly-CSharp::FurnitureGrid
+   _cellSize: 1
+   _floorRenderers: []
++  _autoSizeSource: {fileID: 0}
+   _gridWidth: 0
+   _gridDepth: 0
+   _gridOrigin: {x: 0, y: 0, z: 0}
+@@ -331,32 +326,3 @@ MonoBehaviour:
+         byte0059: 0
+         byte0060: 0
+         byte0061: 0
+---- !u!114 &6394753226109727132
+-MonoBehaviour:
+-  m_ObjectHideFlags: 0
+-  m_CorrespondingSourceObject: {fileID: 0}
+-  m_PrefabInstance: {fileID: 0}
+-  m_PrefabAsset: {fileID: 0}
+-  m_GameObject: {fileID: 8930520634193134600}
+-  m_Enabled: 1
+-  m_EditorHideFlags: 0
+-  m_Script: {fileID: 11500000, guid: aab98f41b969a91488cae6ae727331c0, type: 3}
+-  m_Name: 
+-  m_EditorClassIdentifier: Assembly-CSharp::ConstructionSiteScanner
+-  _tickIntervalSeconds: 0.5
+---- !u!114 &3179942169526424239
+-MonoBehaviour:
+-  m_ObjectHideFlags: 0
+-  m_CorrespondingSourceObject: {fileID: 0}
+-  m_PrefabInstance: {fileID: 0}
+-  m_PrefabAsset: {fileID: 0}
+-  m_GameObject: {fileID: 8930520634193134600}
+-  m_Enabled: 1
+-  m_EditorHideFlags: 0
+-  m_Script: {fileID: 11500000, guid: b17d8b701323d194488a8bd70d19c955, type: 3}
+-  m_Name: 
+-  m_EditorClassIdentifier: Assembly-CSharp::BuildingInteractable
+-  interactionPrompt: Press E to interact
+-  _interactionZone: {fileID: 0}
+-  _rootgameObject: {fileID: 0}
+-  _rigidbody: {fileID: 0}

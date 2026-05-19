@@ -225,6 +225,14 @@ public class PlayerController : CharacterGameController
                     HandleDropCarriedItem();
                 }
 
+                // --- K: Toggle the Character Sheet (stats) window. ---
+                // KeyCode.C is taken by crouching (line ~181); K was chosen by the
+                // 2026-05-19 character-stats rework recon as the fallback.
+                if (Input.GetKeyDown(KeyCode.K))
+                {
+                    PlayerUI.Instance?.ToggleStatsWindow();
+                }
+
                 // --- E key dispatch (placement-active item / consumable / tap-interact / hold-menu). ---
                 // Single owner-gated dispatcher per rule #33.
                 if (Input.GetKeyDown(KeyCode.E))

@@ -24,6 +24,14 @@ public abstract class CharacterTertiaryStats : CharacterBaseStats
 
     public float Value => currentValue;
 
+    // Public read-only accessors for UI preview / tooltip math (e.g. StatPreviewCalculator).
+    // The runtime fields are mutated by ApplyRaceStats(...) / UpdateScaling(...) so the UI
+    // must read live values rather than hard-code a per-stat formula string.
+    public float Multiplier => _multiplier;
+    public float BaseOffset => _baseOffset;
+    public CharacterBaseStats LinkedStat => _linkedStat;
+    public float MinValue => minValue;
+
     public void Modify(float delta)
     {
         currentValue = Mathf.Max(currentValue + delta, minValue);

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mockup-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "serve", "C:/tmp", "-l", "8765", "--no-clipboard"],
+      "port": 8765
+    }
+  ]
+}

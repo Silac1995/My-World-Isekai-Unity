@@ -179,6 +179,46 @@ Debug.Assert(src.name == "Crate", "must variant the Tier-1 base");
 - `Building_prefab.prefab` (root) carries the `NetworkObject`. Every Tier-1 and Tier-2 variant inherits it.
 - `Furniture_prefab.prefab` (root) does NOT carry a `NetworkObject`. A furniture prefab that needs network replication is handled by `Building.ConvertNestedNetworkFurnitureToLayout()` at runtime (see [Default furniture authoring](#default-furniture-authoring-building-level-system) below) — never bake a `NetworkObject` onto the furniture root.
 
+### Building-chain scripts MUST live on the Tier-2 variant — never on root or Tier-1 (anti-pattern)
+
+**The blacklist** — never add any of these to `Building_prefab.prefab` (root) OR to a Tier-1 type base (`CommercialBuilding_prefab.prefab`, `House prefab.prefab`):
+
+- `Building` (and any subclass: `CommercialBuilding`, `ShopBuilding`, `ForgeBuilding`, `FarmingBuilding`, `HarvestingBuilding`, `TransporterBuilding`, `AdministrativeBuilding`, `ResidentialBuilding`, …)
+- `FurnitureGrid`, `FurnitureManager`
+- `BuildingInteractable`, `ConstructionSiteScanner`
+- `BuildingTaskManager`, `BuildingLogisticsManager`
+- `BoxCollider`, `NavMeshModifierVolume` (the Zone-chain requirements)
+
+**Why** — the `Building → ComplexRoom → Room → Zone` chain plus the following `[RequireComponent]` declarations form a transitive trap:
+
+| Script | Declares |
+|---|---|
+| `Zone.cs:7-8` | `[RequireComponent(typeof(BoxCollider))]`, `[RequireComponent(typeof(NavMeshModifierVolume))]` |
+| `Room.cs:9-10` | `[RequireComponent(typeof(FurnitureGrid))]`, `[RequireComponent(typeof(FurnitureManager))]` |
+| `BuildingInteractable.cs:20` | `[RequireComponent(typeof(Building))]` |
+| `ConstructionSiteScanner.cs:16` | `[RequireComponent(typeof(Building))]` |
+| `CommercialBuilding.cs:13-14` | `[RequireComponent(typeof(BuildingTaskManager))]`, `[RequireComponent(typeof(BuildingLogisticsManager))]` |
+
+Add `BuildingInteractable` (or `ConstructionSiteScanner`) to a Tier-1 base and Unity auto-adds a base `Building` to satisfy the requirement. Every Tier-2 variant then carries **two** `Building`-chain `NetworkBehaviour`s — the inherited base + its own concrete subclass (`ShopBuilding`/etc.). At spawn time `Building.Awake → ConvertNestedNetworkFurnitureToLayout` runs twice; the second pass `DestroyImmediate`s already-destroyed nested children → native Editor crash with no managed stack trace (recovery scenes pile up in `Assets/_Recovery/`).
+
+**Where they DO belong** — on the **Tier-2 specific variant** (the actual `Shop.prefab` / `Forge.prefab` / `Small house.prefab`). Each variant carries its own copy. The duplication across variants is *content* duplication (each is a separately-configured instance bound to that variant's subclass) — it is not the kind of duplication that lifting can eliminate, because polymorphism + `[RequireComponent]` + NGO's positional `NetworkBehaviour`-index assignment forces this shape.
+
+**What Tier-1 type bases (`CommercialBuilding_prefab.prefab`, `House prefab.prefab`) actually contain at HEAD** — `m_AddedComponents: []` everywhere. They exist purely as an inheritance anchor giving variants a common folder + a hook for future genuinely-shared content. **If a script you're considering for Tier-1 transitively requires `Building` or extends `Zone`/`Room`/`ComplexRoom`/`Building`, stop — keep it on Tier-2.**
+
+**What the root `Building_prefab.prefab` contains** — `NetworkObject` (inherited by every variant) + `BuildingConstructionOutline` (the scaffold visual). Nothing else. Adding `Building` or any chain dependency to the root has the same blast radius as adding it to Tier-1, scaled across **every** building variant (both commercial and house).
+
+**Litmus test before AddComponent on a parent prefab**: `grep ^\\[RequireComponent <Script>.cs`. If the chain leads to `Building` (directly or via `Zone`/`Room`/`ComplexRoom`), abort.
+
+**If the lift is genuinely desired someday** — first delete the `[RequireComponent(typeof(Building))]` lines from `BuildingInteractable.cs:20` and `ConstructionSiteScanner.cs:16` and rewrite those scripts to resolve `Building` via runtime `GetComponentInParent` (handling the null case gracefully). Only then can the lift be performed, and it must be a coordinated change that also strips the duplicate copies from every Tier-2 variant in the same commit. NetworkBehaviour indices will shift — existing saves break. **Not recommended** — the per-variant pattern is consistent with the polymorphic shape and is the working configuration.
+
+**Recovery procedure if you already triggered the crash** — see [[duplicate-building-component-on-prefab-variant-root]] for the full step-by-step. TL;DR:
+
+1. Snapshot the diff: `git diff HEAD -- Assets/Prefabs/Building/Building_prefab.prefab "Assets/Prefabs/Building/House/House prefab.prefab" Assets/Prefabs/Building/Commercial/CommercialBuilding_prefab.prefab > .claude/snapshots/$(date +%Y-%m-%d)-building-root-restructure.patch`.
+2. Revert the root + the two Tier-1 type bases: `git checkout HEAD -- <those three files>`.
+3. For each Tier-2 commercial variant the user stripped scripts from, Roslyn-re-add the missing scripts on its root via idempotent `PrefabUtility.LoadPrefabContents → AddComponent if GetComponent==null → SaveAsPrefabAsset → UnloadPrefabContents`. The script set is variant-dependent — always diff vs HEAD per file before deciding.
+4. After Roslyn writes, `Assets → Refresh` (Ctrl+R) so `AssetDatabase` picks up the changes.
+5. Verify `grep -c "::<sym>$" <prefab>` matches HEAD counts per script per file. Mismatches mean either you missed a slot or a `[RequireComponent]` chain just dragged `Building` into a parent — abort and re-investigate.
+
 ### Save-schema invariant
 
 - `BuildingSO._defaultFurnitureLayout` slot positions feed `FurnitureKey` (storage save key). Repositioning a slot AFTER a save silently drops storage contents bound to that key. Treat layout positions as **immutable post-ship** — this is a load-bearing constraint at the prefab-authoring stage.

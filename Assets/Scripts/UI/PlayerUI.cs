@@ -306,18 +306,42 @@ public class PlayerUI : MonoBehaviour
         }
     }
 
-    public void ToggleStatsUI()
+    /// <summary>
+    /// Opens the Character Sheet window for the given target and reinitialises it.
+    /// Logs a directive warning if the SerializeField is unwired (rule #39).
+    /// </summary>
+    public void OpenStatsWindow(Character target)
+    {
+        if (_statsUI == null)
+        {
+            Debug.LogWarning("<color=orange>[PlayerUI]</color> OpenStatsWindow called but _statsUI SerializeField is null — author the prefab (variant of UI_WindowBase.prefab) and wire it to PlayerUI._statsUI in the Inspector.");
+            return;
+        }
+        if (target == null) return;
+        _statsUI.Initialize(target);
+        _statsUI.gameObject.SetActive(true);
+    }
+
+    public void CloseStatsWindow()
     {
         if (_statsUI == null) return;
-
-        bool isCurrentlyActive = _statsUI.gameObject.activeSelf;
-        _statsUI.gameObject.SetActive(!isCurrentlyActive);
-
-        if (!isCurrentlyActive && characterComponent != null)
-        {
-            _statsUI.Initialize(characterComponent);
-        }
+        _statsUI.gameObject.SetActive(false);
     }
+
+    public bool IsStatsWindowOpen() => _statsUI != null && _statsUI.gameObject.activeSelf;
+
+    public void ToggleStatsUI()
+    {
+        if (_statsUI == null)
+        {
+            Debug.LogWarning("<color=orange>[PlayerUI]</color> ToggleStatsUI called but _statsUI SerializeField is null — author the prefab (variant of UI_WindowBase.prefab) and wire it to PlayerUI._statsUI in the Inspector.");
+            return;
+        }
+        if (IsStatsWindowOpen()) CloseStatsWindow();
+        else OpenStatsWindow(characterComponent);
+    }
+
+    public void ToggleStatsWindow() => ToggleStatsUI();
 
     public void TogglePartyUI()
     {

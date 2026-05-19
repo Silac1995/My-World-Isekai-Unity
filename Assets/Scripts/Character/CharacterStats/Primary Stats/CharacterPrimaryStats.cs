@@ -13,6 +13,13 @@ public abstract class CharacterPrimaryStats : CharacterBaseStats
 
     public float MaxValue => CurrentValue;
 
+    // Public read-only accessors for UI preview / tooltip math (mirrors CharacterTertiaryStats).
+    // Note: CharacterPrimaryStats has no minValue field — the UpdateFromLinkedStat()
+    // implementation clamps to 0f directly, so MinValue is implicitly 0f.
+    public float Multiplier => _multiplier;
+    public float BaseOffset => _baseOffset;
+    public CharacterBaseStats LinkedStat => _linkedStat;
+
     public float CurrentAmount
     {
         get => currentAmount;
