@@ -18,12 +18,12 @@ public class CharacterProfileSaveData
     public string characterName;
     public string archetypeId;
 
-    // Speech-bubble accent colour. HasAccentColorOverride distinguishes "use the
+    // Speech-bubble accent colour. hasAccentColorOverride distinguishes "use the
     // archetype default" (false) from "use the per-character override" (true) so a
     // future tweak to the archetype's default is NOT silently masked by every saved
     // character. See Task 6 of the speech-bubble rework plan.
-    public Color AccentColorOverride;
-    public bool HasAccentColorOverride;
+    public Color accentColorOverride;
+    public bool hasAccentColorOverride;
 
     public string timestamp;
 
