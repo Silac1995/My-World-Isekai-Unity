@@ -391,6 +391,8 @@ This split is **the project-specific interpretation of CLAUDE.md rule 26** for t
 
 ## Prefab Structure: `SpeechBubbleInstance_Prefab`
 
+> **Note (2026-05-19):** Script-side already exposes `_nameStripBackground` / `_nameText` / `_tailRoot` SerializeFields (Task 9 of the speech-bubble rework). The prefab restructure that authors these children + wires them through SerializeFields is **deferred to Task 8 / Task 9 step 4** — the Unity Editor is currently bound to the main repo, not the worktree; do the prefab work in the Editor session once it is pointed at this branch.
+
 ```
 SpeechBubbleInstance (Root)
 ├── CanvasGroup              (alpha for fade animation)

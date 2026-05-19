@@ -67,10 +67,10 @@ Make social interactions **matter** over the long run. The same "+10 friendly ge
 
 | Field | Type | Semantics |
 |---|---|---|
-| `Opinion` / `_relationValue` | `int` [-100, 100] | Compatibility-filtered numeric opinion. |
-| `RelationshipType` | enum | Auto-derived from `Opinion`. |
+| `RelationValue` / `_relationValue` | `int` [-100, 100] | Compatibility-filtered numeric opinion (exposed via `GetOpinion(other)`). |
+| `RelationshipType` | enum | Auto-derived from `RelationValue`. |
 | `HasMet` | `bool` | True once the two characters have been formally acknowledged via `SetAsMet`. Used for first-meeting gates and dialogue. |
-| `KnowsName` | `bool` | **Separate from `HasMet`.** True once the local character has been told the other's name (introductions, signage, NPC dialogue). Drives the display-name fallback in [[character-speech]]: when a remote speaker's `KnowsName == false` for the local player, their speech bubble's name strip shows `"???"` instead of `Character.DisplayName`. Replicated via the existing `CharacterRelationSyncData` `NetworkList` path and persisted via the existing `RelationshipSaveEntry` save round-trip (with a dormant-resurrection path that also threads it). |
+| `KnowsName` | `bool` | **Separate from `HasMet`.** True once the local character has been told the other's name (introductions, signage, NPC dialogue). Drives the display-name fallback in [[character-speech]]: when a remote speaker's `KnowsName == false` for the local player, their speech bubble's name strip shows `"???"` instead of `Character.CharacterName`. Replicated via the existing `RelationSyncData` `NetworkList` path and persisted via the existing `RelationshipSaveEntry` save round-trip (with a dormant-resurrection path that also threads it). |
 
 ## Data flow — compatibility filter
 
