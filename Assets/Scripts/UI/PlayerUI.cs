@@ -276,7 +276,7 @@ public class PlayerUI : MonoBehaviour
             return;
         }
         if (target == null) return;
-        _equipmentUI.Initialize(target);
+        _equipmentUI.InitializeAndOpen(target);
     }
 
     public void CloseEquipmentWindow()

@@ -62,7 +62,20 @@ namespace MWI.UI.Equipment
             BuildBagCells();
             InitializeChildren();
             RepaintAll();
+            // NOTE: deliberately does NOT call OpenWindow. Visibility is user-driven
+            // (HUD button click → PlayerUI.ToggleEquipmentWindow). Calling OpenWindow
+            // here would auto-show the panel as soon as PlayerUI's character-setup pass
+            // runs (PlayerUI.cs around line 184). Use InitializeAndOpen for the user
+            // intent "open the window now with this character".
+        }
 
+        /// <summary>
+        /// Binds the window to a target Character AND opens it. Used by
+        /// <c>PlayerUI.OpenEquipmentWindow</c> as the canonical "user clicked open" entry.
+        /// </summary>
+        public void InitializeAndOpen(Character target)
+        {
+            Initialize(target);
             OpenWindow();
         }
 
