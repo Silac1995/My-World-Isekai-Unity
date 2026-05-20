@@ -3,17 +3,20 @@ type: gotcha
 title: "Chain-action IsValid must NOT pre-filter by carry state"
 tags: [goap, jobs, ai, isvalid, planner]
 created: 2026-05-02
-updated: 2026-05-02
+updated: 2026-05-20
 sources:
   - "[Assets/Scripts/AI/GOAP/Actions/GoapAction_PlantCrop.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_PlantCrop.cs)"
   - "[Assets/Scripts/AI/GOAP/Actions/GoapAction_WaterCrop.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_WaterCrop.cs)"
   - "[Assets/Scripts/AI/GOAP/Actions/GoapAction_ReturnToolToStorage.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_ReturnToolToStorage.cs)"
   - "[Assets/Scripts/AI/GOAP/GoapPlanner.cs](../../Assets/Scripts/AI/GOAP/GoapPlanner.cs)"
+  - "[Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupLooseItem.cs](../../Assets/Scripts/AI/GOAP/Actions/GoapAction_PickupLooseItem.cs)"
   - "Commit f35e3e2c — fix(goap): chain-action IsValid no longer pre-filters by hand contents"
+  - "Commit 85c32fa3 — fix(harvester): revert IsValid pre-filter on GoapAction_PickupLooseItem (chain-action regression)"
 related:
   - "[[ai-goap]]"
   - "[[job-farmer]]"
   - "[[worldstate-predicate-action-isvalid-divergence]]"
+  - "[[harvester-picks-wrong-loose-item]]"
 status: mitigated
 confidence: high
 ---
@@ -65,9 +68,12 @@ Run `JobFarmer.PlanNextActions` and check the NO-PLAN dump's `validActions` list
 
 ## Links
 - [[worldstate-predicate-action-isvalid-divergence]] — sibling pitfall on the worldState side.
+- [[harvester-picks-wrong-loose-item]] — 2026-05-20 reoccurrence: the wrong-loose-item three-layer fix initially added a `taskMgr.HasAvailableOrClaimedTask<PickupLooseItemTask>` check to `GoapAction_PickupLooseItem.IsValid` (intending defense-in-depth). This rejected Pickup at punch-in time when no item had been dropped yet, breaking the `Harvest/Destroy → Pickup → Deposit` chain. Symptom: `Job Goal: HarvestAndDeposit`, `Job Action: Planning / Idle`, NavMeshAgent `RUNNING | No Path`. Reverted in commit `85c32fa3`; the accepted-item filter now lives ONLY in `Execute.ClaimBestTask` (Execute-time selection, runs after the chain has produced the item).
 - [[ai-goap]] §planner discipline.
 
 ## Sources
 - 2026-05-02 conversation with [[kevin]] surfacing the symptom on JobFarmer.
+- 2026-05-20 conversation with [[kevin]] surfacing the reoccurrence on JobHarvester / `GoapAction_PickupLooseItem` after the wrong-loose-item fix overreached into IsValid.
 - Commit `f35e3e2c` — fix(goap): chain-action IsValid no longer pre-filters by hand contents.
+- Commit `85c32fa3` — fix(harvester): revert IsValid pre-filter on GoapAction_PickupLooseItem (chain-action regression).
 - Commits `52949ecf` (FetchSeed.IsValid widened), `da260bcc` (PlantCrop / WaterCrop work radius + softlock), `1cb1b13d` (storage softlock), `d95dd4db` (ReturnTool softlock).
