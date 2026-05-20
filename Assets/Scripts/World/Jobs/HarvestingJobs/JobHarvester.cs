@@ -194,40 +194,23 @@ public class JobHarvester : Job
             }
         }
 
-        // Logique GOAP intelligente :
-        // Si on a des ressources mais qu'on a ENCORE de la place et qu'une zone existe, 
-        // on ment au planner (hasResources=false) pour le forcer à continuer de Gather.
-        bool hasResourcesForGoap = false;
         bool allResourcesHarvested = building.AreAllRequestedResourcesHarvested();
         bool needsToWork = !allResourcesHarvested;
 
-        if (hasAtLeastOneResource)
-        {
-            if (!hasFreeSpace)
-            {
-                hasResourcesForGoap = true; // Plein à craquer -> aller déposer
-            }
-            else
-            {
-                if (building.HasHarvestableZone && needsToWork)
-                {
-                    hasResourcesForGoap = false; // Continuer de gather
-                }
-                else
-                {
-                    hasResourcesForGoap = true; // Plus rien à gather ou fini le quota -> aller déposer ce qu'on a
-                }
-            }
-        }
-
-        // Planification intelligente du Pickup vs Gather
+        // Task availability scan — MOVED above hasResourcesForGoap so the "is there
+        // anything actionable left?" gate can use canHarvest / looseItemExists. Without
+        // that gate, a worker who just picked up wood from the only available destroy
+        // target kept lying to the planner ("hasResources=false, keep gathering") even
+        // when no harvest/destroy/pickup task remained; the planner could not extend any
+        // chain to hasDepositedResources=true and returned a null plan, freezing the
+        // worker mid-zone with wood in hand. See wiki/gotchas/harvester-deposit-freeze.md.
         bool looseItemExists = false;
         bool canHarvest = false;
         bool hasValidHarvestTasks = false;
-        
+
         if (building.TaskManager != null)
         {
-            looseItemExists = building.TaskManager.HasAvailableOrClaimedTask<PickupLooseItemTask>(_worker, task => 
+            looseItemExists = building.TaskManager.HasAvailableOrClaimedTask<PickupLooseItemTask>(_worker, task =>
             {
                 var interactable = task.Target as WorldItem;
                 return interactable != null && !_worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
@@ -268,6 +251,39 @@ public class JobHarvester : Job
                     && interactable.HasAnyDestructionOutput(building.GetWantedItems());
             });
             hasValidHarvestTasks = hasValidYieldTasks || hasValidDestroyTasks;
+        }
+
+        // Logique GOAP intelligente :
+        // Si on a des ressources mais qu'on a ENCORE de la place, qu'une zone existe ET
+        // qu'il y a du travail actionnable, on ment au planner (hasResources=false) pour
+        // le forcer à continuer de Gather. Sinon (plus rien d'actionnable), on dépose ce
+        // qu'on a au lieu de freezer.
+        bool hasResourcesForGoap = false;
+
+        if (hasAtLeastOneResource)
+        {
+            if (!hasFreeSpace)
+            {
+                hasResourcesForGoap = true; // Plein à craquer -> aller déposer
+            }
+            else
+            {
+                // 2026-05-19 — added (canHarvest || looseItemExists) gate. Previously the
+                // worker froze after picking up the only available wood: the lie kept
+                // hasResources=false, but with no destroy/harvest/pickup task left, the
+                // planner could not extend any chain to hasDepositedResources=true and
+                // returned a null plan, leaving the worker standing still holding wood.
+                // Mirrors FarmingBuilding's worldState/IsValid symmetry canonical pattern
+                // (shipped 2026-05-02). See wiki/gotchas/harvester-deposit-freeze.md.
+                if (building.HasHarvestableZone && needsToWork && (canHarvest || looseItemExists))
+                {
+                    hasResourcesForGoap = false; // Continuer de gather
+                }
+                else
+                {
+                    hasResourcesForGoap = true; // Plus rien d'actionnable -> aller déposer ce qu'on a
+                }
+            }
         }
 
         // Reuse the scratch world-state dict (cleared + repopulated each tick — zero allocation after warm-up).
