@@ -210,10 +210,21 @@ public class JobHarvester : Job
 
         if (building.TaskManager != null)
         {
+            // looseItemExists predicate MUST mirror GoapAction_PickupLooseItem.IsValid /
+            // Execute filter: only count loose items the building actually accepts. Without
+            // this filter, a sapling spawned by destroying an apple tree (lumberyard wants
+            // only wood) would set looseItemExists=true; the planner picks Pickup; the
+            // GoapAction's IsValid (which DOES filter by accepted) rejects every task; the
+            // action falls out of _scratchValidActions; planner returns null plan; worker
+            // freezes. Canonical worldState/IsValid symmetry rule (see
+            // wiki/gotchas/worldstate-predicate-action-isvalid-divergence.md).
             looseItemExists = building.TaskManager.HasAvailableOrClaimedTask<PickupLooseItemTask>(_worker, task =>
             {
                 var interactable = task.Target as WorldItem;
-                return interactable != null && !_worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
+                if (interactable == null) return false;
+                if (_worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID())) return false;
+                var so = interactable.ItemInstance?.ItemSO;
+                return so != null && acceptedItems != null && acceptedItems.Contains(so);
             });
 
             canHarvest = building.TaskManager.HasAvailableOrClaimedTask<HarvestResourceTask>(_worker, task =>

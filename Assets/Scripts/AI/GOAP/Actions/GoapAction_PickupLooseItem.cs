@@ -45,7 +45,7 @@ public class GoapAction_PickupLooseItem : GoapAction
         {
             var hands = worker.CharacterVisual?.BodyPartsController?.HandsController;
             bool handsFree = hands != null && hands.AreHandsFree();
-            
+
             bool bagHasSpace = false;
             var wantedItems = _building.GetWantedItems();
             if (wantedItems != null && wantedItems.Count > 0)
@@ -67,7 +67,25 @@ public class GoapAction_PickupLooseItem : GoapAction
             if (!handsFree && !bagHasSpace) return false;
         }
 
-        return true;
+        // Reject up front when no claimable PickupLooseItemTask points to an item the building
+        // actually accepts. Mirrors the worldState predicate in JobHarvester.PlanNextActions
+        // (looseItemExists). Without this filter, the planner could pick Pickup for a sapling
+        // task left behind by an apple-tree destruction (or any other non-wanted drop), the
+        // worker would carry an unwanted item, hasAtLeastOneResource would stay false, and
+        // the deposit chain would never form. See wiki/gotchas/harvester-picks-wrong-loose-item.md
+        // and wiki/gotchas/worldstate-predicate-action-isvalid-divergence.md.
+        var taskMgr = _building.TaskManager;
+        if (taskMgr == null) return false;
+        var accepted = _building.GetAcceptedItems();
+        if (accepted == null || accepted.Count == 0) return false;
+        return taskMgr.HasAvailableOrClaimedTask<PickupLooseItemTask>(worker, task =>
+        {
+            var wi = task.Target as WorldItem;
+            if (wi == null) return false;
+            if (worker.PathingMemory.IsBlacklisted(wi.gameObject.GetInstanceID())) return false;
+            var so = wi.ItemInstance?.ItemSO;
+            return so != null && accepted.Contains(so);
+        });
     }
 
     public override void Execute(Character worker)
@@ -84,11 +102,19 @@ public class GoapAction_PickupLooseItem : GoapAction
         // 1. Trouver un objet au sol
         if (_targetWorldItem == null && _assignedTask == null)
         {
-            _assignedTask = _building.TaskManager?.ClaimBestTask<PickupLooseItemTask>(worker, task => 
+            // Filter by acceptedItems — mirror IsValid + the JobHarvester.looseItemExists
+            // worldState predicate. Without this, the worker could claim a PickupLooseItemTask
+            // pointing to an item the building does not accept (e.g. an apple sapling spawned
+            // by destroying an apple tree in a wood-only lumberyard), pick it up, then freeze
+            // because hasAtLeastOneResource stays false on the next plan tick.
+            var accepted = _building.GetAcceptedItems();
+            _assignedTask = _building.TaskManager?.ClaimBestTask<PickupLooseItemTask>(worker, task =>
             {
                 var interactable = task.Target as WorldItem;
-                if (interactable == null) return true;
-                return !worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID());
+                if (interactable == null) return false;
+                if (worker.PathingMemory.IsBlacklisted(interactable.gameObject.GetInstanceID())) return false;
+                var so = interactable.ItemInstance?.ItemSO;
+                return so != null && accepted != null && accepted.Contains(so);
             });
 
             if (_assignedTask != null)

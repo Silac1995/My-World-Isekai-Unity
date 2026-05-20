@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
@@ -439,11 +440,25 @@ public class CharacterActions : CharacterSystem
             if (workAssignment != null) harvesterWorkplace = workAssignment.Workplace;
         }
 
+        // Cache the workplace's accepted-items list ONCE (avoid the per-spawned-item alloc of
+        // GetAcceptedItems). Used to gate PickupLooseItemTask registration: only register a
+        // pickup task for items the workplace will actually accept. Without this filter, a
+        // harvestable whose outputs include non-wanted items (e.g. apple tree drops wood AND
+        // apple sapling on destruction; lumberyard only wants wood) registers a task for
+        // EVERY drop. ClaimBestTask may then return the sapling task first; worker picks up
+        // the sapling, hasAtLeastOneResource stays false (sapling not in acceptedItems), no
+        // deposit goal forms, worker freezes. See wiki/gotchas/harvester-picks-wrong-loose-item.md.
+        List<ItemSO> workplaceAccepted = null;
+        if (harvesterWorkplace is HarvestingBuilding hbHarvest)
+            workplaceAccepted = hbHarvest.GetAcceptedItems();
+
         ItemSO firstSpawned = null;
         for (int i = 0; i < entries.Count; i++)
         {
             var entry = entries[i];
             if (entry.Item == null || entry.Count <= 0) continue;
+            // Per-entry accept check — every spawned WorldItem in this entry shares the same ItemSO.
+            bool workplaceWantsItem = workplaceAccepted == null || workplaceAccepted.Contains(entry.Item);
             for (int n = 0; n < entry.Count; n++)
             {
                 Vector3 jitter = baseSpawn;
@@ -454,7 +469,7 @@ public class CharacterActions : CharacterSystem
                 if (spawned != null)
                 {
                     if (firstSpawned == null) firstSpawned = entry.Item;
-                    if (harvesterWorkplace != null)
+                    if (harvesterWorkplace != null && workplaceWantsItem)
                         harvesterWorkplace.TaskManager?.RegisterTask(new PickupLooseItemTask(spawned));
                 }
             }
@@ -495,10 +510,26 @@ public class CharacterActions : CharacterSystem
 
         if (harvesterWorkplace != null && harvesterWorkplace.TaskManager != null && spawned != null)
         {
+            // Same accepted-items gate as ApplyHarvestOnServer — only register pickup tasks
+            // for items the workplace will actually accept. Apple tree drops wood AND a
+            // sapling on destruction; lumberyard only wants wood. Without this filter, the
+            // sapling task gets registered, ClaimBestTask may return it first, worker picks
+            // it up, hasAtLeastOneResource stays false (sapling not in acceptedItems), no
+            // deposit goal forms, worker freezes mid-zone.
+            List<ItemSO> workplaceAccepted = null;
+            if (harvesterWorkplace is HarvestingBuilding hbDestroy)
+                workplaceAccepted = hbDestroy.GetAcceptedItems();
+
             for (int i = 0; i < spawned.Count; i++)
             {
-                if (spawned[i] != null)
-                    harvesterWorkplace.TaskManager.RegisterTask(new PickupLooseItemTask(spawned[i]));
+                var wi = spawned[i];
+                if (wi == null) continue;
+                if (workplaceAccepted != null)
+                {
+                    var itemSO = wi.ItemInstance?.ItemSO;
+                    if (itemSO == null || !workplaceAccepted.Contains(itemSO)) continue;
+                }
+                harvesterWorkplace.TaskManager.RegisterTask(new PickupLooseItemTask(wi));
             }
         }
     }
