@@ -495,7 +495,7 @@ public class PlayerUI : MonoBehaviour
     /// re-opening rebinds the tabs. Null-guard warning when the SerializeField is unwired
     /// (per rule #39 — the prefab variant is authored in Task 8).
     /// </summary>
-    public void OpenCityManagementWindow(AdministrativeBuilding ab)
+    public void OpenCityManagementWindow(AdministrativeBuilding ab, Character customer = null)
     {
         if (ab == null) return;
         if (_cityManagementWindow == null)
@@ -503,7 +503,9 @@ public class PlayerUI : MonoBehaviour
             Debug.LogWarning("<color=orange>[PlayerUI]</color> OpenCityManagementWindow called but _cityManagementWindow SerializeField is null — author the prefab (variant of UI_WindowBase.prefab) and wire it to PlayerUI._cityManagementWindow in the Inspector. Tapping E on a CityManagementFurniture will silently no-op until this is fixed (Plan 4c Task 8).");
             return;
         }
-        _cityManagementWindow.Initialize(ab);
+        // customer drives the 1 Hz out-of-zone auto-close poll on the panel side
+        // (mirrors UI_SafePanel pattern). Null is acceptable for dev / debug callers.
+        _cityManagementWindow.Initialize(ab, customer);
         _cityManagementWindow.OpenWindow();
     }
 

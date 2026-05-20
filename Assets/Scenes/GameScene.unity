@@ -6078,10 +6078,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: UI_CityManagementPanel
       objectReference: {fileID: 0}
-    - target: {fileID: 2694006245766212396, guid: 8516f639fe204e646ab2a5f46e3a5fd8, type: 3}
-      propertyPath: m_IsActive
-      value: 0
-      objectReference: {fileID: 0}
     - target: {fileID: 5062058513308325242, guid: 8516f639fe204e646ab2a5f46e3a5fd8, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0

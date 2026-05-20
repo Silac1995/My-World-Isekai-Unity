@@ -57,7 +57,9 @@ public class CityManagementFurniture : Furniture
             return false;
         }
 
-        PlayerUI.Instance.OpenCityManagementWindow(_ab);
+        // Pass interactor so the panel can wire the 1 Hz out-of-zone auto-close poll
+        // (rule #39 — matches UI_SafePanel / UI_StorageFurniturePanel behavior).
+        PlayerUI.Instance.OpenCityManagementWindow(_ab, interactor);
         return true;
     }
 }
