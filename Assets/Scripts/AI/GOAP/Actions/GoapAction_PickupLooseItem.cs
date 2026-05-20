@@ -67,25 +67,16 @@ public class GoapAction_PickupLooseItem : GoapAction
             if (!handsFree && !bagHasSpace) return false;
         }
 
-        // Reject up front when no claimable PickupLooseItemTask points to an item the building
-        // actually accepts. Mirrors the worldState predicate in JobHarvester.PlanNextActions
-        // (looseItemExists). Without this filter, the planner could pick Pickup for a sapling
-        // task left behind by an apple-tree destruction (or any other non-wanted drop), the
-        // worker would carry an unwanted item, hasAtLeastOneResource would stay false, and
-        // the deposit chain would never form. See wiki/gotchas/harvester-picks-wrong-loose-item.md
-        // and wiki/gotchas/worldstate-predicate-action-isvalid-divergence.md.
-        var taskMgr = _building.TaskManager;
-        if (taskMgr == null) return false;
-        var accepted = _building.GetAcceptedItems();
-        if (accepted == null || accepted.Count == 0) return false;
-        return taskMgr.HasAvailableOrClaimedTask<PickupLooseItemTask>(worker, task =>
-        {
-            var wi = task.Target as WorldItem;
-            if (wi == null) return false;
-            if (worker.PathingMemory.IsBlacklisted(wi.gameObject.GetInstanceID())) return false;
-            var so = wi.ItemInstance?.ItemSO;
-            return so != null && accepted.Contains(so);
-        });
+        // DO NOT add a "task-availability" check here — Pickup is a CHAIN CONSUMER. The
+        // planner is supposed to insert it AFTER Harvest/Destroy (whose Effect produces
+        // looseItemExists=true in the SIMULATED state); pre-filtering on whether a
+        // PickupLooseItemTask exists RIGHT NOW would reject Pickup at punch-in time
+        // (no items dropped yet → planner can't form Harvest→Pickup→Deposit → null plan
+        // → worker stuck on "Planning / Idle"). The accepted-item filter belongs to
+        // Execute.ClaimBestTask, which runs AFTER the chain has produced the item. See
+        // wiki/gotchas/chain-action-isvalid-pre-filter.md and SKILL.md "Chain-action
+        // IsValid must NOT pre-filter by carry state" rule.
+        return true;
     }
 
     public override void Execute(Character worker)

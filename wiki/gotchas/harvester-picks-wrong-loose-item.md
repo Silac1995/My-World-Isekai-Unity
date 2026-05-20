@@ -71,11 +71,11 @@ harvesterWorkplace.TaskManager.RegisterTask(new PickupLooseItemTask(spawned));
 
 Non-wanted drops stay on the ground for players to pick up. The harvester ignores them.
 
-### Layer 2 — Claim filter (defense in depth)
-`GoapAction_PickupLooseItem.IsValid` + `Execute.ClaimBestTask`: predicate must check `accepted.Contains(wi.ItemInstance.ItemSO)`. If Layer 1 missed a task (e.g. a future caller bypasses it), the action still refuses to claim it.
+### Layer 2 — Claim filter (defense in depth, Execute-time only)
+`GoapAction_PickupLooseItem.Execute.ClaimBestTask` predicate must check `accepted.Contains(wi.ItemInstance.ItemSO)`. If Layer 1 missed a task (e.g. a future caller bypasses it), the action still refuses to claim it. **Do NOT add this check to `IsValid`** — Pickup is a CHAIN CONSUMER (the planner inserts it AFTER Harvest/Destroy, whose Effect produces `looseItemExists=true` in the SIMULATED state). Pre-filtering Pickup's `IsValid` on "does a PickupLooseItemTask exist right now?" rejects it at punch-in time (no items dropped yet) — planner can't form `Harvest→Pickup→Deposit`, returns null, worker stuck on `Planning / Idle`. See [[chain-action-isvalid-pre-filter]].
 
-### Layer 3 — worldState/IsValid symmetry
-`JobHarvester.PlanNextActions` `looseItemExists` predicate must mirror Layer 2 exactly. Without this mirror, the worldState advertises `looseItemExists=true` for a sapling, the planner picks `Pickup`, but Layer 2 filters the action out of `_scratchValidActions` → null plan → freeze. See [[worldstate-predicate-action-isvalid-divergence]] for the canonical pattern.
+### Layer 3 — worldState reflects registered-task reality
+`JobHarvester.PlanNextActions` `looseItemExists` predicate mirrors Layer 1's registration filter: only counts `PickupLooseItemTask`s pointing to accepted items. Because Layer 1 already prevents non-accepted drops from getting a task, this is automatic — but the explicit predicate guards against any future code path that registers tasks bypassing Layer 1. Unlike Layer 2's IsValid, this is safe to include because worldState reads CURRENT state (the planner doesn't simulate registrations).
 
 ## How to fix (if already hit)
 1. Confirm the symptom: harvester is standing in the harvest zone holding an item that is NOT in the workplace's `_wantedResources` list. Inspector check.
@@ -93,5 +93,5 @@ Non-wanted drops stay on the ground for players to pick up. The harvester ignore
 ## Sources
 - 2026-05-20 conversation with [[kevin]] — lumberyard harvester chopped an apple tree, picked up the sapling instead of the wood, then froze.
 - `CharacterActions.cs:423-504` (post-fix) — `ApplyHarvestOnServer` + `ApplyDestroyOnServer` gate task registration on workplace's accepted-items list.
-- `GoapAction_PickupLooseItem.cs:39-87` (post-fix) — `IsValid` rejects when no claimable task points to an accepted item; `Execute.ClaimBestTask` filter mirrors it.
-- `JobHarvester.cs:213-228` (post-fix) — `looseItemExists` predicate mirrors the action's filter (canonical worldState/IsValid symmetry).
+- `GoapAction_PickupLooseItem.cs:39-87` (post-fix) — `Execute.ClaimBestTask` filter (Execute-time only — IsValid intentionally does NOT pre-filter, because Pickup is a chain consumer).
+- `JobHarvester.cs:213-228` (post-fix) — `looseItemExists` predicate filters by accepted items, mirroring Layer 1's registration filter.
